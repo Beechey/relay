@@ -159,10 +159,10 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
         } else T("Live TV", 26, Heavy, modifier = Modifier.padding(16.dp))
         val current = groups.firstOrNull { it.id == groupId }
         CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-        if (drawer) CategoryDrawer("Live TV", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }) { drawer = false }
+        if (drawer) CategoryDrawer("Live TV", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }, onMove = categoryMover(app, "live")) { drawer = false }
         channelList(Modifier.weight(1f).padding(horizontal = 8.dp).padding(top = 10.dp))
     } else {
-        GroupColumn("Groups", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } })
+        GroupColumn("Groups", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }, onMove = categoryMover(app, "live"))
         Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 16.dp).padding(top = 28.dp)) {
             Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
                 Label("${groups.firstOrNull { it.id == groupId }?.name ?: ""} · ${list.size} channels", Modifier.weight(1f))
@@ -233,6 +233,8 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     fun zap(d: Int) { if (list.isNotEmpty()) { index = Math.floorMod(index + d, list.size); poke++ } }
+    // Back first hides the info bar; the next Back leaves the player
+    androidx.activity.compose.BackHandler(showInfo && !app.inPip && !menu && !tracksOpen) { showInfo = false }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black).focusRequester(focus).focusable()
@@ -264,6 +266,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
         AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
+                IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute(); poke++ }, size = 48.dp)
                 // phones: keep watching in a small floating window
                 if (compact()) {
                     val activity = androidx.compose.ui.platform.LocalContext.current as? com.avetero.relay.MainActivity
@@ -297,7 +300,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val next = epg.upcoming().firstOrNull()
                     T(if (next != null) "Next  ${fmtTime(next.start)} · ${next.title}" else if (compact()) "Swipe ↑↓ to change channel" else "", 14, Bold, C.Muted, Modifier.weight(1f))
-                    if (compact()) Btn("Audio & quality", { tracksOpen = true }, height = 40.dp) else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Audio & quality"); KeyHint("Back", "Channel list") }
+                    if (compact()) Btn("Audio & quality", { tracksOpen = true }, height = 40.dp) else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Mute, audio & quality"); KeyHint("Back", "Channel list") }
                 }
             }
         }

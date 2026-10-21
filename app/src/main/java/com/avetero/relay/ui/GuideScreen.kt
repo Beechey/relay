@@ -148,7 +148,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     }
                 }
             }
-            if (drawer) CategoryDrawer("TV Guide", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }) { drawer = false }
+            if (drawer) CategoryDrawer("TV Guide", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }, onMove = categoryMover(app, "live")) { drawer = false }
             // the now-line only when "now" is inside the window being shown
             if (nowSec() in windowStart until windowEnd) {
                 val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()

@@ -277,9 +277,12 @@ fun List<Group>.matching(q: String): List<Group> = if (q.isBlank()) this else no
 
 /** The scrolling list of categories, shared by the TV column and the phone drawer. */
 @Composable
-fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, focusSelected: Boolean = false, onHide: ((Group) -> Unit)? = null) {
+fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, focusSelected: Boolean = false,
+                 onHide: ((Group) -> Unit)? = null, onMove: ((Group, com.avetero.relay.Move?) -> Unit)? = null) {
     var confirm by remember { mutableStateOf<Group?>(null) }
+    var menuFor by remember { mutableStateOf<Group?>(null) }
     confirm?.let { g -> HideCategoryDialog(g.name, { onHide?.invoke(g); confirm = null }) { confirm = null } }
+    menuFor?.let { g -> CategoryMenu(g.name, { m -> menuFor = null; onMove?.invoke(g, m) }, onHide?.let { { menuFor = null; confirm = g } }) { menuFor = null } }
     if (groups.isEmpty()) T("No categories match", 14, color = C.Muted, modifier = Modifier.padding(12.dp))
     val state = androidx.compose.foundation.lazy.rememberLazyListState()
     val selectedFocus = remember { FocusRequester() }
@@ -298,7 +301,12 @@ fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Un
             FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp),
                 focusRequester = if (on && focusSelected) selectedFocus else null,
                 // Favourites / All / Continue watching are built in and can't be hidden
-                onLongClick = if (onHide != null && !g.id.startsWith("__")) ({ confirm = g }) else null) { f ->
+                onLongClick = when {
+                    g.id.startsWith("__") -> null
+                    onMove != null -> ({ menuFor = g })
+                    onHide != null -> ({ confirm = g })
+                    else -> null
+                }) { f ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     T(g.name, 15, if (on || f) Bold else FontWeight.Medium, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
                     T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
@@ -310,7 +318,8 @@ fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Un
 
 /** TV: the left category column shared by Live TV, Movies and Series, with a search toggle. */
 @Composable
-fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, onHide: ((Group) -> Unit)? = null) {
+fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, onHide: ((Group) -> Unit)? = null,
+                onMove: ((Group, com.avetero.relay.Move?) -> Unit)? = null) {
     var searching by remember { mutableStateOf(false) }
     var q by rememberSaveable { mutableStateOf("") }
     val field = remember { FocusRequester() }
@@ -323,8 +332,8 @@ fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: 
                 tint = if (searching) C.Accent else C.Muted)
         }
         if (searching) FilterField(q, { q = it }, "Find a category", focusRequester = field)
-        CategoryList(remember(groups, q) { groups.matching(q) }, selected, onSelect, Modifier.weight(1f), onHide = onHide)
-        if (onHide != null) T("Hold OK on a category to hide it", 11, color = C.Dim, modifier = Modifier.padding(start = 12.dp, bottom = 12.dp))
+        CategoryList(remember(groups, q) { groups.matching(q) }, selected, onSelect, Modifier.weight(1f), onHide = onHide, onMove = onMove)
+        if (onHide != null) T(if (onMove != null) "Hold OK on a category to move or hide it" else "Hold OK on a category to hide it", 11, color = C.Dim, modifier = Modifier.padding(start = 12.dp, bottom = 12.dp))
     }
 }
 
@@ -342,7 +351,8 @@ fun CategoryButton(name: String, count: Int, onClick: () -> Unit) =
 
 /** Phone: categories in a panel that slides in from the left, with search. Tap outside or Back to close. */
 @Composable
-fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, onHide: ((Group) -> Unit)? = null, onDismiss: () -> Unit) =
+fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, onHide: ((Group) -> Unit)? = null,
+                   onMove: ((Group, com.avetero.relay.Move?) -> Unit)? = null, onDismiss: () -> Unit) =
     androidx.compose.ui.window.Dialog(onDismiss, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         var q by remember { mutableStateOf("") }
         var shown by remember { mutableStateOf(false) }
@@ -355,8 +365,8 @@ fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelec
                         IconBtn(Icons.Back, "Close", onDismiss, size = 40.dp)
                     }
                     FilterField(q, { q = it }, "Find a category")
-                    CategoryList(remember(groups, q) { groups.matching(q) }, selected, { onSelect(it); onDismiss() }, Modifier.weight(1f), focusSelected = !compact(), onHide = onHide)
-                    if (onHide != null) T(if (compact()) "Press and hold a category to hide it" else "Hold OK on a category to hide it", 12, color = C.Dim, modifier = Modifier.padding(start = 8.dp))
+                    CategoryList(remember(groups, q) { groups.matching(q) }, selected, { onSelect(it); onDismiss() }, Modifier.weight(1f), focusSelected = !compact(), onHide = onHide, onMove = onMove)
+                    if (onHide != null) T((if (compact()) "Press and hold a category to " else "Hold OK on a category to ") + if (onMove != null) "move or hide it" else "hide it", 12, color = C.Dim, modifier = Modifier.padding(start = 8.dp))
                 }
             }
             Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(remember { MutableInteractionSource() }, null, onClick = onDismiss))
@@ -443,10 +453,16 @@ fun HideCategoryDialog(name: String, onHide: () -> Unit, onDismiss: () -> Unit) 
     LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
     Column(Modifier.widthIn(max = 400.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         T("Hide “$name”?", 20, Heavy, maxLines = 3)
-        T("It won't appear in lists, All, the guide or search. Bring it back in Settings → Hidden categories.", 14, color = C.Soft, maxLines = 4, lineHeight = 21)
+        T("It won't appear in lists, All, the guide or search. Bring it back in Settings → Manage categories.", 14, color = C.Soft, maxLines = 4, lineHeight = 21)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Btn("Hide", onHide, Modifier.weight(1f), style = BtnStyle.Destructive, height = 46.dp)
             Btn("Cancel", onDismiss, Modifier.weight(1f), style = BtnStyle.Light, height = 46.dp, focusRequester = cancel)
         }
     }
+}
+
+/** Hold-OK actions for a category in Live TV, Movies or Series: move a single one up or down, or move it to Settings → Category order. */
+fun categoryMover(app: com.avetero.relay.AppState, type: String): (Group, com.avetero.relay.Move?) -> Unit = { g, m ->
+    if (m == null) app.push(com.avetero.relay.Screen.Settings("categories:$type"))
+    else { app.moveCategories(type, setOf(g.id), m); app.message = "Moved “${g.name}”" }
 }

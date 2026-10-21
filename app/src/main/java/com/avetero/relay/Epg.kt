@@ -20,7 +20,7 @@ typealias Guide = Map<String, List<Programme>>
  * Streams an XMLTV document (plain or gzip), keeping only programmes for [wanted] channel ids that overlap [from]..[to]
  * (epoch seconds). The file can be hundreds of MB, so nothing is held but what's kept.
  */
-fun parseXmltv(input: InputStream, wanted: Set<String>, from: Long, to: Long): Guide {
+fun parseXmltv(input: InputStream, wanted: Set<String>, from: Long, to: Long, onCount: (Int) -> Unit = {}): Guide {
     val raw = BufferedInputStream(input, 64 * 1024)
     raw.mark(2)
     val gzip = raw.read() == 0x1f && raw.read() == 0x8b
@@ -31,6 +31,7 @@ fun parseXmltv(input: InputStream, wanted: Set<String>, from: Long, to: Long): G
     parser.setInput(stream, null)
     val out = HashMap<String, ArrayList<Programme>>()
     val strings = HashMap<String, String>() // titles repeat endlessly; share one copy each
+    var kept = 0
 
     var channel: String? = null
     var start = 0L
@@ -61,12 +62,14 @@ fun parseXmltv(input: InputStream, wanted: Set<String>, from: Long, to: Long): G
                     channel?.let { ch ->
                         val t = strings.getOrPut(title) { title }
                         out.getOrPut(ch) { ArrayList() }.add(Programme(t, desc, start, end))
+                        if (++kept % 500 == 0) onCount(kept)
                     }
                     channel = null
                 }
             }
         }
     }
+    onCount(kept)
     return out.mapValues { (_, list) -> list.sortedBy { it.start } }
 }
 
