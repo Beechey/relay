@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -84,18 +86,23 @@ fun LoginScreen(app: AppState) {
         }
     }
 
-    Row(Modifier.fillMaxSize().background(C.Ground).imePadding().padding(horizontal = 64.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(96.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 24, Heavy, C.OnLight) }
-            T("Add your playlist", 40, Heavy, maxLines = 2, lineHeight = 44)
-            T("Sign in with the Xtream Codes details from your provider. Live TV, movies, series and the TV guide load automatically.", 16, color = C.Soft, maxLines = 4, lineHeight = 26)
+    val phone = compact()
+    val intro: @Composable () -> Unit = {
+        Column(Modifier.then(if (phone) Modifier.fillMaxWidth() else Modifier.width(380.dp)), verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
+            Box(Modifier.size(if (phone) 44.dp else 56.dp).clip(RoundedCornerShape(14.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", if (phone) 20 else 24, Heavy, C.OnLight) }
+            T("Add your playlist", if (phone) 28 else 40, Heavy, maxLines = 2, lineHeight = if (phone) 32 else 44)
+            T("Sign in with the Xtream Codes details from your provider. Live TV, movies, series and the TV guide load automatically.", if (phone) 14 else 16, color = C.Soft, maxLines = 4, lineHeight = if (phone) 21 else 26)
             if (app.store.playlists().isNotEmpty()) Btn("Back", { app.back() }, Modifier.width(120.dp), height = 44.dp)
         }
-        // scrolls so the focused field stays above the on-screen keyboard
-        Column(Modifier.width(520.dp).verticalScroll(rememberScrollState()).clip(RoundedCornerShape(20.dp)).background(Color(0xFF11151F)).padding(36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    }
+    val form: @Composable (Modifier) -> Unit = { mod ->
+        Column(mod.clip(RoundedCornerShape(20.dp)).background(Color(0xFF11151F)).padding(if (phone) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Field("Playlist name", name, { name = it })
             Field("Server URL", server, { server = it }, hint = "Include the port, e.g. :8080", keyboard = KeyboardType.Uri, mono = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (phone) {
+                Field("Username", user, { user = it }, error = error != null)
+                Field("Password", pass, { pass = it }, password = true, error = error != null)
+            } else Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Field("Username", user, { user = it }, Modifier.weight(1f), error = error != null)
                 Field("Password", pass, { pass = it }, Modifier.weight(1f), password = true, error = error != null)
             }
@@ -103,6 +110,13 @@ fun LoginScreen(app: AppState) {
             Btn(if (busy) "Signing in…" else "Sign in & load playlist", ::submit, Modifier.fillMaxWidth(), style = BtnStyle.Primary, height = 56.dp, enabled = !busy, focusRequester = first)
             T("Your login is stored only on this device.", 13, color = C.Muted, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
+    }
+    if (phone) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        intro(); form(Modifier.fillMaxWidth())
+    } else Row(Modifier.fillMaxSize().background(C.Ground).imePadding().padding(horizontal = 64.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(96.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        intro()
+        // scrolls so the focused field stays above the on-screen keyboard
+        form(Modifier.width(520.dp).verticalScroll(rememberScrollState()))
     }
 }
 
@@ -148,7 +162,7 @@ fun SyncScreen(app: AppState) {
     }
     val a = app.account
     Box(Modifier.fillMaxSize().background(C.Ground), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(560.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+        Column(Modifier.padding(16.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 20, Heavy, C.OnLight) }
                 Column {

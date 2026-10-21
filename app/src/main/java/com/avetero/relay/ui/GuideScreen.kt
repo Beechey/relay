@@ -52,8 +52,16 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
     val first = remember { FocusRequester() }
     LaunchedEffect(list) { runCatching { first.requestFocus() } }
 
+    val phone = compact()
+    val nameW = if (phone) 112.dp else 240.dp
     Column(Modifier.weight(1f).fillMaxHeight()) {
-        Row(Modifier.fillMaxWidth().height(200.dp).padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+        if (phone) {
+            val (c, p) = focused ?: (null to null)
+            Column(Modifier.padding(16.dp)) {
+                T("TV Guide", 26, Heavy)
+                T(listOfNotNull(c?.name, p?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)} · ${it.title}" }).joinToString(" · ").ifEmpty { "Tap a programme to watch" }, 13, color = C.Muted)
+            }
+        } else Row(Modifier.fillMaxWidth().height(200.dp).padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Box(Modifier.size(270.dp, 152.dp).clip(RoundedCornerShape(12.dp)).background(C.Control)) {
                 if (app.player.url != null) PlayerSurface(app.player.player, Modifier.fillMaxSize())
             }
@@ -67,21 +75,21 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
             Clock(22)
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val gridW = maxWidth - 240.dp
+            val gridW = maxWidth - nameW
             val perSec = gridW / (windowEnd - windowStart).toFloat()
             Column {
                 Row(Modifier.height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                    T(if (favMode) "Favourites" else "All channels", 14, Bold, modifier = Modifier.width(240.dp).padding(start = 40.dp))
-                    (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L), 13, color = C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
+                    T(if (favMode) "Favourites" else "All channels", if (phone) 12 else 14, Bold, modifier = Modifier.width(nameW).padding(start = if (phone) 12.dp else 40.dp))
+                    (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L), if (phone) 11 else 13, color = C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
                 }
                 LazyColumn() {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                         LaunchedEffect(c.id) { app.loadEpg(c.id) }
                         val progs = app.epg[c.id].orEmpty().filter { it.end > windowStart && it.start < windowEnd }
                         Row(Modifier.height(72.dp)) {
-                            Row(Modifier.width(240.dp).fillMaxHeight().padding(start = 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Logo(c.icon, c.name, false, Modifier.size(44.dp, 32.dp))
-                                T(c.name, 14, Bold)
+                            Row(Modifier.width(nameW).fillMaxHeight().padding(start = if (phone) 8.dp else 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 12.dp)) {
+                                Logo(c.icon, c.name, false, Modifier.size(if (phone) 32.dp else 44.dp, if (phone) 24.dp else 32.dp))
+                                T(c.name, if (phone) 12 else 14, Bold, maxLines = 2)
                             }
                             Box(Modifier.width(gridW).fillMaxHeight().padding(vertical = 5.dp)) {
                                 val open = { app.player.play(app.liveUrl(c)); app.push(Screen.LivePlayer(c, list)) }
@@ -107,7 +115,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     }
                 }
             }
-            val nowX = 240.dp + perSec * (nowSec() - windowStart).toFloat()
+            val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()
             Box(Modifier.offset(x = nowX).width(2.dp).fillMaxHeight().background(C.Accent))
         }
     }

@@ -6,12 +6,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +63,7 @@ import androidx.media3.common.C as M3
 import androidx.media3.common.Player
 import com.avetero.relay.AppState
 import com.avetero.relay.PlayerSurface
+import com.avetero.relay.FullscreenVideo
 import com.avetero.relay.Episode
 import com.avetero.relay.PlayItem
 import com.avetero.relay.Resume
@@ -106,21 +113,31 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail
     LaunchedEffect(groupId, sort) { gridState.scrollToItem(0) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
-    GroupColumn("Categories", groups, groupId, { groupId = it })
-    Column(Modifier.weight(1f).fillMaxHeight().padding(start = 32.dp, end = 32.dp, top = 28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            T(groups.firstOrNull { it.id == groupId }?.name ?: "", 26, Heavy)
-            T("   %,d %s".format(tiles.size, if (series) "series" else "movies"), 15, Semi, C.Muted, Modifier.weight(1f))
+    val phone = compact()
+    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it })
+    Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
+        verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
+        if (phone) GroupChips(groups, groupId) { groupId = it }
+        val sortRow: @Composable () -> Unit = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Recently added", "A – Z", "Rating").forEachIndexed { i, s ->
-                    FocusSurface({ sort = i }, Modifier.height(40.dp), selected = sort == i, idle = C.Control, shape = RoundedCornerShape(10.dp)) { f ->
+                    FocusSurface({ sort = i }, Modifier.height(if (phone) 34.dp else 40.dp), selected = sort == i, idle = C.Control, shape = RoundedCornerShape(10.dp)) { f ->
                         T(s, 13, Bold, fg(f), Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
                     }
                 }
             }
         }
+        if (phone) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            T("%,d %s".format(tiles.size, if (series) "series" else "movies"), 13, Semi, C.Muted)
+            sortRow()
+        } else Row(verticalAlignment = Alignment.CenterVertically) {
+            T(groups.firstOrNull { it.id == groupId }?.name ?: "", 26, Heavy)
+            T("   %,d %s".format(tiles.size, if (series) "series" else "movies"), 15, Semi, C.Muted, Modifier.weight(1f))
+            sortRow()
+        }
         if (tiles.isEmpty()) EmptyState("Nothing here yet", if (series) "This category has no series." else "This category has no movies.")
-        LazyVerticalGrid(GridCells.Fixed(6), Modifier, gridState, verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(if (phone) GridCells.Adaptive(108.dp) else GridCells.Fixed(6), Modifier, gridState,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (phone) 12.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
                 FocusSurface({
                     if (series) app.series.firstOrNull { it.id == t.id }?.let { app.push(Screen.SeriesDetail(it)) }
@@ -151,6 +168,42 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
     val more = remember(vod) { app.movies.filter { it.categoryId == vod.categoryId && it.id != vod.id }.take(12) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+
+    if (compact()) {
+        Column(Modifier.fillMaxSize().background(C.Ground).verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                Art(info?.backdrop?.ifEmpty { null } ?: vod.icon, "", vod.id, Modifier.fillMaxSize(), showTitle = false)
+                IconBtn(Icons.Back, "Back", { app.back() }, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 44.dp)
+            }
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Art(vod.icon, vod.name, vod.id, Modifier.size(96.dp, 144.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        T(vod.name, 22, Heavy, maxLines = 3, lineHeight = 26)
+                        if (vod.rating > 0) Badge("%.1f".format(vod.rating), C.Accent, C.OnLight)
+                        T(listOfNotNull(info?.year, info?.duration, info?.genre).filter { it.isNotEmpty() }.joinToString(" · "), 13, Semi, C.Soft, maxLines = 3)
+                    }
+                }
+                Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, Modifier.fillMaxWidth(), style = BtnStyle.Light, icon = Icons.Play, height = 52.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (resumeAt > 0) Btn("From start", { app.saveResume(Resume(key, vod.name, "", vod.icon, 0, 1, vod.id)); app.push(Screen.VodPlayer(item)) }, Modifier.weight(1f), height = 48.dp)
+                    val fav = app.isFav(key)
+                    Btn(if (fav) "Favourited" else "Favourite", { app.toggleFav(key) }, Modifier.weight(1f), icon = if (fav) Icons.StarFilled else Icons.Star, height = 48.dp)
+                }
+                if (resumeAt > 0) ProgressLine(app.resumes.first { it.key == key }.let { it.pos / it.dur.coerceAtLeast(1).toFloat() }, Modifier.fillMaxWidth(), height = 4.dp)
+                T(info?.plot ?: "", 15, color = Color(0xFFC9CED8), maxLines = 12, lineHeight = 23)
+                if (!info?.director.isNullOrEmpty()) T("Director  ${info!!.director}", 13, color = C.Muted, maxLines = 2)
+                if (!info?.cast.isNullOrEmpty()) T("Cast  ${info!!.cast}", 13, color = C.Muted, maxLines = 4)
+                if (more.isNotEmpty()) {
+                    T("More like this", 17, Heavy)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(more, key = { it.id }) { m -> PosterTile(m.icon, m.name, m.id, 100.dp) { app.stack[app.stack.lastIndex] = Screen.MovieDetail(m) } }
+                    }
+                }
+            }
+        }
+        return
+    }
 
     Box(Modifier.fillMaxSize().background(C.Ground)) {
         Box(Modifier.align(Alignment.TopEnd).width(760.dp).height(430.dp)) {
@@ -213,6 +266,63 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
     fun play(e: Episode) {
         val i = eps.indexOf(e)
         app.push(Screen.VodPlayer(item(e), eps.drop(i + 1).take(20).map(::item)))
+    }
+
+    if (compact()) {
+        LazyColumn(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
+            item {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Art(s.cover, s.name, s.id, Modifier.size(96.dp, 144.dp), showTitle = false)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            T(s.name, 22, Heavy, maxLines = 3, lineHeight = 26)
+                            if (s.rating > 0) Badge("%.1f".format(s.rating), C.Accent, C.OnLight)
+                            T(listOfNotNull(s.year.ifEmpty { null }, "${seasons.size} seasons".takeIf { seasons.isNotEmpty() }, info?.genre?.ifEmpty { null }).joinToString(" · "), 13, Semi, C.Soft, maxLines = 3)
+                        }
+                    }
+                    val target = resumeEp ?: eps.firstOrNull()
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Light, icon = Icons.Play, height = 50.dp, enabled = target != null)
+                        val fav = app.isFav("s${s.id}")
+                        IconBtn(if (fav) Icons.StarFilled else Icons.Star, "Favourite", { app.toggleFav("s${s.id}") }, size = 50.dp, tint = if (fav) C.Accent else C.Text)
+                    }
+                    T(info?.plot?.ifEmpty { null } ?: s.plot, 14, color = Color(0xFFC9CED8), maxLines = 8, lineHeight = 22)
+                    when {
+                        error != null -> T("Couldn't load episodes: $error", 14, Bold, C.Error, maxLines = 3)
+                        info == null -> T("Loading episodes…", 14, color = C.Muted)
+                        eps.isEmpty() -> T("No episodes listed for this series.", 14, color = C.Muted)
+                    }
+                }
+            }
+            item {
+                LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(seasons) { n ->
+                        FocusSurface({ season = n }, Modifier.height(38.dp), idle = if (n == season) C.Accent else C.Control, shape = RoundedCornerShape(19.dp)) { f ->
+                            T("Season $n", 13, Bold, if (f || n == season) C.OnLight else C.Soft, Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
+                        }
+                    }
+                }
+            }
+            items(eps.filter { it.season == season }, key = { it.id }) { e ->
+                val r = app.resumes.firstOrNull { it.key == "e${e.id}" }
+                val watched = app.store.watched(app.account, "e${e.id}")
+                FocusSurface({ play(e) }, Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp), shape = RoundedCornerShape(12.dp)) { f ->
+                    Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(112.dp, 63.dp)) {
+                            Art(e.image.ifEmpty { s.cover }, "", e.id, Modifier.fillMaxSize(), showTitle = false)
+                            val frac = if (watched) 1f else r?.let { it.pos / it.dur.coerceAtLeast(1).toFloat() } ?: 0f
+                            if (frac > 0) ProgressLine(frac, Modifier.fillMaxWidth().align(Alignment.BottomStart), Color(0x66000000), height = 4.dp)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            T(listOfNotNull("E${e.num}", e.duration.ifEmpty { null }, "Watched".takeIf { watched }).joinToString(" · "), 12, Bold, sub(f))
+                            T(e.title, 15, Heavy, fg(f), maxLines = 2)
+                        }
+                    }
+                }
+            }
+        }
+        return
     }
 
     Row(Modifier.fillMaxSize().background(C.Ground)) {
@@ -279,6 +389,7 @@ fun fmtDur(ms: Long): String {
 /** Board 09: movie / episode player with seek, tracks, speed and next-episode card. */
 @Composable
 fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
+    FullscreenVideo()
     val p = app.player.player
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
@@ -289,6 +400,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
     var speed by remember { mutableFloatStateOf(1f) }
     var zoom by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
+    var seekHint by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(seekHint) { if (seekHint != null) { delay(1_200); seekHint = null } }
     val root = remember { FocusRequester() }
     val playBtn = remember { FocusRequester() }
 
@@ -330,10 +443,28 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
                     else -> false
                 }
             }
-            .pointerInput(Unit) { detectTapGestures { poke++ } },
+            // phones: tap shows/hides controls, double-tap left/right skips, drag sideways scrubs
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { if (showUi) showUi = false else poke++ },
+                    onDoubleTap = { o ->
+                        val back = o.x < size.width / 2
+                        p.seekTo((p.currentPosition + if (back) -10_000 else 30_000).coerceAtLeast(0))
+                        seekHint = if (back) "−10 s" else "+30 s"
+                    },
+                )
+            }
+            .pointerInput(Unit) {
+                var dx = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onDragEnd = { p.seekTo((p.currentPosition + (dx / size.width * 180_000).toLong()).coerceAtLeast(0)); seekHint = null },
+                ) { _, d -> dx += d; val secs = (dx / size.width * 180).toInt(); seekHint = (if (secs >= 0) "+" else "−") + "${kotlin.math.abs(secs)} s" }
+            },
     ) {
         PlayerSurface(p, Modifier.fillMaxSize(), zoom)
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
+        seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
 
         if (next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
             Row(Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = if (showUi) 196.dp else 40.dp).width(340.dp)
@@ -347,14 +478,15 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
         }
 
         AnimatedVisibility(showUi, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
-            Row(Modifier.fillMaxWidth().height(96.dp).background(Color(0xE60B0E14)).padding(horizontal = 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).statusBarsPadding().height(if (compact()) 72.dp else 96.dp).padding(horizontal = if (compact()) 16.dp else 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
                 Column(Modifier.weight(1f)) { T(item.meta, 13, Semi, C.Muted); T(item.title, 22, Heavy) }
                 Clock(18)
             }
         }
         AnimatedVisibility(showUi, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
-            Column(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).padding(start = 40.dp, end = 40.dp, top = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            val pad = if (compact()) 16.dp else 40.dp
+            Column(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).navigationBarsPadding().padding(start = pad, end = pad, top = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     T(fmtDur(pos), 14, mono = true)
                     Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF2A3142))) {
@@ -363,14 +495,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
                     }
                     T("−" + fmtDur((dur - pos).coerceAtLeast(0)), 14, color = C.Muted, mono = true)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 44.dp)
-                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 44.dp)
-                        Btn("%.2gx".format(speed), {
-                            speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
-                        }, height = 44.dp)
-                    }
+                val phone = compact()
+                val transport: @Composable () -> Unit = {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconBtn(Icons.Back, "Back 10 seconds", { p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0)) }, size = 52.dp, round = true)
                         FocusSurface({ if (p.isPlaying) p.pause() else p.play() }, Modifier.size(68.dp), idle = C.Accent, shape = RoundedCornerShape(34.dp), focusRequester = playBtn,
@@ -379,6 +505,25 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
                         }
                         IconBtn(Icons.Chevron, "Forward 30 seconds", { p.seekTo(p.currentPosition + 30_000) }, size = 52.dp, round = true)
                     }
+                }
+                if (phone) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { transport() }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 40.dp)
+                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 40.dp)
+                        Btn("%.2gx".format(speed), { speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed) }, height = 40.dp)
+                        if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 40.dp)
+                        Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 40.dp)
+                    }
+                } else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 44.dp)
+                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 44.dp)
+                        Btn("%.2gx".format(speed), {
+                            speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
+                        }, height = 44.dp)
+                    }
+                    transport()
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                         if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 44.dp)
                         Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 44.dp)

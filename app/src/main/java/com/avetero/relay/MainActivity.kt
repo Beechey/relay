@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalContext
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import com.avetero.relay.ui.LocalCompact
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.avetero.relay.ui.C
 import com.avetero.relay.ui.ExitDialog
 import com.avetero.relay.ui.FavouritesScreen
+import com.avetero.relay.ui.MoreScreen
 import com.avetero.relay.ui.GuideScreen
 import com.avetero.relay.ui.HomeScreen
 import com.avetero.relay.ui.LivePlayerScreen
@@ -66,23 +69,34 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Lays the app out on the boards' 1280x720 canvas at any screen size (Android TV's default 960x540dp makes everything 33% too big). */
+/**
+ * TV and landscape tablets: lay out on the boards' 1280x720 canvas at any screen size (Android TV's default 960x540dp makes everything 33% too big).
+ * Phones and portrait tablets: natural density with the compact (single-column, bottom bar) layouts.
+ */
 @Composable
 fun DesignScale(content: @Composable () -> Unit) {
-    val dm = LocalContext.current.resources.displayMetrics
-    val scale = minOf(dm.widthPixels / 1280f, dm.heightPixels / 720f)
-    CompositionLocalProvider(LocalDensity provides Density(scale, 1f), content = content)
+    val cfg = LocalConfiguration.current
+    val density = LocalDensity.current.density
+    val tv = (cfg.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+    val compact = !tv && (cfg.smallestScreenWidthDp < 600 || cfg.orientation == Configuration.ORIENTATION_PORTRAIT)
+    if (compact) CompositionLocalProvider(LocalCompact provides true, content = content)
+    else {
+        val scale = minOf(cfg.screenWidthDp * density / 1280f, cfg.screenHeightDp * density / 720f)
+        CompositionLocalProvider(LocalDensity provides Density(scale, 1f), content = content)
+    }
 }
 
 @Composable
 fun App(app: AppState, onExit: () -> Unit) {
     var exitAsk by remember { mutableStateOf(false) }
+    val compact = com.avetero.relay.ui.compact()
     var updatePrompt by remember { mutableStateOf(false) }
     val nav: (Tab) -> Unit = { t ->
         app.go(when (t) {
             Tab.Home -> Screen.Home; Tab.Live -> Screen.Live; Tab.Guide -> Screen.Guide
             Tab.Movies -> Screen.VodGrid(false); Tab.Series -> Screen.VodGrid(true)
             Tab.Favourites -> Screen.Favourites; Tab.Search -> Screen.Search; Tab.Settings -> Screen.Settings()
+            Tab.More -> Screen.More
         })
     }
 
@@ -100,6 +114,8 @@ fun App(app: AppState, onExit: () -> Unit) {
     BackHandler {
         when {
             app.stack.size > 1 -> app.back()
+            app.screen in listOf(Screen.Guide, Screen.Favourites, Screen.Search) && compact -> app.go(Screen.More)
+            app.screen is Screen.Settings && compact -> app.go(Screen.More)
             app.screen !in listOf(Screen.Home, Screen.Login, Screen.Sync) -> app.go(Screen.Home)
             else -> exitAsk = true
         }
@@ -119,6 +135,7 @@ fun App(app: AppState, onExit: () -> Unit) {
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
+            Screen.More -> MoreScreen(app, nav)
             is Screen.Settings -> SettingsScreen(app, s.section, nav)
         }
         app.message?.let { msg ->

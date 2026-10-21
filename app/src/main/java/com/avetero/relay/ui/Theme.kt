@@ -38,6 +38,12 @@ object C {
     val LightTrack = Color(0xFFC9CED8)
 }
 
+/** True on phones (and tablets in portrait): single-column layouts with a bottom tab bar instead of the TV rail. */
+val LocalCompact = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+@Composable
+fun compact() = LocalCompact.current
+
 /** Text colour on a FocusSurface: dark on the light focus fill. */
 fun fg(focused: Boolean) = if (focused) C.OnLight else C.Text
 fun sub(focused: Boolean) = if (focused) C.OnLightSub else C.Muted
@@ -81,6 +87,7 @@ object Icons {
     val Pause = icon("M6 4h4v16H6zM14 4h4v16h-4z", filled = true)
     val Back = icon("M15 5l-7 7 7 7")
     val Chevron = icon("M9 5l7 7-7 7")
+    val More = icon("M4 6h16M4 12h16M4 18h16")
     val Warn = icon("M12 3l10 18H2zM12 10v4M12 17.5v.5")
 }
 
