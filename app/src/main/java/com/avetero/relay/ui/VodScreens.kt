@@ -1,0 +1,391 @@
+package com.avetero.relay.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import androidx.media3.common.C as M3
+import androidx.media3.common.Player
+import com.avetero.relay.AppState
+import com.avetero.relay.PlayerSurface
+import com.avetero.relay.Episode
+import com.avetero.relay.PlayItem
+import com.avetero.relay.Resume
+import com.avetero.relay.Screen
+import com.avetero.relay.Series
+import com.avetero.relay.SeriesInfo
+import com.avetero.relay.Vod
+import com.avetero.relay.VodInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+private const val RESUME = "__resume"
+private const val ALL = "__all"
+
+/** A poster in the grid; movies and series share it. */
+private data class Tile(val id: Int, val name: String, val image: String, val rating: Double, val meta: String, val added: Long)
+
+/** Boards 07 + 10. */
+@Composable
+fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail(if (series) Tab.Series else Tab.Movies, nav) {
+    val cats = if (series) app.seriesCats else app.vodCats
+    val all = remember(series, app.movies, app.series) {
+        if (series) app.series.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
+        else app.movies.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
+    }
+    val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
+    var groupId by rememberSaveable(series) { mutableStateOf(if (resumeIds.isNotEmpty()) RESUME else ALL) }
+    var sort by rememberSaveable { mutableIntStateOf(0) }
+    val groups = remember(cats, all, resumeIds) {
+        val counts = all.groupingBy { it.second }.eachCount()
+        listOfNotNull(
+            Group(RESUME, "Continue watching", resumeIds.size).takeIf { resumeIds.isNotEmpty() },
+            Group(ALL, if (series) "All series" else "All movies", all.size),
+        ) + cats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
+    }
+    val tiles = remember(groupId, sort, all, resumeIds) {
+        val base = when (groupId) {
+            RESUME -> resumeIds.mapNotNull { id -> all.firstOrNull { it.first.id == id }?.first }
+            ALL -> all.map { it.first }
+            else -> all.filter { it.second == groupId }.map { it.first }
+        }
+        when (sort) { 1 -> base.sortedBy { it.name.lowercase() }; 2 -> base.sortedByDescending { it.rating }; else -> if (groupId == RESUME) base else base.sortedByDescending { it.added } }
+    }
+    val gridState = rememberLazyGridState()
+    val first = remember { FocusRequester() }
+    LaunchedEffect(groupId, sort) { gridState.scrollToItem(0) }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+
+    GroupColumn("Categories", groups, groupId, { groupId = it })
+    Column(Modifier.weight(1f).fillMaxHeight().padding(start = 32.dp, end = 32.dp, top = 28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T(groups.firstOrNull { it.id == groupId }?.name ?: "", 26, Heavy)
+            T("   %,d %s".format(tiles.size, if (series) "series" else "movies"), 15, Semi, C.Muted, Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Recently added", "A – Z", "Rating").forEachIndexed { i, s ->
+                    FocusSurface({ sort = i }, Modifier.height(40.dp), selected = sort == i, idle = C.Control, shape = RoundedCornerShape(10.dp)) { f ->
+                        T(s, 13, Bold, fg(f), Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+                    }
+                }
+            }
+        }
+        if (tiles.isEmpty()) EmptyState("Nothing here yet", if (series) "This category has no series." else "This category has no movies.")
+        LazyVerticalGrid(GridCells.Fixed(6), Modifier.focusRestorer(), gridState, verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
+                FocusSurface({
+                    if (series) app.series.firstOrNull { it.id == t.id }?.let { app.push(Screen.SeriesDetail(it)) }
+                    else app.movies.firstOrNull { it.id == t.id }?.let { app.push(Screen.MovieDetail(it)) }
+                }, focusRequester = if (i == 0) first else null, onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) }) { f ->
+                    Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
+                            Art(t.image, t.name, t.id, Modifier.fillMaxSize())
+                            if (t.rating > 0) Badge("%.1f".format(t.rating), C.Accent, C.OnLight, Modifier.align(Alignment.TopEnd).padding(6.dp))
+                        }
+                        T(t.name, 13, Bold, fg(f))
+                        if (t.meta.isNotEmpty()) T(t.meta, 12, color = sub(f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Board 08. */
+@Composable
+fun MovieDetailScreen(app: AppState, vod: Vod) {
+    var info by remember { mutableStateOf<VodInfo?>(null) }
+    LaunchedEffect(vod.id) { info = runCatching { withContext(Dispatchers.IO) { app.api.vodInfo(vod.id) } }.getOrNull() }
+    val key = "m${vod.id}"
+    val resumeAt = app.resumes.firstOrNull { it.key == key }?.pos ?: 0
+    val item = PlayItem(app.api.vodUrl(vod), vod.name, listOfNotNull(info?.year?.ifEmpty { null }, info?.genre?.ifEmpty { null }).joinToString(" · ").ifEmpty { "Movie" }, vod.icon, key, vodId = vod.id)
+    val more = remember(vod) { app.movies.filter { it.categoryId == vod.categoryId && it.id != vod.id }.take(12) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+
+    Box(Modifier.fillMaxSize().background(C.Ground)) {
+        Box(Modifier.align(Alignment.TopEnd).width(760.dp).height(430.dp)) {
+            Art(info?.backdrop ?: "", "", vod.id, Modifier.fillMaxSize(), showTitle = false)
+            Box(Modifier.fillMaxSize().background(Color(0x990B0E14)))
+        }
+        Column(Modifier.fillMaxSize().padding(start = 56.dp, top = 48.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                Art(vod.icon, vod.name, vod.id, Modifier.size(220.dp, 330.dp), 18)
+                Column(Modifier.width(560.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (vod.rating > 0) Badge("%.1f".format(vod.rating), C.Accent, C.OnLight)
+                        T(listOfNotNull(info?.year, info?.duration, info?.genre).filter { it.isNotEmpty() }.joinToString("  ·  "), 14, Semi, C.Soft)
+                    }
+                    T(vod.name, 44, Heavy, maxLines = 2, lineHeight = 48)
+                    T(info?.plot ?: "", 15, color = Color(0xFFC9CED8), maxLines = 4, lineHeight = 24)
+                    if (!info?.director.isNullOrEmpty()) T("Director  ${info!!.director}", 13, color = C.Muted)
+                    if (!info?.cast.isNullOrEmpty()) T("Cast  ${info!!.cast}", 13, color = C.Muted, maxLines = 2)
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, style = BtnStyle.Light, icon = Icons.Play, height = 52.dp, focusRequester = first)
+                        if (resumeAt > 0) Btn("From start", { app.saveResume(Resume(key, vod.name, "", vod.icon, 0, 1, vod.id)); app.push(Screen.VodPlayer(item)) }, height = 52.dp)
+                        val fav = app.isFav(key)
+                        IconBtn(if (fav) Icons.StarFilled else Icons.Star, if (fav) "Remove from favourites" else "Add to favourites", { app.toggleFav(key) }, size = 52.dp, tint = if (fav) C.Accent else C.Text)
+                    }
+                    if (resumeAt > 0) ProgressLine(app.resumes.first { it.key == key }.let { it.pos / it.dur.coerceAtLeast(1).toFloat() }, Modifier.width(260.dp), height = 4.dp)
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            if (more.isNotEmpty()) {
+                T("More like this", 17, Heavy)
+                LazyRow(Modifier.padding(top = 12.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(more, key = { it.id }) { m ->
+                        FocusSurface({ app.stack[app.stack.lastIndex] = Screen.MovieDetail(m) }, Modifier.size(120.dp, 180.dp), shape = RoundedCornerShape(10.dp)) { f ->
+                            Art(m.icon, m.name, m.id, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Board 11. */
+@Composable
+fun SeriesDetailScreen(app: AppState, s: Series) {
+    var info by remember { mutableStateOf<SeriesInfo?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(s.id) {
+        runCatching { withContext(Dispatchers.IO) { app.api.seriesInfo(s.id) } }.onSuccess { info = it }.onFailure { error = it.message }
+    }
+    val eps = info?.episodes.orEmpty()
+    val seasons = eps.map { it.season }.distinct()
+    val lastWatched = app.resumes.firstOrNull { it.seriesId == s.id }
+    val resumeEp = eps.firstOrNull { "e${it.id}" == lastWatched?.key }
+    var season by remember(info) { mutableIntStateOf(resumeEp?.season ?: seasons.firstOrNull() ?: 1) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(info) { if (info != null) runCatching { first.requestFocus() } }
+
+    fun item(e: Episode) = PlayItem(app.api.episodeUrl(e), "E${e.num} · ${e.title}", "${s.name} · Season ${e.season}", e.image.ifEmpty { s.cover }, "e${e.id}", seriesId = s.id)
+    fun play(e: Episode) {
+        val i = eps.indexOf(e)
+        app.push(Screen.VodPlayer(item(e), eps.drop(i + 1).take(20).map(::item)))
+    }
+
+    Row(Modifier.fillMaxSize().background(C.Ground)) {
+        Column(Modifier.width(420.dp).fillMaxHeight().background(C.Panel).padding(start = 56.dp, end = 40.dp, top = 48.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Art(s.cover, s.name, s.id, Modifier.size(150.dp, 225.dp), showTitle = false)
+            T(s.name, 34, Heavy, maxLines = 2, lineHeight = 38)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (s.rating > 0) Badge("%.1f".format(s.rating), C.Accent, C.OnLight)
+                T(listOfNotNull(s.year.ifEmpty { null }, "${seasons.size} seasons".takeIf { seasons.isNotEmpty() }, info?.genre?.ifEmpty { null }).joinToString("  ·  "), 13, Semi, C.Soft)
+            }
+            T(info?.plot?.ifEmpty { null } ?: s.plot, 14, color = Color(0xFFC9CED8), maxLines = 6, lineHeight = 22)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val target = resumeEp ?: eps.firstOrNull()
+                Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Light, icon = Icons.Play, height = 52.dp, enabled = target != null)
+                val fav = app.isFav("s${s.id}")
+                IconBtn(if (fav) Icons.StarFilled else Icons.Star, "Favourite", { app.toggleFav("s${s.id}") }, size = 52.dp, tint = if (fav) C.Accent else C.Text)
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight().padding(start = 40.dp, end = 48.dp, top = 48.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            when {
+                error != null -> EmptyState("Couldn't load episodes", error!!)
+                info == null -> T("Loading episodes…", 15, color = C.Muted)
+                eps.isEmpty() -> EmptyState("No episodes", "Your provider hasn't listed any episodes for this series.")
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(seasons) { n ->
+                    FocusSurface({ season = n }, Modifier.height(42.dp), idle = if (n == season) C.Accent else C.Control, shape = RoundedCornerShape(21.dp)) { f ->
+                        T("Season $n", 14, Bold, if (f || n == season) C.OnLight else C.Soft, Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
+                    }
+                }
+            }
+            LazyColumn(Modifier.focusRestorer(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                itemsIndexed(eps.filter { it.season == season }, key = { _, e -> e.id }) { i, e ->
+                    val r = app.resumes.firstOrNull { it.key == "e${e.id}" }
+                    val watched = app.store.watched(app.account, "e${e.id}")
+                    FocusSurface({ play(e) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+                        focusRequester = if (e == resumeEp || (resumeEp?.season != season && i == 0)) first else null) { f ->
+                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            Box(Modifier.size(136.dp, 76.dp)) {
+                                Art(e.image.ifEmpty { s.cover }, "", e.id, Modifier.fillMaxSize(), showTitle = false)
+                                val frac = if (watched) 1f else r?.let { it.pos / it.dur.coerceAtLeast(1).toFloat() } ?: 0f
+                                if (frac > 0) ProgressLine(frac, Modifier.fillMaxWidth().align(Alignment.BottomStart), Color(0x66000000), height = 4.dp)
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                T("Episode ${e.num}" + if (e.duration.isNotEmpty()) " · ${e.duration}" else "", 13, Bold, sub(f))
+                                T(e.title, 16, Heavy, fg(f))
+                                if (e.plot.isNotEmpty()) T(e.plot, 13, color = sub(f))
+                            }
+                            T(when { watched -> "Watched"; r != null -> fmtDur(r.dur - r.pos) + " left"; else -> "" }, 12, Heavy, sub(f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun fmtDur(ms: Long): String {
+    val s = ms / 1000
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Board 09: movie / episode player with seek, tracks, speed and next-episode card. */
+@Composable
+fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
+    val p = app.player.player
+    var pos by remember { mutableLongStateOf(0L) }
+    var dur by remember { mutableLongStateOf(0L) }
+    var showUi by remember { mutableStateOf(true) }
+    var poke by remember { mutableIntStateOf(0) }
+    var audio by remember { mutableStateOf("Default") }
+    var subs by remember { mutableStateOf(if (app.store.subtitlesOn) "On" else "Off") }
+    var speed by remember { mutableFloatStateOf(1f) }
+    var zoom by remember { mutableStateOf(false) }
+    var ended by remember { mutableStateOf(false) }
+    val root = remember { FocusRequester() }
+    val playBtn = remember { FocusRequester() }
+
+    fun save() { if (dur > 0) app.saveResume(Resume(item.resumeKey, item.title, item.meta, item.image, pos, dur, item.vodId, item.seriesId)) }
+    fun playNext() { save(); if (next.isNotEmpty()) app.stack[app.stack.lastIndex] = Screen.VodPlayer(next.first(), next.drop(1)) }
+
+    LaunchedEffect(item.url) {
+        ended = false
+        app.player.play(item.url, app.store.resumeAt(app.account, item.resumeKey), app.store.subtitlesOn)
+        var ticks = 0
+        while (true) {
+            pos = p.currentPosition; dur = p.duration.coerceAtLeast(0)
+            if (p.playbackState == Player.STATE_ENDED && !ended) {
+                ended = true
+                if (next.isNotEmpty() && app.store.autoplayNext) playNext() else { pos = dur; save() }
+            }
+            if (++ticks % 20 == 0) save() // every 10 s
+            delay(500)
+        }
+    }
+    DisposableEffect(item.url) { onDispose { save(); app.player.stop() } }
+    LaunchedEffect(poke, app.player.playing) {
+        showUi = true
+        if (app.player.playing) { delay(5_000); showUi = false; runCatching { root.requestFocus() } }
+    }
+    LaunchedEffect(showUi) { if (showUi) runCatching { playBtn.requestFocus() } }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && showUi) poke++; false }
+            .focusRequester(root).focusable()
+            .onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown || showUi) return@onKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft, Key.MediaRewind -> { p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0)); poke++; true }
+                    Key.DirectionRight, Key.MediaFastForward -> { p.seekTo(p.currentPosition + 30_000); poke++; true }
+                    Key.MediaPlayPause -> { if (p.isPlaying) p.pause() else p.play(); poke++; true }
+                    Key.DirectionCenter, Key.Enter, Key.DirectionUp, Key.DirectionDown -> { poke++; true }
+                    else -> false
+                }
+            }
+            .pointerInput(Unit) { detectTapGestures { poke++ } },
+    ) {
+        PlayerSurface(p, Modifier.fillMaxSize(), zoom)
+        app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
+
+        if (next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
+            Row(Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = if (showUi) 196.dp else 40.dp).width(340.dp)
+                .clip(RoundedCornerShape(14.dp)).background(C.Ground).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Art(next.first().image, "", 1, Modifier.size(112.dp, 63.dp), showTitle = false)
+                Column(Modifier.weight(1f)) {
+                    T("Next episode in ${(dur - pos) / 1000} s", 12, Bold, C.Muted); T(next.first().title, 14, Heavy)
+                }
+                Btn("Play", ::playNext, style = BtnStyle.Light, height = 40.dp)
+            }
+        }
+
+        AnimatedVisibility(showUi, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+            Row(Modifier.fillMaxWidth().height(96.dp).background(Color(0xE60B0E14)).padding(horizontal = 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
+                Column(Modifier.weight(1f)) { T(item.meta, 13, Semi, C.Muted); T(item.title, 22, Heavy) }
+                Clock(18)
+            }
+        }
+        AnimatedVisibility(showUi, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+            Column(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).padding(start = 40.dp, end = 40.dp, top = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    T(fmtDur(pos), 14, mono = true)
+                    Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF2A3142))) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (p.bufferedPosition.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color(0xFF4A5368)))
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(C.Accent))
+                    }
+                    T("−" + fmtDur((dur - pos).coerceAtLeast(0)), 14, color = C.Muted, mono = true)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 44.dp)
+                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 44.dp)
+                        Btn("%.2gx".format(speed), {
+                            speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
+                        }, height = 44.dp)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconBtn(Icons.Back, "Back 10 seconds", { p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0)) }, size = 52.dp, round = true)
+                        FocusSurface({ if (p.isPlaying) p.pause() else p.play() }, Modifier.size(68.dp), idle = C.Accent, shape = RoundedCornerShape(34.dp), focusRequester = playBtn,
+                            label = if (app.player.playing) "Pause" else "Play") { _ ->
+                            Ico(if (app.player.playing) Icons.Pause else Icons.Play, C.OnLight, 24.dp, Modifier.align(Alignment.Center))
+                        }
+                        IconBtn(Icons.Chevron, "Forward 30 seconds", { p.seekTo(p.currentPosition + 30_000) }, size = 52.dp, round = true)
+                    }
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                        if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 44.dp)
+                        Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 44.dp)
+                    }
+                }
+            }
+        }
+    }
+}
