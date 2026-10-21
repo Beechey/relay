@@ -268,13 +268,16 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val next = epg.upcoming().firstOrNull()
-                    T(if (next != null) "Next  ${fmtTime(next.start)} · ${next.title}" else "", 14, Bold, C.Muted, Modifier.weight(1f))
-                    if (compact()) T("Swipe ↑↓ to change channel", 12, color = C.Muted)
-                    else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Options"); KeyHint("Back", "Channel list") }
+                    T(if (next != null) "Next  ${fmtTime(next.start)} · ${next.title}" else if (compact()) "Swipe ↑↓ to change channel" else "", 14, Bold, C.Muted, Modifier.weight(1f))
+                    if (compact()) {
+                        Btn("Audio", { menu = true }, height = 40.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Btn("Subtitles", { menu = true }, height = 40.dp)
+                    } else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Audio, subtitles"); KeyHint("Back", "Channel list") }
                 }
             }
         }
-        if (menu) ChannelMenu(app, c, { menu = false; runCatching { focus.requestFocus() } })
+        if (menu) ChannelMenu(app, c, { menu = false; runCatching { focus.requestFocus() } }, inPlayer = true)
     }
 }
 

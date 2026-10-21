@@ -3,7 +3,7 @@
 First release.
 
 - Xtream Codes sign-in, saved on the device with automatic sign-in
-- Live TV with groups, preview, fullscreen player and channel zapping
+- Live TV with groups, preview, fullscreen player, channel zapping, audio and subtitle switching
 - TV guide (now and next from your provider)
 - Movies and series: browse, details, resume, next-episode autoplay
 - Search, favourites, settings, multiple playlists
