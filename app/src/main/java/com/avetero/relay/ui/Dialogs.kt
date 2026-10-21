@@ -49,7 +49,9 @@ private fun MenuItem(text: String, icon: ImageVector, onClick: () -> Unit, focus
 
 /** Board 18: channel long-press menu. */
 @Composable
-fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit) = Dialog(onDismiss) {
+fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Boolean = false) = Dialog(onDismiss) {
+    var audio by remember { mutableStateOf("Change") }
+    var subs by remember { mutableStateOf("Change") }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Panel(340) {
@@ -59,8 +61,14 @@ fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit) = Dialog(onDis
         }
         val fav = app.isFav("c${c.id}")
         MenuItem(if (fav) "Remove from favourites" else "Add to favourites", if (fav) Icons.StarFilled else Icons.Star, { app.toggleFav("c${c.id}"); onDismiss() }, first)
-        MenuItem("Show in TV guide", Icons.Guide, { onDismiss(); app.go(Screen.Guide) })
-        MenuItem("Watch fullscreen", Icons.Play, { onDismiss(); app.push(Screen.LivePlayer(c, app.channelsIn(c.categoryId))) })
+        if (inPlayer) {
+            // stays open so you can keep cycling until you hear/see the right track
+            MenuItem("Audio · $audio", Icons.Play, { audio = app.player.cycleTrack(androidx.media3.common.C.TRACK_TYPE_AUDIO) })
+            MenuItem("Subtitles · $subs", Icons.Guide, { subs = app.player.cycleTrack(androidx.media3.common.C.TRACK_TYPE_TEXT) })
+        } else {
+            MenuItem("Show in TV guide", Icons.Guide, { onDismiss(); app.go(Screen.Guide) })
+            MenuItem("Watch fullscreen", Icons.Play, { onDismiss(); app.push(Screen.LivePlayer(c, app.channelsIn(c.categoryId))) })
+        }
     }
 }
 
