@@ -141,7 +141,7 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
         }
         if (tiles.isEmpty()) EmptyState("Nothing here yet", if (series) "This category has no series." else "This category has no movies.")
         LazyVerticalGrid(if (phone) GridCells.Adaptive(108.dp) else GridCells.Fixed(6), Modifier, gridState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (phone) 12.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = if (phone) 12.dp else 0.dp, end = if (phone) 12.dp else 0.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
                 FocusSurface({
                     if (series) app.series.firstOrNull { it.id == t.id }?.let { app.push(Screen.SeriesDetail(it)) }
@@ -359,7 +359,7 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
                     }
                 }
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(eps.filter { it.season == season }, key = { _, e -> e.id }) { i, e ->
                     val r = app.resumes.firstOrNull { it.key == "e${e.id}" }
                     val watched = app.store.watched(app.account, "e${e.id}")
@@ -470,7 +470,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
         seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
 
-        if (next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
+        if (!app.inPip && next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
             Row(Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = if (showUi) 196.dp else 40.dp).width(340.dp)
                 .clip(RoundedCornerShape(14.dp)).background(C.Ground).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Art(next.first().image, "", 1, Modifier.size(112.dp, 63.dp), showTitle = false)
@@ -481,14 +481,18 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
             }
         }
 
-        AnimatedVisibility(showUi, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
             Row(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).statusBarsPadding().height(if (compact()) 72.dp else 96.dp).padding(horizontal = if (compact()) 16.dp else 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
                 Column(Modifier.weight(1f)) { T(item.meta, 13, Semi, C.Muted); T(item.title, 22, Heavy) }
+                if (compact()) {
+                    val activity = androidx.compose.ui.platform.LocalContext.current as? com.avetero.relay.MainActivity
+                    IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 44.dp)
+                }
                 Clock(18)
             }
         }
-        AnimatedVisibility(showUi, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
             val pad = if (compact()) 16.dp else 40.dp
             Column(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).navigationBarsPadding().padding(start = pad, end = pad, top = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

@@ -89,6 +89,7 @@ object Icons {
     val Pause = icon("M6 4h4v16H6zM14 4h4v16h-4z", filled = true)
     val Back = icon("M15 5l-7 7 7 7")
     val Chevron = icon("M9 5l7 7-7 7")
+    val Pip = icon("M3 5h18v14H3zM12 12h6v4h-6z")
     val More = icon("M4 6h16M4 12h16M4 18h16")
     val Warn = icon("M12 3l10 18H2zM12 10v4M12 17.5v.5")
 }

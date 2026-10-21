@@ -251,7 +251,8 @@ fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Un
             runCatching { selectedFocus.requestFocus() }
         }
     }
-    LazyColumn(modifier, state, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    // bottom room so the last category clears the screen edge / navigation bar
+    LazyColumn(modifier, state, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         items(groups, key = { it.id }) { g ->
             val on = g.id == selected
             FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp),

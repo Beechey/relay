@@ -89,7 +89,7 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         }
     }
 
-    LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (phone) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (phone) 16.dp else 32.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Box(Modifier.height(6.dp)) }
         // phones type with their own keyboard
         if (phone) item { Field("Search channels, movies and series", q, { q = it }) }
