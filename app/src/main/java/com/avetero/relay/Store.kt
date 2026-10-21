@@ -51,6 +51,7 @@ class Store(private val ctx: Context) {
     private fun cacheDir(a: Account) = File(ctx.filesDir, "cache_" + (a.server + a.user).hashCode().toUInt())
     fun readCache(a: Account, name: String): String? = File(cacheDir(a), "$name.json").takeIf { it.exists() }?.readText()
     fun writeCache(a: Account, name: String, json: String) = cacheDir(a).run { mkdirs(); File(this, "$name.json").writeText(json) }
+    fun cacheFile(a: Account, name: String) = File(cacheDir(a).apply { mkdirs() }, "$name.json")
     fun cacheTime(a: Account): Long = File(cacheDir(a), "live.json").lastModified()
 
     // ---- per-playlist lists ----

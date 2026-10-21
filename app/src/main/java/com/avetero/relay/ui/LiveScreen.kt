@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -96,7 +95,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
         if (list.isEmpty()) {
             EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK on any channel to add it to Favourites.")
         }
-        LazyColumn(Modifier.focusRestorer(), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                 LaunchedEffect(c.id) { app.loadEpg(c.id) }
                 val now = app.epg[c.id].current()
@@ -129,18 +128,20 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
         }
     }
 
-    Preview(app, focusedCh ?: playing, playing)
+    Preview(app, focusedCh ?: playing, playing) { c -> app.push(Screen.LivePlayer(c, list)) }
 
     menuFor?.let { c -> ChannelMenu(app, c, { menuFor = null }) }
 }
 
 @Composable
-private fun Preview(app: AppState, c: Channel?, playing: Channel?) {
+private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen: (Channel) -> Unit) {
     Column(Modifier.width(440.dp).fillMaxHeight().padding(start = 8.dp, end = 28.dp, top = 28.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Box(Modifier.size(404.dp, 227.dp).clip(RoundedCornerShape(14.dp)).background(C.Control)) {
-            if (playing != null) PlayerSurface(app.player.player, Modifier.fillMaxSize())
-            else T("Press OK to preview", 13, color = C.Muted, modifier = Modifier.align(Alignment.Center))
+        // the preview itself is a button: OK or a click goes fullscreen
+        FocusSurface({ playing?.let(onFullscreen) }, Modifier.size(404.dp, 227.dp), idle = C.Control, shape = RoundedCornerShape(14.dp), label = "Watch fullscreen") { f ->
+            if (playing != null) PlayerSurface(app.player.player, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp).clip(RoundedCornerShape(11.dp)))
+            else T("Press OK on a channel to preview", 13, color = sub(f), modifier = Modifier.align(Alignment.Center))
             if (playing != null) Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(12.dp))
+            if (playing != null) Badge("Fullscreen", if (f) C.Text else C.Ground, if (f) C.OnLight else C.Soft, Modifier.align(Alignment.BottomEnd).padding(12.dp))
             app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(12.dp)) }
         }
         if (c != null) {
@@ -160,7 +161,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?) {
             }
         }
         Spacer(Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("OK", "Watch"); KeyHint("Hold OK", "Favourite"); KeyHint("◀", "Groups") }
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("OK", if (playing != null) "OK again: fullscreen" else "Preview"); KeyHint("Hold OK", "Favourite"); KeyHint("◀", "Groups") }
     }
 }
 

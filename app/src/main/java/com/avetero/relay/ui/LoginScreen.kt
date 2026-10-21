@@ -9,6 +9,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -76,14 +84,15 @@ fun LoginScreen(app: AppState) {
         }
     }
 
-    Row(Modifier.fillMaxSize().background(C.Ground).padding(64.dp), horizontalArrangement = Arrangement.spacedBy(96.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxSize().background(C.Ground).imePadding().padding(horizontal = 64.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(96.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(380.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 24, Heavy, C.OnLight) }
             T("Add your playlist", 40, Heavy, maxLines = 2, lineHeight = 44)
             T("Sign in with the Xtream Codes details from your provider. Live TV, movies, series and the TV guide load automatically.", 16, color = C.Soft, maxLines = 4, lineHeight = 26)
             if (app.store.playlists().isNotEmpty()) Btn("Back", { app.back() }, Modifier.width(120.dp), height = 44.dp)
         }
-        Column(Modifier.width(520.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF11151F)).padding(36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        // scrolls so the focused field stays above the on-screen keyboard
+        Column(Modifier.width(520.dp).verticalScroll(rememberScrollState()).clip(RoundedCornerShape(20.dp)).background(Color(0xFF11151F)).padding(36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Field("Playlist name", name, { name = it })
             Field("Server URL", server, { server = it }, hint = "Include the port, e.g. :8080", keyboard = KeyboardType.Uri, mono = true)
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -103,7 +112,11 @@ fun Field(
     password: Boolean = false, keyboard: KeyboardType = KeyboardType.Text, mono: Boolean = false, error: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val bring = remember { BringIntoViewRequester() }
+    val imeVisible = WindowInsets.isImeVisible
+    // re-scroll once the keyboard has resized the window, so the field ends up visible
+    LaunchedEffect(focused, imeVisible) { if (focused) { delay(200); bring.bringIntoView() } }
+    Column(modifier.bringIntoViewRequester(bring), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         T(label, 13, Bold, if (error) C.Error else C.Soft)
         BasicTextField(
             value, onChange, singleLine = true,

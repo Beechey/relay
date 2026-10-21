@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -121,7 +120,7 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail
             }
         }
         if (tiles.isEmpty()) EmptyState("Nothing here yet", if (series) "This category has no series." else "This category has no movies.")
-        LazyVerticalGrid(GridCells.Fixed(6), Modifier.focusRestorer(), gridState, verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(6), Modifier, gridState, verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
                 FocusSurface({
                     if (series) app.series.firstOrNull { it.id == t.id }?.let { app.push(Screen.SeriesDetail(it)) }
@@ -246,7 +245,7 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
                     }
                 }
             }
-            LazyColumn(Modifier.focusRestorer(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(eps.filter { it.season == season }, key = { _, e -> e.id }) { i, e ->
                     val r = app.resumes.firstOrNull { it.key == "e${e.id}" }
                     val watched = app.store.watched(app.account, "e${e.id}")

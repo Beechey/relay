@@ -36,7 +36,7 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
             Column(Modifier.weight(1f)) {
                 T(listOfNotNull(app.account?.name, app.info?.expires?.let { "expires " + fmtDate(it) }).joinToString(" · "), 13, Semi, C.Muted)
                 val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                T(when (h) { in 5..11 -> "Good morning"; in 12..17 -> "Good afternoon"; else -> "Good evening" }, 30, Heavy)
+                T(if (app.libraryLoading) "Loading your library…" else when (h) { in 5..11 -> "Good morning"; in 12..17 -> "Good afternoon"; else -> "Good evening" }, 30, Heavy)
             }
             Clock(22)
         }
