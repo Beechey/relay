@@ -177,7 +177,7 @@ private fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrange
                     Badge("Update available", C.Accent, C.OnLight); T("Released ${r.date} · %.1f MB".format(r.size / 1e6), 13, color = C.Muted)
                 }
                 T("Version ${r.version}", 22, Heavy)
-                T(r.notes, 14, color = Color(0xFFC9CED8), maxLines = 6, lineHeight = 22)
+                ReleaseNotes(r.notes)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Btn("Download & install", { showDialog = true }, style = BtnStyle.Light, height = 46.dp)
                     T("You're on ${BuildConfig.VERSION_NAME}", 13, color = C.Muted)
