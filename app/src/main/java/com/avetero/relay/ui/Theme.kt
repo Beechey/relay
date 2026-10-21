@@ -1,6 +1,8 @@
 package com.avetero.relay.ui
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,3 +96,17 @@ object Icons {
 @Composable
 fun Ico(v: ImageVector, color: Color, size: Dp = 22.dp, modifier: Modifier = Modifier) =
     Icon(v, contentDescription = null, tint = color, modifier = modifier.size(size))
+
+/** Logo B "Handoff": grey chevron passing to an amber one, on the dark tile (see board 00). */
+@Composable
+fun LogoMark(size: Dp, modifier: Modifier = Modifier) {
+    val v = androidx.compose.runtime.remember {
+        ImageVector.Builder(defaultWidth = 108.dp, defaultHeight = 108.dp, viewportWidth = 108f, viewportHeight = 108f).apply {
+            addPath(addPathNodes("M28 32 L50 54 L28 76"), fill = null, stroke = SolidColor(Color(0xFF5A6378)), strokeLineWidth = 12f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+            addPath(addPathNodes("M54 32 L76 54 L54 76"), fill = null, stroke = SolidColor(C.Accent), strokeLineWidth = 12f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+        }.build()
+    }
+    androidx.compose.foundation.Image(v, contentDescription = "Relay", modifier = modifier.size(size)
+        .clip(androidx.compose.foundation.shape.RoundedCornerShape(size * 0.24f))
+        .background(Color(0xFF0B0E14)))
+}
