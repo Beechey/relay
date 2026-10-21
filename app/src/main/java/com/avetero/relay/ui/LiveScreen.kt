@@ -75,8 +75,9 @@ fun Programme.minutesLeft() = ((end - nowSec()) / 60).let { if (it >= 60) "${it 
 
 /** Board 04: groups · channels · preview. OK plays in preview, OK again goes fullscreen, hold OK opens the menu. Phone: video on top, chips, one column. */
 @Composable
-fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
-    var groupId by rememberSaveable { mutableStateOf(if (app.favourites.any { it.startsWith("c") }) FAVS else ALL) }
+fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) = WithRail(Tab.Live, nav) {
+    var groupId by rememberSaveable(initialGroup) { mutableStateOf(initialGroup ?: ALL) }
+    var drawer by remember { mutableStateOf(false) }
     val list = remember(groupId, app.channels, app.favourites) { app.channelsIn(groupId) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var menuFor by remember { mutableStateOf<Channel?>(null) }
@@ -85,11 +86,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
     val listState = rememberLazyListState()
     val phone = compact()
 
-    val groups = remember(app.liveCats, app.channels, app.favourites) {
-        val counts = app.channels.groupingBy { it.categoryId }.eachCount()
-        listOf(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }), Group(ALL, "All channels", app.channels.size)) +
-            app.liveCats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
-    }
+    val groups = rememberLiveGroups(app)
     LaunchedEffect(groupId) { listState.scrollToItem(0); if (!phone) runCatching { firstRow.requestFocus() } }
 
     val channelList: @Composable (Modifier) -> Unit = { mod ->
@@ -143,7 +140,9 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
                 T(now?.title ?: "No programme info", 17, Heavy)
             }
         } else T("Live TV", 26, Heavy, modifier = Modifier.padding(16.dp))
-        GroupChips(groups, groupId) { groupId = it }
+        val current = groups.firstOrNull { it.id == groupId }
+        CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
+        if (drawer) CategoryDrawer("Live TV", groups, groupId, { groupId = it }) { drawer = false }
         channelList(Modifier.weight(1f).padding(horizontal = 8.dp).padding(top = 10.dp))
     } else {
         GroupColumn("Groups", groups, groupId, { groupId = it })
@@ -300,3 +299,11 @@ fun PlayerError(err: String, onRetry: () -> Unit, onSwitch: (() -> Unit)?, hls: 
             }
         }
     }
+
+/** Favourites, All channels, then the provider's live categories that have channels. Shared by Live TV and the Guide. */
+@Composable
+fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCats, app.channels, app.favourites) {
+    val counts = app.channels.groupingBy { it.categoryId }.eachCount()
+    listOf(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }), Group(ALL, "All channels", app.channels.size)) +
+        app.liveCats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
+}

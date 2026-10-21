@@ -93,7 +93,7 @@ fun App(app: AppState, onExit: () -> Unit) {
     var updatePrompt by remember { mutableStateOf(false) }
     val nav: (Tab) -> Unit = { t ->
         app.go(when (t) {
-            Tab.Home -> Screen.Home; Tab.Live -> Screen.Live; Tab.Guide -> Screen.Guide
+            Tab.Home -> Screen.Home; Tab.Live -> Screen.Live(); Tab.Guide -> Screen.Guide
             Tab.Movies -> Screen.VodGrid(false); Tab.Series -> Screen.VodGrid(true)
             Tab.Favourites -> Screen.Favourites; Tab.Search -> Screen.Search; Tab.Settings -> Screen.Settings()
             Tab.More -> Screen.More
@@ -126,10 +126,10 @@ fun App(app: AppState, onExit: () -> Unit) {
             Screen.Login -> LoginScreen(app)
             Screen.Sync -> SyncScreen(app)
             Screen.Home -> HomeScreen(app, nav)
-            Screen.Live -> LiveScreen(app, nav)
+            is Screen.Live -> LiveScreen(app, nav, s.group)
             Screen.Guide -> GuideScreen(app, nav)
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
-            is Screen.VodGrid -> VodGridScreen(app, s.series, nav)
+            is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
             is Screen.MovieDetail -> MovieDetailScreen(app, s.vod)
             is Screen.SeriesDetail -> SeriesDetailScreen(app, s.series)
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next)

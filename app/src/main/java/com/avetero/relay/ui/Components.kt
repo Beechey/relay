@@ -39,6 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -198,24 +200,100 @@ fun GroupChips(groups: List<Group>, selected: String, onSelect: (String) -> Unit
 
 data class Group(val id: String, val name: String, val count: Int)
 
-/** The left category column shared by Live TV, Movies and Series. */
+/** Single-line filter box used to find a category. */
 @Composable
-fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.width(220.dp).fillMaxHeight().background(C.Panel).padding(start = 12.dp, end = 12.dp, top = 28.dp)) {
-        Label(title, Modifier.padding(start = 12.dp, bottom = 12.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            items(groups, key = { it.id }) { g ->
-                val on = g.id == selected
-                FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp)) { f ->
-                    Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        T(g.name, 15, if (on || f) Bold else FontWeight.Medium, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
-                        T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
-                    }
+fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
+    var focused by remember { mutableStateOf(false) }
+    androidx.compose.foundation.text.BasicTextField(
+        value, onChange, singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 15.sp),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(C.Accent),
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+        decorationBox = { inner ->
+            Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)).background(if (focused) Color(0xFF2A3347) else C.Control).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Ico(Icons.Search, C.Muted, 16.dp)
+                Box(Modifier.weight(1f)) { if (value.isEmpty()) T(placeholder, 14, color = C.Dim); inner() }
+            }
+        },
+    )
+}
+
+/** Lowercase, accents stripped, so "Telé" matches "tele". */
+fun norm(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
+
+fun List<Group>.matching(q: String): List<Group> = if (q.isBlank()) this else norm(q.trim()).let { n -> filter { norm(it.name).contains(n) } }
+
+/** The scrolling list of categories, shared by the TV column and the phone drawer. */
+@Composable
+fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    if (groups.isEmpty()) T("No categories match", 14, color = C.Muted, modifier = Modifier.padding(12.dp))
+    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        items(groups, key = { it.id }) { g ->
+            val on = g.id == selected
+            FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(g.name, 15, if (on || f) Bold else FontWeight.Medium, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
+                    T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
                 }
             }
         }
     }
 }
+
+/** TV: the left category column shared by Live TV, Movies and Series, with a search toggle. */
+@Composable
+fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    var searching by remember { mutableStateOf(false) }
+    var q by rememberSaveable { mutableStateOf("") }
+    val field = remember { FocusRequester() }
+    // the field only appears on request: a focused text field on TV pops the keyboard
+    LaunchedEffect(searching) { if (searching) runCatching { field.requestFocus() } }
+    Column(modifier.width(220.dp).fillMaxHeight().background(C.Panel).padding(start = 12.dp, end = 12.dp, top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Label(title, Modifier.weight(1f))
+            IconBtn(Icons.Search, if (searching) "Close category search" else "Search categories", { searching = !searching; if (!searching) q = "" }, size = 36.dp,
+                tint = if (searching) C.Accent else C.Muted)
+        }
+        if (searching) FilterField(q, { q = it }, "Find a category", focusRequester = field)
+        CategoryList(remember(groups, q) { groups.matching(q) }, selected, onSelect)
+    }
+}
+
+/** Phone: the button that shows the current category and opens the drawer. */
+@Composable
+fun CategoryButton(name: String, count: Int, onClick: () -> Unit) =
+    FocusSurface(onClick, Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(48.dp), idle = C.Control, shape = RoundedCornerShape(12.dp), label = "Choose category") { f ->
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Ico(Icons.More, if (f) C.OnLight else C.Accent, 20.dp)
+            T(name, 15, Bold, fg(f), Modifier.weight(1f))
+            T("%,d".format(count), 13, color = sub(f))
+            Ico(Icons.Chevron, sub(f), 16.dp)
+        }
+    }
+
+/** Phone: categories in a panel that slides in from the left, with search. Tap outside or Back to close. */
+@Composable
+fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) =
+    androidx.compose.ui.window.Dialog(onDismiss, androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        var q by remember { mutableStateOf("") }
+        var shown by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { shown = true }
+        Row(Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(shown, enter = androidx.compose.animation.slideInHorizontally { -it }) {
+                Column(Modifier.width(310.dp).fillMaxHeight().background(C.Panel).statusBarsPadding().navigationBarsPadding().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        T(title, 20, Heavy, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        IconBtn(Icons.Back, "Close", onDismiss, size = 40.dp)
+                    }
+                    FilterField(q, { q = it }, "Find a category")
+                    CategoryList(remember(groups, q) { groups.matching(q) }, selected, { onSelect(it); onDismiss() }, Modifier.weight(1f))
+                }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(remember { MutableInteractionSource() }, null, onClick = onDismiss))
+        }
+    }
 
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier) = T(text.uppercase(), 12, Bold, C.Muted, modifier)

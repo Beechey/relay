@@ -84,14 +84,15 @@ private data class Tile(val id: Int, val name: String, val image: String, val ra
 
 /** Boards 07 + 10. */
 @Composable
-fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail(if (series) Tab.Series else Tab.Movies, nav) {
+fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) = WithRail(if (series) Tab.Series else Tab.Movies, nav) {
     val cats = if (series) app.seriesCats else app.vodCats
     val all = remember(series, app.movies, app.series) {
         if (series) app.series.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
         else app.movies.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
     }
     val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
-    var groupId by rememberSaveable(series) { mutableStateOf(if (resumeIds.isNotEmpty()) RESUME else ALL) }
+    var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: if (resumeIds.isNotEmpty()) RESUME else ALL) }
+    var drawer by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableIntStateOf(0) }
     val groups = remember(cats, all, resumeIds) {
         val counts = all.groupingBy { it.second }.eachCount()
@@ -117,7 +118,12 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail
     if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it })
     Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
-        if (phone) GroupChips(groups, groupId) { groupId = it }
+        if (phone) {
+            T(if (series) "Series" else "Movies", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
+            val current = groups.firstOrNull { it.id == groupId }
+            CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
+            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }) { drawer = false }
+        }
         val sortRow: @Composable () -> Unit = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Recently added", "A – Z", "Rating").forEachIndexed { i, s ->
@@ -127,10 +133,8 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit) = WithRail
                 }
             }
         }
-        if (phone) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            T("%,d %s".format(tiles.size, if (series) "series" else "movies"), 13, Semi, C.Muted)
-            sortRow()
-        } else Row(verticalAlignment = Alignment.CenterVertically) {
+        // the category button already shows the count
+        if (phone) Box(Modifier.padding(horizontal = 16.dp)) { sortRow() } else Row(verticalAlignment = Alignment.CenterVertically) {
             T(groups.firstOrNull { it.id == groupId }?.name ?: "", 26, Heavy)
             T("   %,d %s".format(tiles.size, if (series) "series" else "movies"), 15, Semi, C.Muted, Modifier.weight(1f))
             sortRow()

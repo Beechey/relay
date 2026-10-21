@@ -46,7 +46,7 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 10.dp else 20.dp)) {
             listOf(
-                Triple(Tab.Live, "%,d channels".format(app.channels.size), Screen.Live),
+                Triple(Tab.Live, "%,d channels".format(app.channels.size), Screen.Live()),
                 Triple(Tab.Movies, "%,d titles".format(app.movies.size), Screen.VodGrid(false)),
                 Triple(Tab.Series, "%,d shows".format(app.series.size), Screen.VodGrid(true)),
             ).forEachIndexed { i, (tab, count, screen) ->
