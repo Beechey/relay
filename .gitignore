@@ -8,3 +8,6 @@ local.properties
 *.jks
 .DS_Store
 dist/
+
+# implementation notes stay local, never pushed
+docs/
