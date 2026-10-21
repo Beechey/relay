@@ -59,6 +59,9 @@ class AppState(val ctx: Context) {
     var hls by mutableStateOf(store.hls)
     /** True until the saved catalogue has been read back (it can be 100+ MB, so never on the main thread). */
     var libraryLoading by mutableStateOf(false)
+    /** True while the activity is shown as a picture-in-picture window. */
+    var inPip by mutableStateOf(false)
+    val onPlayerScreen get() = screen is Screen.LivePlayer || screen is Screen.VodPlayer
 
     private val epgGate = Semaphore(4)
     private val epgFetched = HashMap<Int, Long>()

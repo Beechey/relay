@@ -1,8 +1,6 @@
-# Relay IPTV 0.1.3
+# Relay IPTV 0.1.4
 
-- **Search categories:** find a category by name in Live TV, Movies and Series. On TV, press the magnifier above the category list; on phones it's at the top of the category panel
-- **Phone category panel:** categories now open in a panel that slides in from the left, replacing the scrolling strip
-- **TV Guide by category:** pick a category to see just its channels in the guide
-- **Search finds categories:** results include matching categories and jump straight to them
-- **Starts on All channels:** Live TV and the TV Guide always open on All channels
-- Movies and Series have titles on phones
+- **Picture-in-picture on phones and tablets:** while a channel, movie or episode is playing, press Home (or the new picture-in-picture button in the player) and it keeps playing in a small floating window. Tap the window to come back
+- **Nothing cut off at the bottom:** the last item in the category panel and other long lists now scrolls fully into view
+
+Already on an earlier version? The app offers this update itself — choose **Install now** when asked.

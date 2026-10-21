@@ -1,6 +1,10 @@
 package com.avetero.relay
 
+import android.app.PictureInPictureParams
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -56,6 +60,27 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
         setContent { DesignScale { App(app, onExit = ::finish) } }
+    }
+
+    /** Phones and tablets only: TVs keep fullscreen playback. */
+    private val canPip get() = Build.VERSION.SDK_INT >= 26 &&
+        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+        !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+
+    fun enterPip() {
+        if (!canPip || app.player.url == null) return
+        enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+    }
+
+    // Home / recent apps while a video is playing: shrink to a floating window instead of stopping
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (app.onPlayerScreen && app.player.playing) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        app.inPip = isInPictureInPictureMode
     }
 
     override fun onStop() {

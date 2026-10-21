@@ -48,7 +48,7 @@ fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRai
     if (phone) Column(Modifier.weight(1f).fillMaxHeight()) {
         T("Settings", 26, Heavy, modifier = Modifier.padding(16.dp))
         GroupChips(sections.map { Group(it.first, it.second, 0) }, section) { app.stack[app.stack.lastIndex] = Screen.Settings(it) }
-        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Spacer(Modifier.height(4.dp)) }
             when (section) {
                 "player" -> item { PlayerSettings(app) }

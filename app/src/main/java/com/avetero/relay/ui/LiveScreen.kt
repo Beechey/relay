@@ -92,7 +92,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     val channelList: @Composable (Modifier) -> Unit = { mod ->
         Column(mod) {
             if (list.isEmpty()) EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK (or press and hold) on any channel to add it to Favourites.")
-            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                     LaunchedEffect(c.id) { app.loadEpg(c.id) }
                     val now = app.epg[c.id].current()
@@ -242,13 +242,20 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
             }, hls = app.hls)
         }
         // phones have no Back key on screen: show one with the info bar
-        AnimatedVisibility(showInfo, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
-            IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
+        AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
+                // phones: keep watching in a small floating window
+                if (compact()) {
+                    val activity = androidx.compose.ui.platform.LocalContext.current as? com.avetero.relay.MainActivity
+                    IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 48.dp)
+                }
+            }
         }
-        AnimatedVisibility(showInfo, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Ground).padding(horizontal = 12.dp, vertical = 6.dp)) { Clock(22) }
         }
-        AnimatedVisibility(showInfo, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
             val epg = app.epg[c.id]
             val now = epg.current()
             val pad = if (compact()) 16.dp else 40.dp

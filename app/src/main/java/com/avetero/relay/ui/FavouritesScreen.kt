@@ -52,7 +52,7 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourite
         }
         when (tab) {
             0 -> if (chans.isEmpty()) EmptyState("No favourites yet", "Hold OK on any channel, movie or series to add it here.", "Browse live TV") { app.go(Screen.Live()) }
-            else LazyVerticalGrid(if (phone) GridCells.Fixed(1) else GridCells.Fixed(3), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            else LazyVerticalGrid(if (phone) GridCells.Fixed(1) else GridCells.Fixed(3), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(chans, key = { it.id }) { c ->
                     LaunchedEffect(c.id) { app.loadEpg(c.id) }
                     val now = app.epg[c.id].current()
@@ -70,11 +70,11 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourite
                 }
             }
             1 -> if (movies.isEmpty()) EmptyState("No favourite movies", "Hold OK on a movie poster to add it.")
-            else LazyVerticalGrid(GridCells.Adaptive(if (phone) 104.dp else 130.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            else LazyVerticalGrid(GridCells.Adaptive(if (phone) 104.dp else 130.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(movies, key = { it.id }) { m -> PosterTile(m.icon, m.name, m.id) { app.push(Screen.MovieDetail(m)) } }
             }
             else -> if (series.isEmpty()) EmptyState("No favourite series", "Hold OK on a series poster to add it.")
-            else LazyVerticalGrid(GridCells.Adaptive(if (phone) 104.dp else 130.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            else LazyVerticalGrid(GridCells.Adaptive(if (phone) 104.dp else 130.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(series, key = { it.id }) { s -> PosterTile(s.cover, s.name, s.id) { app.push(Screen.SeriesDetail(s)) } }
             }
         }

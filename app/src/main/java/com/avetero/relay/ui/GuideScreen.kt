@@ -99,7 +99,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     }
                     (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L), if (phone) 11 else 13, color = C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
                 }
-                LazyColumn() {
+                LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp)) {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                         LaunchedEffect(c.id) { app.loadEpg(c.id) }
                         val progs = app.epg[c.id].orEmpty().filter { it.end > windowStart && it.start < windowEnd }
