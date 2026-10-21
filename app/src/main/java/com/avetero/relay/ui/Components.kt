@@ -155,7 +155,7 @@ data class Group(val id: String, val name: String, val count: Int)
 fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.width(220.dp).fillMaxHeight().background(C.Panel).padding(start = 12.dp, end = 12.dp, top = 28.dp)) {
         Label(title, Modifier.padding(start = 12.dp, bottom = 12.dp))
-        LazyColumn(Modifier.focusRestorer(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(groups, key = { it.id }) { g ->
                 val on = g.id == selected
                 FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp)) { f ->

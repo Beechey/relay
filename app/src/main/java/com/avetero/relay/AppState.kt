@@ -56,6 +56,8 @@ class AppState(val ctx: Context) {
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
     var hls by mutableStateOf(store.hls)
+    /** True until the saved catalogue has been read back (it can be 100+ MB, so never on the main thread). */
+    var libraryLoading by mutableStateOf(false)
 
     private val epgGate = Semaphore(4)
     private val epgFetched = HashMap<Int, Long>()
@@ -66,7 +68,7 @@ class AppState(val ctx: Context) {
         val a = account
         stack += when {
             a == null -> Screen.Login
-            store.readCache(a, "live") != null -> { loadCache(a); Screen.Home }
+            hasCache(a) -> { libraryLoading = true; Screen.Home }
             else -> Screen.Sync
         }
     }
@@ -93,14 +95,25 @@ class AppState(val ctx: Context) {
 
     fun saveResume(r: Resume) { store.saveResume(account, r); resumes = store.resumes(account) }
 
+    private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
+
+    suspend fun loadLibrary() {
+        val a = account ?: return
+        if (!libraryLoading) return
+        withContext(Dispatchers.IO) { loadCache(a) }
+        libraryLoading = false
+    }
+
     private fun loadCache(a: Account) {
+        fun <T> read(name: String, parse: (java.io.Reader) -> List<T>): List<T> =
+            store.cacheFile(a, name).takeIf { it.exists() }?.bufferedReader()?.use(parse) ?: emptyList()
         runCatching {
             liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
-            channels = parseChannels(store.readCache(a, "live") ?: "[]")
+            channels = read("live", ::parseChannels)
             vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
-            movies = parseVods(store.readCache(a, "vod") ?: "[]")
+            movies = read("vod", ::parseVods)
             seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
-            series = parseSeries(store.readCache(a, "series") ?: "[]")
+            series = read("series", ::parseSeries)
         }
     }
 
@@ -116,28 +129,29 @@ class AppState(val ctx: Context) {
         info = withContext(Dispatchers.IO) { x.login() }
         set(0, StepState.Done, info?.expires?.let { "Active · expires " + fmtDate(it) } ?: "Active")
 
-        suspend fun step(i: Int, catsName: String, name: String, cats: () -> List<Category>, items: () -> String, apply: (List<Category>, String) -> Int) {
-            set(i, StepState.Busy)
+        suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (java.io.File) -> Unit, apply: (List<Category>, java.io.Reader) -> Int) {
+            set(i, StepState.Busy, "Downloading…")
             try {
-                val (c, json) = withContext(Dispatchers.IO) {
+                val file = store.cacheFile(a, name)
+                val c = withContext(Dispatchers.IO) {
                     val c = cats()
-                    val json = items()
-                    c to json
+                    download(file)
+                    store.writeCache(a, name + "_cats", org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString())
+                    c
                 }
-                val n = withContext(Dispatchers.Default) { apply(c, json) }
-                withContext(Dispatchers.IO) {
-                    store.writeCache(a, catsName, org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString())
-                    store.writeCache(a, name, json)
-                }
+                set(i, StepState.Busy, "Reading…")
+                val n = withContext(Dispatchers.IO) { file.bufferedReader().use { apply(c, it) } }
                 set(i, StepState.Done, "%,d".format(n))
+            } catch (e: OutOfMemoryError) {
+                set(i, StepState.Failed, "Too large for this device")
             } catch (e: Exception) {
                 set(i, StepState.Failed, e.message ?: "Failed")
             }
         }
         listOf(
-            async { step(1, "live_cats", "live", x::liveCategories, x::channelsJson) { c, j -> liveCats = c; channels = parseChannels(j); channels.size } },
-            async { step(2, "vod_cats", "vod", x::vodCategories, x::vodJson) { c, j -> vodCats = c; movies = parseVods(j); movies.size } },
-            async { step(3, "series_cats", "series", x::seriesCategories, x::seriesJson) { c, j -> seriesCats = c; series = parseSeries(j); series.size } },
+            async { step(1, "live", x::liveCategories, x::downloadChannels) { c, r -> liveCats = c; channels = parseChannels(r); channels.size } },
+            async { step(2, "vod", x::vodCategories, x::downloadVods) { c, r -> vodCats = c; movies = parseVods(r); movies.size } },
+            async { step(3, "series", x::seriesCategories, x::downloadSeries) { c, r -> seriesCats = c; series = parseSeries(r); series.size } },
         ).forEach { it.await() }
     }
 
@@ -165,7 +179,7 @@ class AppState(val ctx: Context) {
         favourites = store.favourites(a)
         resumes = store.resumes(a)
         liveCats = emptyList(); channels = emptyList(); vodCats = emptyList(); movies = emptyList(); seriesCats = emptyList(); series = emptyList()
-        if (store.readCache(a, "live") != null) { loadCache(a); go(Screen.Home) } else go(Screen.Sync)
+        if (hasCache(a)) { libraryLoading = true; go(Screen.Home) } else go(Screen.Sync)
     }
 
     fun remove(a: Account) {

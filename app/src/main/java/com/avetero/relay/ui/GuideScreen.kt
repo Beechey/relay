@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.avetero.relay.AppState
@@ -75,7 +74,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     T(if (favMode) "Favourites" else "All channels", 14, Bold, modifier = Modifier.width(240.dp).padding(start = 40.dp))
                     (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L), 13, color = C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
                 }
-                LazyColumn(Modifier.focusRestorer()) {
+                LazyColumn() {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                         LaunchedEffect(c.id) { app.loadEpg(c.id) }
                         val progs = app.epg[c.id].orEmpty().filter { it.end > windowStart && it.start < windowEnd }

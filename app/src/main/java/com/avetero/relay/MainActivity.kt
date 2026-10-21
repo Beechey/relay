@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
-        setContent { App(app, onExit = ::finish) }
+        setContent { DesignScale { App(app, onExit = ::finish) } }
     }
 
     override fun onStop() {
@@ -60,6 +64,14 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         app.player.player.release()
     }
+}
+
+/** Lays the app out on the boards' 1280x720 canvas at any screen size (Android TV's default 960x540dp makes everything 33% too big). */
+@Composable
+fun DesignScale(content: @Composable () -> Unit) {
+    val dm = LocalContext.current.resources.displayMetrics
+    val scale = minOf(dm.widthPixels / 1280f, dm.heightPixels / 720f)
+    CompositionLocalProvider(LocalDensity provides Density(scale, 1f), content = content)
 }
 
 @Composable
@@ -76,7 +88,9 @@ fun App(app: AppState, onExit: () -> Unit) {
 
     // background refresh of a cached catalogue, then a silent update check
     LaunchedEffect(app.account) {
-        if (app.account != null && app.screen == Screen.Home && app.store.refreshOnStart) runCatching { app.sync() }
+        app.loadLibrary()
+        val stale = app.account?.let { System.currentTimeMillis() - app.store.cacheTime(it) > 12 * 3600_000 } ?: false
+        if (app.account != null && app.screen == Screen.Home && app.store.refreshOnStart && stale) runCatching { app.sync() }
         if (Updater.enabled && app.store.checkUpdates) runCatching {
             val r = withContext(Dispatchers.IO) { Updater.latest(app.store.betaUpdates) }
             if (r != null && Updater.isNewer(r)) { app.update = r; updatePrompt = r.version != app.store.skippedVersion }

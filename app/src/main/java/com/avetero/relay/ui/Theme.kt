@@ -69,13 +69,13 @@ fun icon(d: String, filled: Boolean = false): ImageVector =
 
 object Icons {
     val Home = icon("M3 11l9-8 9 8M5 9.5V21h5v-6h4v6h5V9.5")
-    val Live = icon("M4 7h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2zM17 2l-5 5-5-5")
-    val Guide = icon("M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2zM3 10h18M9 4v16")
+    val Live = icon("M4 7h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2-2V9a2 2 0 0 1 2-2zM17 2l-5 5-5-5")
+    val Guide = icon("M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2-2V6a2 2 0 0 1 2-2zM3 10h18M9 4v16")
     val Movies = icon("M4 3h16v18H4zM8 3v18M16 3v18M4 8h4M4 16h4M16 8h4M16 16h4M4 12h16")
     val Series = icon("M7 3h13v13H7zM4 7v13h13")
     val Star = icon("M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z")
     val StarFilled = icon("M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z", filled = true)
-    val Search = icon("M11 4a7 7 0 110 14 7 7 0 010-14zM21 21l-4.3-4.3")
+    val Search = icon("M11 4a7 7 0 1 1 0 14a7 7 0 1 1 0-14zM21 21l-4.3-4.3")
     val Settings = icon("M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M14 4v4M8 10v4M16 16v4")
     val Play = icon("M7 4l13 8-13 8z", filled = true)
     val Pause = icon("M6 4h4v16H6zM14 4h4v16h-4z", filled = true)

@@ -110,7 +110,7 @@ private fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arran
             Btn("Switch to", { app.info = null; app.switchTo(other) }, height = 40.dp)
         }
     }
-    SettingRow("Refresh playlist on start", "Reload channels, movies and series each time the app opens", toggle = app.store.refreshOnStart.also { refresh }) {
+    SettingRow("Refresh playlist on start", "Reload channels, movies and series when the app opens and the saved copy is over 12 hours old", toggle = app.store.refreshOnStart.also { refresh }) {
         app.store.refreshOnStart = !app.store.refreshOnStart; refresh++
     }
 }

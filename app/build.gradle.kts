@@ -43,7 +43,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += listOf("-opt-in=androidx.compose.foundation.ExperimentalFoundationApi", "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi")
+        freeCompilerArgs += listOf("-opt-in=androidx.compose.foundation.ExperimentalFoundationApi", "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi", "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi")
     }
     buildFeatures { compose = true; buildConfig = true }
 }
@@ -58,6 +58,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    // streaming JSON reader: catalogue lists can be hundreds of MB
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
     testImplementation("junit:junit:4.13.2")
