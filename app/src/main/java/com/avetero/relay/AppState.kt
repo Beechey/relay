@@ -24,7 +24,7 @@ sealed interface Screen {
     data class VodGrid(val series: Boolean, val group: String? = null) : Screen
     data class MovieDetail(val vod: Vod) : Screen
     data class SeriesDetail(val series: Series) : Screen
-    data class VodPlayer(val item: PlayItem, val next: List<PlayItem> = emptyList()) : Screen
+    data class VodPlayer(val item: PlayItem, val next: List<PlayItem> = emptyList(), val episodes: List<PlayItem> = emptyList()) : Screen
     data object Search : Screen
     data object Favourites : Screen
     data object More : Screen
@@ -65,6 +65,15 @@ class AppState(val ctx: Context) {
     val moviesVisible by derivedStateOf { if (hidden.none { it.startsWith("vod:") }) movies else movies.filter { "vod:${it.categoryId}" !in hidden } }
     val seriesVisible by derivedStateOf { if (hidden.none { it.startsWith("series:") }) series else series.filter { "series:${it.categoryId}" !in hidden } }
     var resumes by mutableStateOf(store.resumes(account))
+    var recentChannels by mutableStateOf(store.recents(account, "recent"))
+    // before recents were recorded, fall back to what's in Continue watching
+    var recentMovies by mutableStateOf(store.recents(account, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() })
+    var recentSeries by mutableStateOf(store.recents(account, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() })
+    fun addRecentChannel(id: Int) { store.addRecent(account, "recent", id); recentChannels = store.recents(account, "recent") }
+    fun addRecentVod(item: PlayItem) {
+        if (item.seriesId != 0) { store.addRecent(account, "rseries", item.seriesId); recentSeries = store.recents(account, "rseries") }
+        else if (item.vodId != 0) { store.addRecent(account, "rmovie", item.vodId); recentMovies = store.recents(account, "rmovie") }
+    }
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
@@ -102,6 +111,7 @@ class AppState(val ctx: Context) {
 
     fun channelsIn(groupId: String): List<Channel> = when (groupId) {
         FAVS -> favourites.mapNotNull { k -> if (k.startsWith("c")) channels.firstOrNull { it.id == k.drop(1).toIntOrNull() } else null }
+        RECENT -> recentChannels.mapNotNull { id -> channels.firstOrNull { it.id == id } }
         ALL -> channelsVisible
         else -> channels.filter { it.categoryId == groupId }
     }
@@ -255,6 +265,8 @@ class AppState(val ctx: Context) {
         favourites = store.favourites(a)
         hidden = store.hidden(a)
         resumes = store.resumes(a)
+        recentChannels = store.recents(a, "recent"); recentMovies = store.recents(a, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() }
+        recentSeries = store.recents(a, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() }
         liveCats = emptyList(); channels = emptyList(); vodCats = emptyList(); movies = emptyList(); seriesCats = emptyList(); series = emptyList()
         if (hasCache(a)) { libraryLoading = true; go(Screen.Home) } else go(Screen.Sync)
     }
@@ -268,6 +280,7 @@ class AppState(val ctx: Context) {
     companion object {
         const val FAVS = "__favs"
         const val ALL = "__all"
+        const val RECENT = "__recent"
     }
 }
 

@@ -84,10 +84,15 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     // Settings → Live TV → Resume the last channel
     LaunchedEffect(Unit) {
         if (app.store.resumeLastChannel && app.player.url == null)
-            app.store.recentChannels(app.account).firstOrNull()?.let { id -> app.channels.firstOrNull { it.id == id } }?.let { app.player.play(app.liveUrl(it)) }
+            app.recentChannels.firstOrNull()?.let { id -> app.channels.firstOrNull { it.id == id } }?.let { app.player.play(app.liveUrl(it)) }
     }
     var drawer by remember { mutableStateOf(false) }
-    val list = remember(groupId, app.channels, app.favourites, app.hidden) { app.channelsIn(groupId) }
+    var query by rememberSaveable { mutableStateOf("") }
+    // only the Recent group depends on the recents; rebuilding the list on every play would drop focus
+    val recentKey = if (groupId == AppState.RECENT) app.recentChannels else null
+    val list = remember(groupId, app.channels, app.favourites, app.hidden, recentKey, query) {
+        app.channelsIn(groupId).let { l -> if (query.isBlank()) l else l.filter { it.name.contains(query.trim(), ignoreCase = true) } }
+    }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var menuFor by remember { mutableStateOf<Channel?>(null) }
     val playing = list.firstOrNull { app.player.url == app.liveUrl(it) } ?: app.channels.firstOrNull { app.player.url == app.liveUrl(it) }
@@ -99,8 +104,10 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     LaunchedEffect(groupId) { listState.scrollToItem(0); if (!phone) runCatching { firstRow.requestFocus() } }
 
     val channelList: @Composable (Modifier) -> Unit = { mod ->
-        Column(mod) {
-            if (list.isEmpty()) EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK (or press and hold) on any channel to add it to Favourites.")
+        Column(mod, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterField(query, { query = it }, "Search channels in this category", if (phone) Modifier.padding(horizontal = 12.dp) else Modifier)
+            if (list.isEmpty() && query.isNotBlank()) EmptyState("No matches", "No channel here matches “${query.trim()}”.")
+            else if (list.isEmpty()) EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK (or press and hold) on any channel to add it to Favourites.")
             LazyColumn(state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                     LaunchedEffect(c.id) { app.loadEpg(c) }
@@ -108,7 +115,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                     FocusSurface(
                         onClick = {
                             if (playing?.id == c.id) app.push(Screen.LivePlayer(c, list))
-                            else { app.player.play(app.liveUrl(c)); app.store.addRecent(app.account, c.id) }
+                            else { app.player.play(app.liveUrl(c)); app.addRecentChannel(c.id) }
                         },
                         modifier = Modifier.fillMaxWidth().height(if (phone) 64.dp else 68.dp),
                         selected = playing?.id == c.id,
@@ -142,7 +149,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                 androidx.compose.runtime.key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize()) }
                 Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(10.dp))
                 Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
-                app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(10.dp)) }
+                app.player.error?.let { T(it, 13, Bold, C.Error, maxLines = 3, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) }
             }
             val now = app.programmesFor(playing).current()
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
@@ -181,7 +188,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen:
             else T("Press OK on a channel to preview", 13, color = sub(f), modifier = Modifier.align(Alignment.Center))
             if (playing != null) Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(12.dp))
             if (playing != null) Badge("Fullscreen", if (f) C.Text else C.Ground, if (f) C.OnLight else C.Soft, Modifier.align(Alignment.BottomEnd).padding(12.dp))
-            app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(12.dp)) }
+            app.player.error?.let { T(it, 13, Bold, C.Error, maxLines = 3, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)) }
         }
         if (c != null) {
             val list = app.programmesFor(c)
@@ -219,7 +226,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
     LaunchedEffect(c.id) {
         delay(400) // debounce fast zapping
         app.player.play(app.liveUrl(c))
-        app.store.addRecent(app.account, c.id)
+        app.addRecentChannel(c.id)
         app.loadEpg(c)
     }
     LaunchedEffect(poke) { showInfo = true; delay(5_000); showInfo = false }
@@ -234,7 +241,8 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 when (e.key) {
                     Key.DirectionUp, Key.ChannelUp -> { zap(-1); true }
                     Key.DirectionDown, Key.ChannelDown -> { zap(1); true }
-                    Key.DirectionCenter, Key.Enter -> { poke++; true }
+                    // hold OK = options (audio, subtitles, quality, favourite); a press shows the info bar
+                    Key.DirectionCenter, Key.Enter -> { if (e.nativeKeyEvent.repeatCount > 0 || e.nativeKeyEvent.isLongPress) menu = true else poke++; true }
                     Key.Menu -> { menu = true; true }
                     else -> false
                 }
@@ -307,7 +315,7 @@ fun PlayerError(err: String, onRetry: () -> Unit, onSwitch: (() -> Unit)?, hls: 
         Column(Modifier.padding(16.dp).widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(C.Surface).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Ico(Icons.Warn, C.Error, 26.dp)
             T("This isn't playing", 20, Heavy)
-            T("The stream stopped or the format isn't supported ($err).", 14, color = C.Soft, maxLines = 3, lineHeight = 21)
+            T(err, 14, color = C.Soft, maxLines = 4, lineHeight = 21)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Btn("Retry", onRetry, style = BtnStyle.Light, height = 44.dp, focusRequester = first)
                 if (onSwitch != null) Btn(if (hls) "Try MPEG-TS" else "Try HLS", onSwitch, height = 44.dp)
@@ -317,9 +325,11 @@ fun PlayerError(err: String, onRetry: () -> Unit, onSwitch: (() -> Unit)?, hls: 
 
 /** Favourites, All channels, then the provider's live categories that have channels. Shared by Live TV and the Guide. */
 @Composable
-fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCatsVisible, app.channels, app.favourites) {
+fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCatsVisible, app.channels, app.favourites, app.recentChannels) {
     val counts = app.channels.groupingBy { it.categoryId }.eachCount()
-    listOf(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }), Group(ALL, "All channels", app.channelsVisible.size)) +
+    listOfNotNull(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }),
+        Group(AppState.RECENT, "Recent", app.recentChannels.size).takeIf { app.recentChannels.isNotEmpty() },
+        Group(ALL, "All channels", app.channelsVisible.size)) +
         app.liveCatsVisible.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
 }
 
