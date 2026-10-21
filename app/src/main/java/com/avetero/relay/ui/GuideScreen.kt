@@ -23,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,8 +46,11 @@ import com.avetero.relay.fmtTime
  */
 @Composable
 fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
-    val favMode = app.favourites.any { it.startsWith("c") }
-    val list = remember(app.channels, app.favourites) { app.channelsIn(if (favMode) FAVS else ALL) }
+    var groupId by rememberSaveable { mutableStateOf(ALL) }
+    var drawer by remember { mutableStateOf(false) }
+    val groups = rememberLiveGroups(app)
+    val current = groups.firstOrNull { it.id == groupId }
+    val list = remember(groupId, app.channels, app.favourites) { app.channelsIn(groupId) }
     val windowStart = remember { nowSec() / 1800 * 1800 }
     val windowEnd = windowStart + 2 * 3600
     var focused by remember { mutableStateOf<Pair<Channel, Programme?>?>(null) }
@@ -57,9 +62,12 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
     Column(Modifier.weight(1f).fillMaxHeight()) {
         if (phone) {
             val (c, p) = focused ?: (null to null)
-            Column(Modifier.padding(16.dp)) {
-                T("TV Guide", 26, Heavy)
-                T(listOfNotNull(c?.name, p?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)} · ${it.title}" }).joinToString(" · ").ifEmpty { "Tap a programme to watch" }, 13, color = C.Muted)
+            Column(Modifier.padding(vertical = 16.dp)) {
+                T("TV Guide", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
+                Spacer(Modifier.height(10.dp))
+                CategoryButton(current?.name ?: "All channels", current?.count ?: 0) { drawer = true }
+                Spacer(Modifier.height(6.dp))
+                T(listOfNotNull(c?.name, p?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)} · ${it.title}" }).joinToString(" · ").ifEmpty { "Tap a programme to watch" }, 13, color = C.Muted, modifier = Modifier.padding(horizontal = 16.dp))
             }
         } else Row(Modifier.fillMaxWidth().height(200.dp).padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 20.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Box(Modifier.size(270.dp, 152.dp).clip(RoundedCornerShape(12.dp)).background(C.Control)) {
@@ -79,7 +87,16 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
             val perSec = gridW / (windowEnd - windowStart).toFloat()
             Column {
                 Row(Modifier.height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                    T(if (favMode) "Favourites" else "All channels", if (phone) 12 else 14, Bold, modifier = Modifier.width(nameW).padding(start = if (phone) 12.dp else 40.dp))
+                    // TV: the category button sits above the channel column; on phones it's in the header
+                    if (phone) Spacer(Modifier.width(nameW))
+                    else Box(Modifier.width(nameW).padding(start = 24.dp)) {
+                        FocusSurface({ drawer = true }, Modifier.fillMaxWidth().height(36.dp), idle = C.Control, shape = RoundedCornerShape(10.dp), label = "Choose category") { f ->
+                            Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Ico(Icons.More, if (f) C.OnLight else C.Accent, 16.dp)
+                                T(current?.name ?: "All channels", 13, Bold, fg(f), Modifier.weight(1f))
+                            }
+                        }
+                    }
                     (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L), if (phone) 11 else 13, color = C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
                 }
                 LazyColumn() {
@@ -115,6 +132,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     }
                 }
             }
+            if (drawer) CategoryDrawer("TV Guide", groups, groupId, { groupId = it }) { drawer = false }
             val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()
             Box(Modifier.offset(x = nowX).width(2.dp).fillMaxHeight().background(C.Accent))
         }

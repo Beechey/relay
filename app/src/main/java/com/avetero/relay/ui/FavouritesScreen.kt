@@ -51,7 +51,7 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourite
             }
         }
         when (tab) {
-            0 -> if (chans.isEmpty()) EmptyState("No favourites yet", "Hold OK on any channel, movie or series to add it here.", "Browse live TV") { app.go(Screen.Live) }
+            0 -> if (chans.isEmpty()) EmptyState("No favourites yet", "Hold OK on any channel, movie or series to add it here.", "Browse live TV") { app.go(Screen.Live()) }
             else LazyVerticalGrid(if (phone) GridCells.Fixed(1) else GridCells.Fixed(3), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(chans, key = { it.id }) { c ->
                     LaunchedEffect(c.id) { app.loadEpg(c.id) }

@@ -43,19 +43,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.text.Normalizer
 
-/** Lowercase, accents stripped, so "Telé" matches "tele". */
-fun norm(s: String) = Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
 
 /** Board 12: on-screen keyboard and grouped results. */
 @Composable
 fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) {
     var q by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf(Triple(emptyList<Channel>(), emptyList<Series>(), emptyList<Vod>())) }
+    var cats by remember { mutableStateOf(emptyList<Pair<String, Screen>>()) }
     val firstKey = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
     LaunchedEffect(q) {
         delay(250)
         val n = norm(q.trim())
+        cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
+            app.liveCats.filter { norm(it.name).contains(n) }.map { "Live · ${it.name}" to Screen.Live(it.id) } +
+                app.vodCats.filter { norm(it.name).contains(n) }.map { "Movies · ${it.name}" to Screen.VodGrid(false, it.id) } +
+                app.seriesCats.filter { norm(it.name).contains(n) }.map { "Series · ${it.name}" to Screen.VodGrid(true, it.id) }
+        }.take(30)
         results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
             Triple(
                 app.channels.filter { norm(it.name).contains(n) }.take(30),
@@ -90,7 +94,16 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         // phones type with their own keyboard
         if (phone) item { Field("Search channels, movies and series", q, { q = it }) }
         val (chans, ser, mov) = results
-        if (q.length >= 2 && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T("No results for “$q”", 16, Bold, C.Muted) }
+        if (cats.isNotEmpty()) item {
+            ResultRow("Categories", cats.size) {
+                items(cats, key = { it.first }) { (label, screen) ->
+                    FocusSurface({ app.go(screen) }, Modifier.height(48.dp), idle = C.Surface, shape = RoundedCornerShape(24.dp)) { f ->
+                        T(label, 14, Bold, fg(f), Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
+                    }
+                }
+            }
+        }
+        if (q.length >= 2 && cats.isEmpty() && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T("No results for “$q”", 16, Bold, C.Muted) }
         if (chans.isNotEmpty()) item {
             ResultRow("Channels", chans.size) {
                 items(chans, key = { it.id }) { c ->
