@@ -49,6 +49,9 @@ class PlayerHost(ctx: Context, store: Store) {
         private set
     var playing by mutableStateOf(false)
         private set
+    /** A stream is loaded and meant to be playing (true through buffering pauses). */
+    var active by mutableStateOf(false)
+        private set
     var tracks by mutableStateOf(Tracks.EMPTY)
         private set
 
@@ -56,6 +59,7 @@ class PlayerHost(ctx: Context, store: Store) {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) { error = e.errorCodeName.removePrefix("ERROR_CODE_").replace('_', ' ').lowercase() }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { active = playWhenReady && url != null }
             override fun onTracksChanged(t: Tracks) { tracks = t }
         })
     }
@@ -69,6 +73,7 @@ class PlayerHost(ctx: Context, store: Store) {
         player.setMediaItem(MediaItem.fromUri(url), startMs)
         player.prepare()
         player.playWhenReady = true
+        active = true
     }
 
     fun retry() = url?.let { u -> url = null; play(u) }
@@ -76,6 +81,7 @@ class PlayerHost(ctx: Context, store: Store) {
     fun stop() {
         player.stop()
         url = null
+        active = false
     }
 
     /** Cycles to the next track of a type (audio/text); for text, "off" is part of the cycle. Returns its label. */
@@ -118,10 +124,11 @@ fun PlayerSurface(player: Player, modifier: Modifier = Modifier, zoom: Boolean =
  * keep the screen awake, and turn phones to landscape. Everything is restored when the player closes.
  */
 @Composable
-fun FullscreenVideo() {
+fun FullscreenVideo(inPip: Boolean = false) {
     val activity = LocalContext.current as? Activity ?: return
     val phone = com.avetero.relay.ui.compact()
-    DisposableEffect(Unit) {
+    // re-applied when leaving picture-in-picture, which drops the landscape lock and hidden bars
+    DisposableEffect(inPip) {
         val win = activity.window
         val ctl = WindowCompat.getInsetsController(win, win.decorView)
         val orientation = activity.requestedOrientation

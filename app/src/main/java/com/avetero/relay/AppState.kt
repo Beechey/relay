@@ -62,6 +62,8 @@ class AppState(val ctx: Context) {
     /** True while the activity is shown as a picture-in-picture window. */
     var inPip by mutableStateOf(false)
     val onPlayerScreen get() = screen is Screen.LivePlayer || screen is Screen.VodPlayer
+    /** Screens where leaving the app should keep the video going in a floating window: the players, and Live TV's preview. */
+    val pipEligible get() = player.active && (onPlayerScreen || screen is Screen.Live)
 
     private val epgGate = Semaphore(4)
     private val epgFetched = HashMap<Int, Long>()
