@@ -62,6 +62,10 @@ class Store(private val ctx: Context) {
 
     fun setFavourites(a: Account?, list: List<String>) = prefs.edit().putString(key(a, "favs"), list.joinToString(",")).apply()
 
+    /** Hidden categories, keyed "live:<id>", "vod:<id>" or "series:<id>". */
+    fun hidden(a: Account?): Set<String> = prefs.getStringSet(key(a, "hidden"), emptySet())!!.toSet()
+    fun setHidden(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "hidden"), set).apply()
+
     fun recentChannels(a: Account?): List<Int> =
         prefs.getString(key(a, "recent"), "")!!.split(',').mapNotNull { it.toIntOrNull() }
 
@@ -78,11 +82,24 @@ class Store(private val ctx: Context) {
     fun resumeAt(a: Account?, key: String): Long = resumes(a).firstOrNull { it.key == key }?.pos ?: 0
 
     /** Saves progress; past 95% the item counts as watched and leaves Continue watching. */
-    fun saveResume(a: Account?, r: Resume) {
+    /**
+     * Saves progress; past 95% the item counts as watched and leaves Continue watching.
+     * A series keeps one entry (its latest episode); upNext keeps an unstarted next episode there.
+     */
+    fun saveResume(a: Account?, r: Resume, upNext: Boolean = false) {
         val watched = r.dur > 0 && r.pos > r.dur * 0.95
-        val rest = resumes(a).filter { it.key != r.key }
-        val list = (if (watched || r.pos < 10_000) rest else listOf(r) + rest).take(30)
+        val rest = resumes(a).filter { it.key != r.key && (r.seriesId == 0 || it.seriesId != r.seriesId) }
+        val keep = upNext || (!watched && r.pos >= 10_000)
+        val list = (if (keep) listOf(r) + rest else rest).take(30)
         if (watched) prefs.edit().putBoolean(key(a, "w" + r.key), true).apply()
+        prefs.edit().putString(key(a, "resume"), JSONArray(list.map {
+            JSONObject().put("key", it.key).put("title", it.title).put("meta", it.meta).put("image", it.image)
+                .put("pos", it.pos).put("dur", it.dur).put("vodId", it.vodId).put("seriesId", it.seriesId)
+        }).toString()).apply()
+    }
+
+    fun removeResume(a: Account?, key: String) {
+        val list = resumes(a).filter { it.key != key }
         prefs.edit().putString(key(a, "resume"), JSONArray(list.map {
             JSONObject().put("key", it.key).put("title", it.title).put("meta", it.meta).put("image", it.image)
                 .put("pos", it.pos).put("dur", it.dur).put("vodId", it.vodId).put("seriesId", it.seriesId)
@@ -104,9 +121,38 @@ class Store(private val ctx: Context) {
     var subtitlesOn: Boolean
         get() = prefs.getBoolean("subs", false)
         set(v) = prefs.edit().putBoolean("subs", v).apply()
-    var refreshOnStart: Boolean
-        get() = prefs.getBoolean("refreshOnStart", true)
-        set(v) = prefs.edit().putBoolean("refreshOnStart", v).apply()
+    private fun str(k: String, d: String) = prefs.getString(k, d)!!
+    private fun put(k: String, v: String) = prefs.edit().putString(k, v).apply()
+    private fun bool(k: String, d: Boolean) = prefs.getBoolean(k, d)
+    private fun put(k: String, v: Boolean) = prefs.edit().putBoolean(k, v).apply()
+
+    /** Playlist refresh: "Every start", "Daily", "Weekly", "Monthly" or "Manually". */
+    var refreshEvery: String get() = str("refreshEvery", "Daily"); set(v) = put("refreshEvery", v)
+    /** TV guide refresh: "6 hours", "12 hours", "Daily" or "Manually". */
+    var guideEvery: String get() = str("guideEvery", "12 hours"); set(v) = put("guideEvery", v)
+    /** Live TV opens on "All channels" or the "Last category" you used. */
+    var liveStart: String get() = str("liveStart", "All channels"); set(v) = put("liveStart", v)
+    var lastLiveGroup: String get() = str("lastLiveGroup", ""); set(v) = put("lastLiveGroup", v)
+    var resumeLastChannel: Boolean get() = bool("resumeLastChannel", false); set(v) = put("resumeLastChannel", v)
+    var showNumbers: Boolean get() = bool("showNumbers", true); set(v) = put("showNumbers", v)
+    /** Preferred track languages as ISO codes, "" = the stream's default. */
+    var audioLang: String get() = str("audioLang", ""); set(v) = put("audioLang", v)
+    var subLang: String get() = str("subLang", ""); set(v) = put("subLang", v)
+    var skipBackSec: Int get() = prefs.getInt("skipBack", 10); set(v) = prefs.edit().putInt("skipBack", v).apply()
+    var skipFwdSec: Int get() = prefs.getInt("skipFwd", 30); set(v) = prefs.edit().putInt("skipFwd", v).apply()
+    var pipOnLeave: Boolean get() = bool("pipOnLeave", true); set(v) = put("pipOnLeave", v)
+    var zoomDefault: Boolean get() = bool("zoomDefault", false); set(v) = put("zoomDefault", v)
+    var clock24: Boolean get() = bool("clock24", true); set(v) = put("clock24", v)
+
+    /** Milliseconds a cached catalogue stays fresh for the chosen schedule (null = never refresh on its own). */
+    fun refreshAfterMs(): Long? = when (refreshEvery) {
+        "Every start" -> 0; "Weekly" -> 7 * 86_400_000L; "Monthly" -> 30 * 86_400_000L; "Manually" -> null; else -> 86_400_000L
+    }
+
+    fun guideAfterMs(): Long? = when (guideEvery) { "6 hours" -> 6 * 3600_000L; "Daily" -> 86_400_000L; "Manually" -> null; else -> 12 * 3600_000L }
+
+    /** Drops the saved catalogue and guide for a playlist; the next start downloads them again. */
+    fun clearCache(a: Account) = cacheDir(a).deleteRecursively()
     var checkUpdates: Boolean
         get() = prefs.getBoolean("checkUpdates", true)
         set(v) = prefs.edit().putBoolean("checkUpdates", v).apply()

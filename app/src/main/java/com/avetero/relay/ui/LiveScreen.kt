@@ -76,9 +76,18 @@ fun Programme.minutesLeft() = ((end - nowSec()) / 60).let { if (it >= 60) "${it 
 /** Board 04: groups · channels · preview. OK plays in preview, OK again goes fullscreen, hold OK opens the menu. Phone: video on top, chips, one column. */
 @Composable
 fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) = WithRail(Tab.Live, nav) {
-    var groupId by rememberSaveable(initialGroup) { mutableStateOf(initialGroup ?: ALL) }
+    var groupId by rememberSaveable(initialGroup) {
+        val last = app.store.lastLiveGroup.takeIf { app.store.liveStart == "Last category" && it.isNotEmpty() }
+        mutableStateOf(initialGroup ?: last ?: ALL)
+    }
+    LaunchedEffect(groupId) { app.store.lastLiveGroup = groupId }
+    // Settings → Live TV → Resume the last channel
+    LaunchedEffect(Unit) {
+        if (app.store.resumeLastChannel && app.player.url == null)
+            app.store.recentChannels(app.account).firstOrNull()?.let { id -> app.channels.firstOrNull { it.id == id } }?.let { app.player.play(app.liveUrl(it)) }
+    }
     var drawer by remember { mutableStateOf(false) }
-    val list = remember(groupId, app.channels, app.favourites) { app.channelsIn(groupId) }
+    val list = remember(groupId, app.channels, app.favourites, app.hidden) { app.channelsIn(groupId) }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var menuFor by remember { mutableStateOf<Channel?>(null) }
     val playing = list.firstOrNull { app.player.url == app.liveUrl(it) } ?: app.channels.firstOrNull { app.player.url == app.liveUrl(it) }
@@ -94,8 +103,8 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             if (list.isEmpty()) EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK (or press and hold) on any channel to add it to Favourites.")
             LazyColumn(state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
-                    LaunchedEffect(c.id) { app.loadEpg(c.id) }
-                    val now = app.epg[c.id].current()
+                    LaunchedEffect(c.id) { app.loadEpg(c) }
+                    val now = app.programmesFor(c).current()
                     FocusSurface(
                         onClick = {
                             if (playing?.id == c.id) app.push(Screen.LivePlayer(c, list))
@@ -108,7 +117,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                         onLongClick = { menuFor = c },
                     ) { f ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (phone) 10.dp else 14.dp)) {
-                            if (!phone) T(if (c.num > 0) c.num.toString() else "", 13, color = sub(f), mono = true, modifier = Modifier.width(40.dp))
+                            if (!phone && app.store.showNumbers) T(if (c.num > 0) c.num.toString() else "", 13, color = sub(f), mono = true, modifier = Modifier.width(40.dp))
                             Logo(c.icon, c.name, f, Modifier.size(48.dp, 36.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Row {
@@ -135,7 +144,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                 Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
                 app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(10.dp)) }
             }
-            val now = app.epg[playing.id].current()
+            val now = app.programmesFor(playing).current()
             Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 T(playing.name, 13, Bold, C.Accent)
                 T(now?.title ?: "No programme info", 17, Heavy)
@@ -143,10 +152,10 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
         } else T("Live TV", 26, Heavy, modifier = Modifier.padding(16.dp))
         val current = groups.firstOrNull { it.id == groupId }
         CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-        if (drawer) CategoryDrawer("Live TV", groups, groupId, { groupId = it }) { drawer = false }
+        if (drawer) CategoryDrawer("Live TV", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }) { drawer = false }
         channelList(Modifier.weight(1f).padding(horizontal = 8.dp).padding(top = 10.dp))
     } else {
-        GroupColumn("Groups", groups, groupId, { groupId = it })
+        GroupColumn("Groups", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } })
         Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 16.dp).padding(top = 28.dp)) {
             Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
                 Label("${groups.firstOrNull { it.id == groupId }?.name ?: ""} · ${list.size} channels", Modifier.weight(1f))
@@ -175,7 +184,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen:
             app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(12.dp)) }
         }
         if (c != null) {
-            val list = app.epg[c.id]
+            val list = app.programmesFor(c)
             val now = list.current()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 T(c.name.uppercase() + (now?.let { " · NOW · ${fmtTime(it.start)} – ${fmtTime(it.end)}" } ?: ""), 13, Bold, C.Accent)
@@ -204,13 +213,14 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
     var showInfo by remember { mutableStateOf(true) }
     var poke by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
+    var tracksOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
 
     LaunchedEffect(c.id) {
         delay(400) // debounce fast zapping
         app.player.play(app.liveUrl(c))
         app.store.addRecent(app.account, c.id)
-        app.loadEpg(c.id)
+        app.loadEpg(c)
     }
     LaunchedEffect(poke) { showInfo = true; delay(5_000); showInfo = false }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -236,7 +246,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total < -120f) zap(1) else if (total > 120f) zap(-1) }) { _, dy -> total += dy }
             },
     ) {
-        PlayerSurface(app.player.player, Modifier.fillMaxSize())
+        PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
         app.player.error?.let { err ->
             PlayerError(err, onRetry = { app.player.retry() }, onSwitch = {
                 app.hls = !app.hls; app.store.hls = app.hls; app.player.play(app.liveUrl(c))
@@ -257,7 +267,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
             Box(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Ground).padding(horizontal = 12.dp, vertical = 6.dp)) { Clock(22) }
         }
         AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
-            val epg = app.epg[c.id]
+            val epg = app.programmesFor(c)
             val now = epg.current()
             val pad = if (compact()) 16.dp else 40.dp
             Column(Modifier.fillMaxWidth().background(C.Ground).navigationBarsPadding().padding(start = pad, end = pad, top = if (compact()) 16.dp else 28.dp, bottom = if (compact()) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (compact()) 12.dp else 18.dp)) {
@@ -279,15 +289,12 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val next = epg.upcoming().firstOrNull()
                     T(if (next != null) "Next  ${fmtTime(next.start)} · ${next.title}" else if (compact()) "Swipe ↑↓ to change channel" else "", 14, Bold, C.Muted, Modifier.weight(1f))
-                    if (compact()) {
-                        Btn("Audio", { menu = true }, height = 40.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Btn("Subtitles", { menu = true }, height = 40.dp)
-                    } else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Audio, subtitles"); KeyHint("Back", "Channel list") }
+                    if (compact()) Btn("Audio & quality", { tracksOpen = true }, height = 40.dp) else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Audio & quality"); KeyHint("Back", "Channel list") }
                 }
             }
         }
         if (menu) ChannelMenu(app, c, { menu = false; runCatching { focus.requestFocus() } }, inPlayer = true)
+        if (tracksOpen) TracksDialog(app) { tracksOpen = false; runCatching { focus.requestFocus() } }
     }
 }
 
@@ -310,8 +317,15 @@ fun PlayerError(err: String, onRetry: () -> Unit, onSwitch: (() -> Unit)?, hls: 
 
 /** Favourites, All channels, then the provider's live categories that have channels. Shared by Live TV and the Guide. */
 @Composable
-fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCats, app.channels, app.favourites) {
+fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCatsVisible, app.channels, app.favourites) {
     val counts = app.channels.groupingBy { it.categoryId }.eachCount()
-    listOf(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }), Group(ALL, "All channels", app.channels.size)) +
-        app.liveCats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
+    listOf(Group(FAVS, "Favourites", app.favourites.count { it.startsWith("c") }), Group(ALL, "All channels", app.channelsVisible.size)) +
+        app.liveCatsVisible.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
+}
+
+/** Hides a live category; if it was the one showing, falls back to All channels. */
+fun hideLive(app: AppState, g: Group, current: String, setGroup: (String) -> Unit) {
+    app.setCategoryHidden("live:${g.id}", true)
+    if (g.id == current) setGroup(ALL)
+    app.message = "Hidden “${g.name}”"
 }

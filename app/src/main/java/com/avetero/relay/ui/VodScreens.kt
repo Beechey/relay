@@ -85,10 +85,10 @@ private data class Tile(val id: Int, val name: String, val image: String, val ra
 /** Boards 07 + 10. */
 @Composable
 fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) = WithRail(if (series) Tab.Series else Tab.Movies, nav) {
-    val cats = if (series) app.seriesCats else app.vodCats
-    val all = remember(series, app.movies, app.series) {
-        if (series) app.series.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
-        else app.movies.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
+    val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
+    val all = remember(series, app.moviesVisible, app.seriesVisible) {
+        if (series) app.seriesVisible.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
+        else app.moviesVisible.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
     }
     val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
     var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: if (resumeIds.isNotEmpty()) RESUME else ALL) }
@@ -115,14 +115,19 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
     val phone = compact()
-    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it })
+    val hideVod: (Group) -> Unit = { g ->
+        app.setCategoryHidden((if (series) "series:" else "vod:") + g.id, true)
+        if (g.id == groupId) groupId = ALL
+        app.message = "Hidden “${g.name}”"
+    }
+    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it }, onHide = hideVod)
     Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
         if (phone) {
             T(if (series) "Series" else "Movies", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
             val current = groups.firstOrNull { it.id == groupId }
             CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }) { drawer = false }
+            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }, onHide = hideVod) { drawer = false }
         }
         val sortRow: @Composable () -> Unit = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -169,7 +174,7 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
     val key = "m${vod.id}"
     val resumeAt = app.resumes.firstOrNull { it.key == key }?.pos ?: 0
     val item = PlayItem(app.api.vodUrl(vod), vod.name, listOfNotNull(info?.year?.ifEmpty { null }, info?.genre?.ifEmpty { null }).joinToString(" · ").ifEmpty { "Movie" }, vod.icon, key, vodId = vod.id)
-    val more = remember(vod) { app.movies.filter { it.categoryId == vod.categoryId && it.id != vod.id }.take(12) }
+    val more = remember(vod) { app.moviesVisible.filter { it.categoryId == vod.categoryId && it.id != vod.id }.take(12) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
@@ -402,14 +407,24 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
     var audio by remember { mutableStateOf("Default") }
     var subs by remember { mutableStateOf(if (app.store.subtitlesOn) "On" else "Off") }
     var speed by remember { mutableFloatStateOf(1f) }
-    var zoom by remember { mutableStateOf(false) }
+    var zoom by remember { mutableStateOf(app.store.zoomDefault) }
+    val back = app.store.skipBackSec * 1000L
+    val fwd = app.store.skipFwdSec * 1000L
     var ended by remember { mutableStateOf(false) }
     var seekHint by remember { mutableStateOf<String?>(null) }
+    var tracksOpen by remember { mutableStateOf(false) }
     LaunchedEffect(seekHint) { if (seekHint != null) { delay(1_200); seekHint = null } }
     val root = remember { FocusRequester() }
     val playBtn = remember { FocusRequester() }
 
-    fun save() { if (dur > 0) app.saveResume(Resume(item.resumeKey, item.title, item.meta, item.image, pos, dur, item.vodId, item.seriesId)) }
+    fun save() {
+        if (dur <= 0) return
+        app.saveResume(Resume(item.resumeKey, item.title, item.meta, item.image, pos, dur, item.vodId, item.seriesId))
+        // finished an episode: keep the show in Continue watching with the next one queued up
+        val n = next.firstOrNull()
+        if (pos > dur * 0.95 && n != null)
+            app.saveResume(Resume(n.resumeKey, n.title, "Up next · ${n.meta}", n.image, 0, 1, n.vodId, n.seriesId), upNext = true)
+    }
     fun playNext() { save(); if (next.isNotEmpty()) app.stack[app.stack.lastIndex] = Screen.VodPlayer(next.first(), next.drop(1)) }
 
     LaunchedEffect(item.url) {
@@ -440,8 +455,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || showUi) return@onKeyEvent false
                 when (e.key) {
-                    Key.DirectionLeft, Key.MediaRewind -> { p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0)); poke++; true }
-                    Key.DirectionRight, Key.MediaFastForward -> { p.seekTo(p.currentPosition + 30_000); poke++; true }
+                    Key.DirectionLeft, Key.MediaRewind -> { p.seekTo((p.currentPosition - back).coerceAtLeast(0)); poke++; true }
+                    Key.DirectionRight, Key.MediaFastForward -> { p.seekTo(p.currentPosition + fwd); poke++; true }
                     Key.MediaPlayPause -> { if (p.isPlaying) p.pause() else p.play(); poke++; true }
                     Key.DirectionCenter, Key.Enter, Key.DirectionUp, Key.DirectionDown -> { poke++; true }
                     else -> false
@@ -452,9 +467,9 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
                 detectTapGestures(
                     onTap = { if (showUi) showUi = false else poke++ },
                     onDoubleTap = { o ->
-                        val back = o.x < size.width / 2
-                        p.seekTo((p.currentPosition + if (back) -10_000 else 30_000).coerceAtLeast(0))
-                        seekHint = if (back) "−10 s" else "+30 s"
+                        val left = o.x < size.width / 2
+                        p.seekTo((p.currentPosition + if (left) -back else fwd).coerceAtLeast(0))
+                        seekHint = if (left) "−${back / 1000} s" else "+${fwd / 1000} s"
                     },
                 )
             }
@@ -469,6 +484,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
         PlayerSurface(p, Modifier.fillMaxSize(), zoom)
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
         seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
+        if (tracksOpen) TracksDialog(app) { tracksOpen = false; poke++ }
 
         if (!app.inPip && next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
             Row(Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = if (showUi) 196.dp else 40.dp).width(340.dp)
@@ -506,27 +522,25 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
                 val phone = compact()
                 val transport: @Composable () -> Unit = {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconBtn(Icons.Back, "Back 10 seconds", { p.seekTo((p.currentPosition - 10_000).coerceAtLeast(0)) }, size = 52.dp, round = true)
+                        IconBtn(Icons.Back, "Back ${back / 1000} seconds", { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }, size = 52.dp, round = true)
                         FocusSurface({ if (p.isPlaying) p.pause() else p.play() }, Modifier.size(68.dp), idle = C.Accent, shape = RoundedCornerShape(34.dp), focusRequester = playBtn,
                             label = if (app.player.playing) "Pause" else "Play") { _ ->
                             Ico(if (app.player.playing) Icons.Pause else Icons.Play, C.OnLight, 24.dp, Modifier.align(Alignment.Center))
                         }
-                        IconBtn(Icons.Chevron, "Forward 30 seconds", { p.seekTo(p.currentPosition + 30_000) }, size = 52.dp, round = true)
+                        IconBtn(Icons.Chevron, "Forward ${fwd / 1000} seconds", { p.seekTo(p.currentPosition + fwd) }, size = 52.dp, round = true)
                     }
                 }
                 if (phone) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { transport() }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 40.dp)
-                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 40.dp)
+                        Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 40.dp)
                         Btn("%.2gx".format(speed), { speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed) }, height = 40.dp)
                         if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 40.dp)
                         Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 40.dp)
                     }
                 } else Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Btn("Audio · $audio", { audio = app.player.cycleTrack(M3.TRACK_TYPE_AUDIO) }, height = 44.dp)
-                        Btn("Subtitles · $subs", { subs = app.player.cycleTrack(M3.TRACK_TYPE_TEXT) }, height = 44.dp)
+                        Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 44.dp)
                         Btn("%.2gx".format(speed), {
                             speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
                         }, height = 44.dp)

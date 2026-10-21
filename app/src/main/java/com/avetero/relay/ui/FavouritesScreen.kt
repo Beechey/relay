@@ -54,8 +54,8 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourite
             0 -> if (chans.isEmpty()) EmptyState("No favourites yet", "Hold OK on any channel, movie or series to add it here.", "Browse live TV") { app.go(Screen.Live()) }
             else LazyVerticalGrid(if (phone) GridCells.Fixed(1) else GridCells.Fixed(3), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(chans, key = { it.id }) { c ->
-                    LaunchedEffect(c.id) { app.loadEpg(c.id) }
-                    val now = app.epg[c.id].current()
+                    LaunchedEffect(c.id) { app.loadEpg(c) }
+                    val now = app.programmesFor(c).current()
                     FocusSurface({ app.push(Screen.LivePlayer(c, chans)) }, Modifier.height(96.dp), idle = C.Surface, shape = RoundedCornerShape(14.dp),
                         onLongClick = { app.toggleFav("c${c.id}") }) { f ->
                         Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

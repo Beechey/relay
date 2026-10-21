@@ -56,15 +56,15 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         delay(250)
         val n = norm(q.trim())
         cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
-            app.liveCats.filter { norm(it.name).contains(n) }.map { "Live · ${it.name}" to Screen.Live(it.id) } +
-                app.vodCats.filter { norm(it.name).contains(n) }.map { "Movies · ${it.name}" to Screen.VodGrid(false, it.id) } +
-                app.seriesCats.filter { norm(it.name).contains(n) }.map { "Series · ${it.name}" to Screen.VodGrid(true, it.id) }
+            app.liveCatsVisible.filter { norm(it.name).contains(n) }.map { "Live · ${it.name}" to Screen.Live(it.id) } +
+                app.vodCatsVisible.filter { norm(it.name).contains(n) }.map { "Movies · ${it.name}" to Screen.VodGrid(false, it.id) } +
+                app.seriesCatsVisible.filter { norm(it.name).contains(n) }.map { "Series · ${it.name}" to Screen.VodGrid(true, it.id) }
         }.take(30)
         results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
             Triple(
-                app.channels.filter { norm(it.name).contains(n) }.take(30),
-                app.series.filter { norm(it.name).contains(n) }.take(30),
-                app.movies.filter { norm(it.name).contains(n) }.take(30),
+                app.channelsVisible.filter { norm(it.name).contains(n) }.take(30),
+                app.seriesVisible.filter { norm(it.name).contains(n) }.take(30),
+                app.moviesVisible.filter { norm(it.name).contains(n) }.take(30),
             )
         }
     }

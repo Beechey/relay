@@ -46,9 +46,9 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 10.dp else 20.dp)) {
             listOf(
-                Triple(Tab.Live, "%,d channels".format(app.channels.size), Screen.Live()),
-                Triple(Tab.Movies, "%,d titles".format(app.movies.size), Screen.VodGrid(false)),
-                Triple(Tab.Series, "%,d shows".format(app.series.size), Screen.VodGrid(true)),
+                Triple(Tab.Live, "%,d channels".format(app.channelsVisible.size), Screen.Live()),
+                Triple(Tab.Movies, "%,d titles".format(app.moviesVisible.size), Screen.VodGrid(false)),
+                Triple(Tab.Series, "%,d shows".format(app.seriesVisible.size), Screen.VodGrid(true)),
             ).forEachIndexed { i, (tab, count, screen) ->
                 FocusSurface({ app.go(screen) }, Modifier.weight(1f).height(if (phone) 112.dp else 150.dp), idle = C.Surface, shape = RoundedCornerShape(18.dp),
                     focusRequester = if (i == 0) first else null) { f ->
@@ -65,7 +65,10 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
             }
         }
         if (app.resumes.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            T("Continue watching", 18, Heavy)
+            Row(verticalAlignment = Alignment.Bottom) {
+                T("Continue watching", 18, Heavy, modifier = Modifier.weight(1f))
+                T(if (phone) "Press and hold to remove" else "Hold OK to remove", 12, color = C.Dim)
+            }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(app.resumes, key = { it.key }) { r ->
                     FocusSurface({
@@ -75,14 +78,14 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
                             vod != null -> app.push(Screen.MovieDetail(vod))
                             ser != null -> app.push(Screen.SeriesDetail(ser))
                         }
-                    }, Modifier.width(if (phone) 220.dp else 272.dp)) { f ->
+                    }, Modifier.width(if (phone) 220.dp else 272.dp), onLongClick = { app.removeResume(r.key) }) { f ->
                         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.fillMaxWidth().height(if (phone) 118.dp else 146.dp)) {
                                 Art(r.image, r.title, r.key.hashCode(), Modifier.fillMaxSize(), showTitle = false)
                                 ProgressLine(r.pos / r.dur.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth().align(Alignment.BottomStart), height = 4.dp)
                             }
                             T(r.title, 15, Bold, fg(f))
-                            T(r.meta, 13, color = sub(f))
+                            T(r.meta + if (r.pos > 0 && r.dur > r.pos) " · ${fmtDur(r.dur - r.pos)} left" else "", 13, color = sub(f))
                         }
                     }
                 }

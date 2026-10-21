@@ -34,7 +34,7 @@ import androidx.media3.ui.PlayerView
 
 /** The one ExoPlayer; screens attach a PlayerSurface to show it. Buffer setting applies on next app start. */
 @OptIn(UnstableApi::class)
-class PlayerHost(ctx: Context, store: Store) {
+class PlayerHost(ctx: Context, private val store: Store) {
     private val bufferMs = when (store.buffer) { "Small" -> 15_000; "Large" -> 60_000; else -> 30_000 }
 
     val player: ExoPlayer = ExoPlayer.Builder(ctx)
@@ -68,7 +68,11 @@ class PlayerHost(ctx: Context, store: Store) {
         if (url == this.url && error == null) return
         this.url = url
         error = null
+        // fresh choices per video: preferred languages from Settings, no leftover overrides from the last one
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverrides()
+            .setPreferredAudioLanguage(store.audioLang.ifEmpty { null })
+            .setPreferredTextLanguage(store.subLang.ifEmpty { null })
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitles).build()
         player.setMediaItem(MediaItem.fromUri(url), startMs)
         player.prepare()
@@ -82,6 +86,50 @@ class PlayerHost(ctx: Context, store: Store) {
         player.stop()
         url = null
         active = false
+    }
+
+    data class TrackOption(val label: String, val selected: Boolean, val pick: () -> Unit)
+
+    /** Choices for one track type in the playing stream: video quality, audio or subtitles. Empty when there's nothing to choose. */
+    fun options(type: Int): List<TrackOption> {
+        val params = player.trackSelectionParameters
+        val groups = tracks.groups.filter { it.type == type }
+        val overridden = groups.any { params.overrides.containsKey(it.mediaTrackGroup) }
+        val out = ArrayList<TrackOption>()
+        fun select(g: Tracks.Group, i: Int) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(type, false).clearOverridesOfType(type)
+                .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+        }
+        when (type) {
+            C.TRACK_TYPE_VIDEO -> {
+                out += TrackOption("Auto", !overridden) { player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(type).build() }
+                groups.forEach { g ->
+                    (0 until g.length).filter { g.isTrackSupported(it) }.sortedByDescending { g.getTrackFormat(it).height }.forEach { i ->
+                        val f = g.getTrackFormat(i)
+                        val label = listOfNotNull(f.height.takeIf { it > 0 }?.let { "${it}p" }, f.bitrate.takeIf { it > 0 }?.let { "%.1f Mbps".format(it / 1e6) }).joinToString(" · ").ifEmpty { "Track ${i + 1}" }
+                        out += TrackOption(label, overridden && g.isTrackSelected(i)) { select(g, i) }
+                    }
+                }
+                if (out.size <= 2) return emptyList() // a single quality: nothing to choose
+            }
+            else -> {
+                val textOff = type == C.TRACK_TYPE_TEXT && params.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+                if (type == C.TRACK_TYPE_TEXT) out += TrackOption("Off", textOff || groups.none { it.isSelected }) {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(type).setTrackTypeDisabled(type, true).build()
+                }
+                groups.forEach { g ->
+                    (0 until g.length).filter { g.isTrackSupported(it) }.forEach { i ->
+                        val f = g.getTrackFormat(i)
+                        val lang = f.language?.let { java.util.Locale.forLanguageTag(it).displayLanguage.ifEmpty { it } }
+                        val extra = if (type == C.TRACK_TYPE_AUDIO && f.channelCount > 0) when (f.channelCount) { 1 -> "mono"; 2 -> "stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${f.channelCount} ch" } else null
+                        val label = listOfNotNull(f.label ?: lang, extra).joinToString(" · ").ifEmpty { "Track ${out.size + 1}" }
+                        out += TrackOption(label, !textOff && g.isTrackSelected(i)) { select(g, i) }
+                    }
+                }
+            }
+        }
+        return out
     }
 
     /** Cycles to the next track of a type (audio/text); for text, "off" is part of the cycle. Returns its label. */
