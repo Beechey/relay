@@ -132,21 +132,26 @@ fun Field(
     LaunchedEffect(focused, imeVisible) { if (focused) { delay(200); bring.bringIntoView() } }
     Column(modifier.bringIntoViewRequester(bring), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         T(label, 13, Bold, if (error) C.Error else C.Soft)
+        TvEditable(Modifier.onFocusChanged { if (it.hasFocus) focused = true }) { field, hover, _ ->
         BasicTextField(
             value, onChange, singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = if (mono) Mono else null),
+            textStyle = TextStyle(color = if (hover) C.OnLight else Color.White, fontSize = 16.sp, fontFamily = if (mono) Mono else null),
             cursorBrush = SolidColor(C.Accent),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard, imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            modifier = field.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             decorationBox = { inner ->
                 Box(
                     Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(10.dp))
-                        .background(when { error -> Color(0xFF3A1E24); focused -> Color(0xFF2A3347); else -> C.Control }).padding(horizontal = 16.dp),
+                        .background(when { hover -> C.Text; error -> Color(0xFF3A1E24); focused -> Color(0xFF2A3347); else -> C.Control }).padding(horizontal = 16.dp),
                     contentAlignment = Alignment.CenterStart,
-                ) { inner() }
+                ) {
+                    if (hover && value.isEmpty()) T("Press OK to type", 14, color = C.OnLight)
+                    inner()
+                }
             },
         )
+        }
         if (hint != null) T(hint, 12, color = C.Muted)
     }
 }

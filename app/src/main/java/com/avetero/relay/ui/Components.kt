@@ -37,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -201,36 +203,72 @@ fun GroupChips(groups: List<Group>, selected: String, onSelect: (String) -> Unit
 data class Group(val id: String, val name: String, val count: Int)
 
 /** Single-line filter box used to find a category. */
+/**
+ * TV: a text box is first only highlighted; OK starts typing (and opens the keyboard), Back, Up/Down or the
+ * keyboard's action ends it. Moving past a box with the remote never pops the keyboard. Phones type straight away.
+ * [content] gets the modifier for the text field itself, whether the box is highlighted, and whether it's being edited.
+ */
 @Composable
-fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
-    var focused by remember { mutableStateOf(false) }
+fun TvEditable(
+    modifier: Modifier = Modifier, focusRequester: FocusRequester? = null, startEditing: Boolean = false,
+    content: @Composable (field: Modifier, hover: Boolean, editing: Boolean) -> Unit,
+) {
+    if (compact()) return Box(modifier) { content(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier, false, true) }
+    val outer = focusRequester ?: remember { FocusRequester() }
+    val inner = remember { FocusRequester() }
+    var editing by remember { mutableStateOf(startEditing) }
+    var hover by remember { mutableStateOf(false) }
+    var innerFocused by remember { mutableStateOf(false) }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    androidx.compose.foundation.text.BasicTextField(
-        value, onChange, singleLine = true,
-        // text fields swallow D-pad Up/Down; on TV that would trap focus in the box
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
-        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }),
-        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 15.sp),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(C.Accent),
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
-            .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) false
-                else when (e.key) {
-                    Key.DirectionDown -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
-                    Key.DirectionUp -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
-                    else -> false
-                }
-            }
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
-        decorationBox = { inner ->
-            Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)).background(if (focused) Color(0xFF2A3347) else C.Control).padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Ico(Icons.Search, C.Muted, 16.dp)
-                Box(Modifier.weight(1f)) { if (value.isEmpty()) T(placeholder, 14, color = C.Dim); inner() }
-            }
-        },
-    )
+    LaunchedEffect(editing) { if (editing) { runCatching { inner.requestFocus() }; keyboard?.show() } }
+    fun stop() { editing = false; runCatching { outer.requestFocus() } }
+    Box(modifier.focusRequester(outer).onFocusChanged { hover = it.isFocused }
+        .onPreviewKeyEvent { e ->
+            val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+            if (!editing && ok && e.type == KeyEventType.KeyDown) { editing = true; true } else false
+        }
+        .focusable()) {
+        content(
+            Modifier.focusRequester(inner).focusProperties { canFocus = editing }
+                .onFocusChanged { if (it.isFocused) innerFocused = true else if (innerFocused) { innerFocused = false; editing = false } }
+                .onPreviewKeyEvent { e ->
+                    when (e.key) {
+                        // KeyUp too, or the app's own Back handler would see it after editing ends
+                        Key.Back -> { if (e.type == KeyEventType.KeyUp) stop(); true }
+                        Key.DirectionDown, Key.DirectionUp -> {
+                            if (e.type == KeyEventType.KeyDown) { stop(); focusManager.moveFocus(if (e.key == Key.DirectionDown) androidx.compose.ui.focus.FocusDirection.Down else androidx.compose.ui.focus.FocusDirection.Up) }
+                            true
+                        }
+                        else -> false
+                    }
+                },
+            hover && !editing, editing,
+        )
+    }
 }
+
+@Composable
+fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) =
+    TvEditable(modifier.fillMaxWidth(), focusRequester, startEditing = focusRequester != null) { field, hover, editing ->
+        var focused by remember { mutableStateOf(false) }
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        androidx.compose.foundation.text.BasicTextField(
+            value, onChange, singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }),
+            textStyle = androidx.compose.ui.text.TextStyle(color = if (hover) C.OnLight else Color.White, fontSize = 15.sp),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(C.Accent),
+            modifier = field.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            decorationBox = { inner ->
+                Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)).background(when { hover -> C.Text; focused && editing -> Color(0xFF2A3347); else -> C.Control }).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Ico(Icons.Search, if (hover) C.OnLight else C.Muted, 16.dp)
+                    Box(Modifier.weight(1f)) { if (value.isEmpty()) T(placeholder, 14, color = if (hover) C.OnLight else C.Dim); inner() }
+                }
+            },
+        )
+    }
 
 /** Lowercase, accents stripped, so "Telé" matches "tele". */
 fun norm(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()

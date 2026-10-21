@@ -50,8 +50,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-private fun Panel(width: Int, content: @Composable () -> Unit) =
-    Column(Modifier.widthIn(max = width.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
+private fun Panel(width: Int, content: @Composable () -> Unit) {
+    // a menu opened by holding OK must not take that same press (its repeats and release) as a click on its first item
+    var armed by remember { mutableStateOf(false) }
+    Column(Modifier.widthIn(max = width.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.Surface)
+        .onPreviewKeyEvent { e ->
+            val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+            if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) armed = true
+            ok && !armed
+        }
+        .padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
+}
 
 @Composable
 private fun MenuItem(text: String, icon: ImageVector, onClick: () -> Unit, focusRequester: FocusRequester? = null) =
