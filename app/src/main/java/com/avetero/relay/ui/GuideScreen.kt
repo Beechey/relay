@@ -50,9 +50,20 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
     var drawer by remember { mutableStateOf(false) }
     val groups = rememberLiveGroups(app)
     val current = groups.firstOrNull { it.id == groupId }
-    val list = remember(groupId, app.channels, app.favourites) { app.channelsIn(groupId) }
-    val windowStart = remember { nowSec() / 1800 * 1800 }
+    val list = remember(groupId, app.channels, app.favourites, app.hidden) { app.channelsIn(groupId) }
+    // a 2-hour window you can move through the day the guide covers (2 h back, ~22 h ahead)
+    val baseStart = remember { nowSec() / 1800 * 1800 }
+    var shift by rememberSaveable { mutableStateOf(0) }
+    val windowStart = baseStart + shift * 3600L
     val windowEnd = windowStart + 2 * 3600
+    val timeNav: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Btn("◀ Earlier", { shift = (shift - 2).coerceAtLeast(-2) }, height = 40.dp, enabled = shift > -2)
+            Btn("Now", { shift = 0 }, height = 40.dp, style = if (shift == 0) BtnStyle.Secondary else BtnStyle.Light)
+            Btn("Later ▶", { shift = (shift + 2).coerceAtMost(22) }, height = 40.dp, enabled = shift < 22)
+            if (shift != 0) T(java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(java.util.Date(windowStart * 1000)), 13, Bold, C.Muted)
+        }
+    }
     var focused by remember { mutableStateOf<Pair<Channel, Programme?>?>(null) }
     val first = remember { FocusRequester() }
     LaunchedEffect(list) { runCatching { first.requestFocus() } }
@@ -66,6 +77,8 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                 T("TV Guide", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
                 Spacer(Modifier.height(10.dp))
                 CategoryButton(current?.name ?: "All channels", current?.count ?: 0) { drawer = true }
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.padding(horizontal = 16.dp)) { timeNav() }
                 Spacer(Modifier.height(6.dp))
                 T(listOfNotNull(c?.name, p?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)} · ${it.title}" }).joinToString(" · ").ifEmpty { "Tap a programme to watch" }, 13, color = C.Muted, modifier = Modifier.padding(horizontal = 16.dp))
             }
@@ -80,7 +93,10 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                 T(p?.description ?: "", 14, color = C.Soft, maxLines = 3, lineHeight = 21)
                 if (c?.archive == true) Badge("Catch-up")
             }
-            Clock(22)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Clock(22)
+                timeNav()
+            }
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val gridW = maxWidth - nameW
@@ -101,8 +117,8 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                 }
                 LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp)) {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
-                        LaunchedEffect(c.id) { app.loadEpg(c.id) }
-                        val progs = app.epg[c.id].orEmpty().filter { it.end > windowStart && it.start < windowEnd }
+                        LaunchedEffect(c.id) { app.loadEpg(c) }
+                        val progs = app.programmesFor(c).orEmpty().filter { it.end > windowStart && it.start < windowEnd }
                         Row(Modifier.height(72.dp)) {
                             Row(Modifier.width(nameW).fillMaxHeight().padding(start = if (phone) 8.dp else 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 12.dp)) {
                                 Logo(c.icon, c.name, false, Modifier.size(if (phone) 32.dp else 44.dp, if (phone) 24.dp else 32.dp))
@@ -132,9 +148,12 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav) {
                     }
                 }
             }
-            if (drawer) CategoryDrawer("TV Guide", groups, groupId, { groupId = it }) { drawer = false }
-            val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()
-            Box(Modifier.offset(x = nowX).width(2.dp).fillMaxHeight().background(C.Accent))
+            if (drawer) CategoryDrawer("TV Guide", groups, groupId, { groupId = it }, onHide = { hideLive(app, it, groupId) { g -> groupId = g } }) { drawer = false }
+            // the now-line only when "now" is inside the window being shown
+            if (nowSec() in windowStart until windowEnd) {
+                val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()
+                Box(Modifier.offset(x = nowX).width(2.dp).fillMaxHeight().background(C.Accent))
+            }
         }
     }
 }

@@ -63,8 +63,8 @@ private fun MenuItem(text: String, icon: ImageVector, onClick: () -> Unit, focus
 /** Board 18: channel long-press menu. */
 @Composable
 fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Boolean = false) = Dialog(onDismiss) {
-    var audio by remember { mutableStateOf("Change") }
-    var subs by remember { mutableStateOf("Change") }
+    var tracks by remember { mutableStateOf(false) }
+    if (tracks) TracksDialog(app) { tracks = false; onDismiss() }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Panel(340) {
@@ -75,9 +75,7 @@ fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Bool
         val fav = app.isFav("c${c.id}")
         MenuItem(if (fav) "Remove from favourites" else "Add to favourites", if (fav) Icons.StarFilled else Icons.Star, { app.toggleFav("c${c.id}"); onDismiss() }, first)
         if (inPlayer) {
-            // stays open so you can keep cycling until you hear/see the right track
-            MenuItem("Audio · $audio", Icons.Play, { audio = app.player.cycleTrack(androidx.media3.common.C.TRACK_TYPE_AUDIO) })
-            MenuItem("Subtitles · $subs", Icons.Guide, { subs = app.player.cycleTrack(androidx.media3.common.C.TRACK_TYPE_TEXT) })
+            MenuItem("Audio, subtitles & quality", Icons.Settings, { tracks = true })
         } else {
             MenuItem("Show in TV guide", Icons.Guide, { onDismiss(); app.go(Screen.Guide) })
             MenuItem("Watch fullscreen", Icons.Play, { onDismiss(); app.push(Screen.LivePlayer(c, app.channelsIn(c.categoryId))) })
@@ -184,5 +182,38 @@ fun ReleaseNotes(md: String, modifier: Modifier = Modifier) {
                 else -> androidx.compose.material3.Text(inlineMd(line), color = C.Soft, fontSize = 14.sp, lineHeight = 21.sp)
             }
         }
+    }
+}
+
+/** Per-video choices: quality, audio track and subtitles, as the stream offers them. */
+@Composable
+fun TracksDialog(app: AppState, onDismiss: () -> Unit) = Dialog(onDismiss) {
+    val p = app.player
+    p.tracks // recompose when the stream's tracks change
+    val sections = listOf(
+        "Quality" to p.options(androidx.media3.common.C.TRACK_TYPE_VIDEO),
+        "Audio" to p.options(androidx.media3.common.C.TRACK_TYPE_AUDIO),
+        "Subtitles" to p.options(androidx.media3.common.C.TRACK_TYPE_TEXT),
+    ).filter { it.second.isNotEmpty() }
+    var tick by remember { mutableStateOf(0) }
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    Column(Modifier.widthIn(max = 460.dp).fillMaxWidth().heightIn(max = 560.dp).clip(RoundedCornerShape(20.dp)).background(C.Surface).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        T("Audio, subtitles & quality", 18, Heavy, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
+        if (sections.isEmpty()) T("This stream has a single quality and audio track, and no subtitles.", 14, color = C.Muted, maxLines = 3, modifier = Modifier.padding(8.dp))
+        sections.forEachIndexed { si, (title, opts) ->
+            Label(title, Modifier.padding(start = 8.dp, top = if (si > 0) 10.dp else 0.dp))
+            opts.forEachIndexed { oi, o ->
+                FocusSurface({ o.pick(); tick++ }, Modifier.fillMaxWidth().height(46.dp), selected = o.selected, shape = RoundedCornerShape(10.dp),
+                    focusRequester = if (si == 0 && oi == 0) first else null) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        T(o.label, 15, Bold, fg(f), Modifier.weight(1f))
+                        if (o.selected) T("✓", 15, Heavy, if (f) C.OnLight else C.Accent)
+                    }
+                }
+            }
+        }
+        Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
     }
 }

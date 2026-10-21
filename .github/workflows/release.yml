@@ -1,5 +1,5 @@
 # Tag v1.2.3 (or v1.2.3-beta.1) on this private repo -> signed APK published as a release on the public
-# aveterosystems/relay-releases repo, which the app checks for updates.
+# Beechey/relay-releases repo, which the app checks for updates.
 # Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, RELEASES_TOKEN (contents:write on relay-releases).
 name: release
 on:
@@ -23,13 +23,13 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :app:testReleaseUnitTest :app:assembleRelease
-      - run: cp app/build/outputs/apk/release/app-release.apk "relay-iptv-${GITHUB_REF_NAME#v}.apk"
+      - run: cp app/build/outputs/apk/release/app-release.apk relay-iptv.apk  # same name every release: stable /releases/latest/download/relay-iptv.apk link
       - uses: softprops/action-gh-release@v2
         with:
-          repository: aveterosystems/relay-releases
+          repository: Beechey/relay-releases
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: ${{ github.ref_name }}
           name: Relay IPTV ${{ github.ref_name }}
-          files: relay-iptv-*.apk
+          files: relay-iptv.apk
           prerelease: ${{ contains(github.ref_name, '-') }}
           body_path: RELEASE_NOTES.md

@@ -65,4 +65,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android's org.json is a stub in local unit tests
     testImplementation("org.json:json:20240303")
+    // XmlPullParser for the XMLTV tests (Android supplies it on devices)
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
 }

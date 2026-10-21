@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -38,23 +39,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Boards 14–16. shortcut: TV guide, appearance, parental and remote sections from the design aren't built yet (docs M2/M4).
- */
+/** Boards 14–16: Settings, one section at a time. shortcut: no parental PIN section yet. */
 @Composable
 fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRail(Tab.Settings, nav) {
-    val sections = listOf("playlists" to "Playlists", "player" to "Player", "updates" to "Updates & about")
+    val sections = listOf(
+        "playlists" to "Playlists", "live" to "Live TV", "guide" to "TV guide", "player" to "Player",
+        "appearance" to "Appearance", "hidden" to "Hidden categories", "updates" to "Updates & about",
+    )
     val phone = compact()
     if (phone) Column(Modifier.weight(1f).fillMaxHeight()) {
         T("Settings", 26, Heavy, modifier = Modifier.padding(16.dp))
         GroupChips(sections.map { Group(it.first, it.second, 0) }, section) { app.stack[app.stack.lastIndex] = Screen.Settings(it) }
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Spacer(Modifier.height(4.dp)) }
-            when (section) {
-                "player" -> item { PlayerSettings(app) }
-                "updates" -> item { UpdateSettings(app) }
-                else -> item { PlaylistSettings(app) }
-            }
+            item { SectionContent(app, section) }
             item { T("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 12, color = C.Dim) }
         }
         return@WithRail
@@ -74,12 +72,80 @@ fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRai
     }
     LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Spacer(Modifier.height(14.dp)) }
-        when (section) {
-            "player" -> item { PlayerSettings(app) }
-            "updates" -> item { UpdateSettings(app) }
-            else -> item { PlaylistSettings(app) }
-        }
+        item { SectionContent(app, section) }
         item { Spacer(Modifier.height(28.dp)) }
+    }
+}
+
+@Composable
+private fun SectionContent(app: AppState, section: String) = when (section) {
+    "live" -> LiveSettings(app)
+    "guide" -> GuideSettings(app)
+    "player" -> PlayerSettings(app)
+    "appearance" -> AppearanceSettings(app)
+    "hidden" -> HiddenSettings(app)
+    "updates" -> UpdateSettings(app)
+    else -> PlaylistSettings(app)
+}
+
+/** A setting with a fixed set of choices: shows the current one, opens a picker. */
+@Composable
+private fun ChoiceRow(label: String, desc: String?, options: List<String>, current: String, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var shown by remember(current) { mutableStateOf(current) }
+    SettingRow(label, desc, value = shown) { open = true }
+    if (open) androidx.compose.ui.window.Dialog({ open = false }) {
+        val first = remember { androidx.compose.ui.focus.FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            T(label, 18, Heavy, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+            options.forEach { o ->
+                FocusSurface({ shown = o; onPick(o); open = false }, Modifier.fillMaxWidth().height(48.dp), selected = o == shown, shape = RoundedCornerShape(10.dp),
+                    focusRequester = if (o == shown) first else null) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        T(o, 15, Bold, fg(f), Modifier.weight(1f))
+                        if (o == shown) T("✓", 15, Heavy, if (f) C.OnLight else C.Accent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Title(text: String) = T(text, if (compact()) 20 else 24, Heavy)
+
+@Composable
+private fun LiveSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    var tick by remember { mutableIntStateOf(0) }
+    val s = app.store.also { tick }
+    Title("Live TV")
+    ChoiceRow("Open Live TV on", null, listOf("All channels", "Last category"), s.liveStart) { s.liveStart = it }
+    SettingRow("Resume the last channel", "Start playing the channel you watched last when you open Live TV", toggle = s.resumeLastChannel) { s.resumeLastChannel = !s.resumeLastChannel; tick++ }
+    SettingRow("Show channel numbers", toggle = s.showNumbers) { s.showNumbers = !s.showNumbers; tick++ }
+    SettingRow("Live stream format", "MPEG-TS works with most providers; try HLS if channels fail", value = if (app.hls) "HLS" else "MPEG-TS") {
+        app.hls = !app.hls; s.hls = app.hls; tick++
+    }
+}
+
+@Composable
+private fun GuideSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val scope = rememberCoroutineScope()
+    Title("TV guide")
+    SettingRow("Guide data", app.guideStatus.ifEmpty { "Full guide from your provider (XMLTV)" }, value = "Refresh now") {
+        scope.launch { app.refreshGuide(force = true) }
+    }
+    ChoiceRow("Refresh the guide", "Download a fresh guide in the background when the saved one is older than this", listOf("6 hours", "12 hours", "Daily", "Manually"), app.store.guideEvery) { app.store.guideEvery = it }
+    T("The guide keeps 2 hours back to 24 hours ahead. Channels your provider doesn't cover use its short now-and-next data.", 13, color = C.Muted, maxLines = 3, lineHeight = 19)
+}
+
+@Composable
+private fun AppearanceSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    var tick by remember { mutableIntStateOf(0) }
+    val s = app.store.also { tick }
+    Title("Appearance")
+    SettingRow("24-hour clock", if (s.clock24) "Times show as 21:30" else "Times show as 9:30 PM", toggle = s.clock24) {
+        s.clock24 = !s.clock24; com.avetero.relay.clock24 = s.clock24; app.appearanceTick++; tick++
     }
 }
 
@@ -127,24 +193,25 @@ private fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arran
             Btn("Switch to", { app.info = null; app.switchTo(other) }, height = 40.dp)
         }
     }
-    SettingRow("Refresh playlist on start", "Reload channels, movies and series when the app opens and the saved copy is over 12 hours old", toggle = app.store.refreshOnStart.also { refresh }) {
-        app.store.refreshOnStart = !app.store.refreshOnStart; refresh++
-    }
+    ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
+    SettingRow("Clear saved data", "Deletes the saved catalogue and guide, then downloads them again") { app.clearCacheAndReload() }
 }
 
 @Composable
 private fun PlayerSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
     var tick by remember { mutableIntStateOf(0) }
     val s = app.store.also { tick }
-    T("Player", 24, Heavy)
-    SettingRow("Buffer size", "Bigger buffers ride out slow connections but start slower. Applies next time the app starts.", value = s.buffer) {
-        s.buffer = listOf("Small", "Medium", "Large").let { it[(it.indexOf(s.buffer) + 1) % it.size] }; tick++
-    }
-    SettingRow("Live stream format", "MPEG-TS works with most providers; try HLS if channels fail", value = if (app.hls) "HLS" else "MPEG-TS") {
-        app.hls = !app.hls; s.hls = app.hls; tick++
-    }
+    val langs = listOf("Default" to "", "English" to "en", "Spanish" to "es", "French" to "fr", "German" to "de", "Italian" to "it", "Portuguese" to "pt", "Dutch" to "nl", "Polish" to "pl", "Turkish" to "tr", "Arabic" to "ar", "Hindi" to "hi")
+    Title("Player")
+    ChoiceRow("Preferred audio language", "Used when a stream has more than one audio track", langs.map { it.first }, langs.firstOrNull { it.second == s.audioLang }?.first ?: "Default") { n -> s.audioLang = langs.first { it.first == n }.second }
     SettingRow("Subtitles on by default", toggle = s.subtitlesOn) { s.subtitlesOn = !s.subtitlesOn; tick++ }
+    ChoiceRow("Preferred subtitle language", null, langs.map { it.first }, langs.firstOrNull { it.second == s.subLang }?.first ?: "Default") { n -> s.subLang = langs.first { it.first == n }.second }
+    ChoiceRow("Skip back", "Movies and episodes", listOf("5 s", "10 s", "15 s", "30 s"), "${s.skipBackSec} s") { s.skipBackSec = it.removeSuffix(" s").toInt() }
+    ChoiceRow("Skip forward", "Movies and episodes", listOf("10 s", "15 s", "30 s", "60 s"), "${s.skipFwdSec} s") { s.skipFwdSec = it.removeSuffix(" s").toInt() }
+    SettingRow("Zoom to fill the screen", "Crop the picture instead of showing black bars", toggle = s.zoomDefault) { s.zoomDefault = !s.zoomDefault; tick++ }
     SettingRow("Play next episode automatically", toggle = s.autoplayNext) { s.autoplayNext = !s.autoplayNext; tick++ }
+    if (compact()) SettingRow("Picture-in-picture when leaving", "Keep watching in a floating window when you go home", toggle = s.pipOnLeave) { s.pipOnLeave = !s.pipOnLeave; tick++ }
+    ChoiceRow("Buffer size", "Bigger buffers ride out slow connections but start slower. Applies next time the app starts.", listOf("Small", "Medium", "Large"), s.buffer) { s.buffer = it }
 }
 
 @Composable
@@ -164,7 +231,7 @@ private fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrange
             } catch (e: Exception) { "Couldn't reach GitHub: ${e.message}" }
         }
     }
-    T("Updates & about", 24, Heavy)
+    Title("Updates & about")
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         val r = app.update
         when {
@@ -193,4 +260,22 @@ private fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrange
     SettingRow("Include beta releases", "Get pre-release builds before everyone else", toggle = s.betaUpdates) { s.betaUpdates = !s.betaUpdates; tick++ }
     SettingRow("Update source", value = if (Updater.enabled) "github.com/${Updater.repo}" else "Not configured") {}
     app.update?.let { if (showDialog) UpdateDialog(app, it) { showDialog = false } }
+}
+
+/** Settings → Hidden categories: everything hidden with a long-press, with a way back. */
+@Composable
+private fun HiddenSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val rows = app.hidden.mapNotNull { key ->
+        val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        val (label, cats) = when (type) { "live" -> "Live TV" to app.liveCats; "vod" -> "Movies" to app.vodCats; else -> "Series" to app.seriesCats }
+        cats.firstOrNull { it.id == id }?.let { Triple(key, it.name, label) }
+    }.sortedWith(compareBy({ it.third }, { it.second }))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        T("Hidden categories", if (compact()) 20 else 24, Heavy, modifier = Modifier.weight(1f))
+        if (rows.isNotEmpty()) Btn("Show all", { app.hidden.forEach { app.setCategoryHidden(it, false) } }, height = 44.dp)
+    }
+    if (rows.isEmpty()) T("Nothing hidden. Hold OK on a category (or press and hold on a phone) to hide it from lists, All, the guide and search.", 14, color = C.Muted, maxLines = 4, lineHeight = 21)
+    rows.forEach { (key, name, label) ->
+        SettingRow(name, label, value = "Show") { app.setCategoryHidden(key, false) }
+    }
 }

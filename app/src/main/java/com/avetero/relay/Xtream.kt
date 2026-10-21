@@ -17,7 +17,7 @@ import java.util.Base64
 data class Account(val name: String, val server: String, val user: String, val pass: String)
 data class AccountInfo(val status: String, val expires: Long?, val maxConnections: Int, val activeConnections: Int)
 data class Category(val id: String, val name: String)
-data class Channel(val id: Int, val num: Int, val name: String, val categoryId: String, val icon: String = "", val archive: Boolean = false)
+data class Channel(val id: Int, val num: Int, val name: String, val categoryId: String, val icon: String = "", val archive: Boolean = false, val epgId: String = "")
 data class Vod(val id: Int, val name: String, val icon: String, val rating: Double, val categoryId: String, val ext: String, val added: Long)
 data class Series(val id: Int, val name: String, val cover: String, val rating: Double, val categoryId: String, val plot: String, val year: String)
 data class VodInfo(val plot: String, val cast: String, val director: String, val genre: String, val year: String, val duration: String, val backdrop: String)
@@ -63,6 +63,10 @@ class Xtream(private val account: Account) {
     fun downloadSeries(to: File) = download(apiUrl("get_series"), to)
     fun vodInfo(id: Int) = parseVodInfo(get(apiUrl("get_vod_info", "&vod_id=$id")))
     fun seriesInfo(id: Int) = parseSeriesInfo(get(apiUrl("get_series_info", "&series_id=$id")))
+    /** Full guide (XMLTV), stream-parsed straight off the network; only [wanted] channels in [from]..[to] are kept. */
+    fun guide(wanted: Set<String>, from: Long, to: Long): Guide =
+        open("$base/xmltv.php?username=${enc(account.user)}&password=${enc(account.pass)}") { parseXmltv(it, wanted, from, to) }
+
     fun shortEpg(streamId: Int, limit: Int = 8) =
         parseEpg(get(apiUrl("get_short_epg", "&stream_id=$streamId&limit=$limit")))
 }
@@ -71,7 +75,7 @@ internal fun normaliseServer(s: String) = s.trim().trimEnd('/').let { if ("://" 
 
 internal fun <T> open(url: String, ua: String = "IPTVSmartersPlayer", read: (InputStream) -> T): T = (URL(url).openConnection() as HttpURLConnection).run {
     connectTimeout = 15_000
-    readTimeout = 60_000
+    readTimeout = 120_000
     // some panels reject unknown user agents
     setRequestProperty("User-Agent", ua)
     try {
@@ -139,6 +143,7 @@ internal fun parseChannels(r: Reader): List<Channel> = readObjects(r) {
         categoryId = it["category_id"].orEmpty(),
         icon = it["stream_icon"].orEmpty(),
         archive = it["tv_archive"] == "1",
+        epgId = it["epg_channel_id"].orEmpty(),
     )
 }
 

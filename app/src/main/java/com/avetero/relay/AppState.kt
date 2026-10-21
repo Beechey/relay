@@ -1,6 +1,7 @@
 package com.avetero.relay
 
 import android.content.Context
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -51,7 +52,18 @@ class AppState(val ctx: Context) {
     var seriesCats by mutableStateOf(emptyList<Category>())
     var series by mutableStateOf(emptyList<Series>())
     val epg = mutableStateMapOf<Int, List<Programme>>()
+    /** Full guide from XMLTV, keyed by epg_channel_id; short EPG (epg) fills in where it has nothing. */
+    var guide by mutableStateOf<Guide>(emptyMap())
+    var guideStatus by mutableStateOf("")
     var favourites by mutableStateOf(store.favourites(account))
+    var hidden by mutableStateOf(store.hidden(account))
+    // what the user browses: everything except hidden categories
+    val liveCatsVisible by derivedStateOf { liveCats.filter { "live:${it.id}" !in hidden } }
+    val vodCatsVisible by derivedStateOf { vodCats.filter { "vod:${it.id}" !in hidden } }
+    val seriesCatsVisible by derivedStateOf { seriesCats.filter { "series:${it.id}" !in hidden } }
+    val channelsVisible by derivedStateOf { if (hidden.none { it.startsWith("live:") }) channels else channels.filter { "live:${it.categoryId}" !in hidden } }
+    val moviesVisible by derivedStateOf { if (hidden.none { it.startsWith("vod:") }) movies else movies.filter { "vod:${it.categoryId}" !in hidden } }
+    val seriesVisible by derivedStateOf { if (hidden.none { it.startsWith("series:") }) series else series.filter { "series:${it.categoryId}" !in hidden } }
     var resumes by mutableStateOf(store.resumes(account))
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
@@ -63,7 +75,10 @@ class AppState(val ctx: Context) {
     var inPip by mutableStateOf(false)
     val onPlayerScreen get() = screen is Screen.LivePlayer || screen is Screen.VodPlayer
     /** Screens where leaving the app should keep the video going in a floating window: the players, and Live TV's preview. */
-    val pipEligible get() = player.active && (onPlayerScreen || screen is Screen.Live)
+    val pipEligible get() = store.pipOnLeave && player.active && (onPlayerScreen || screen is Screen.Live)
+
+    /** Bumped when an appearance setting changes so screens redraw (e.g. the clock format). */
+    var appearanceTick by mutableStateOf(0)
 
     private val epgGate = Semaphore(4)
     private val epgFetched = HashMap<Int, Long>()
@@ -71,6 +86,7 @@ class AppState(val ctx: Context) {
     val api get() = Xtream(account!!)
 
     init {
+        clock24 = store.clock24
         val a = account
         stack += when {
             a == null -> Screen.Login
@@ -86,7 +102,7 @@ class AppState(val ctx: Context) {
 
     fun channelsIn(groupId: String): List<Channel> = when (groupId) {
         FAVS -> favourites.mapNotNull { k -> if (k.startsWith("c")) channels.firstOrNull { it.id == k.drop(1).toIntOrNull() } else null }
-        ALL -> channels
+        ALL -> channelsVisible
         else -> channels.filter { it.categoryId == groupId }
     }
 
@@ -97,9 +113,20 @@ class AppState(val ctx: Context) {
         message = if (isFav(key)) "Added to favourites" else "Removed from favourites"
     }
 
+    fun setCategoryHidden(key: String, hide: Boolean) {
+        hidden = if (hide) hidden + key else hidden - key
+        store.setHidden(account, hidden)
+    }
+
+    fun clearCacheAndReload() {
+        val a = account ?: return
+        player.stop(); store.clearCache(a); guide = emptyMap(); epg.clear(); epgFetched.clear(); go(Screen.Sync)
+    }
+
     fun liveUrl(c: Channel) = api.streamUrl(c, hls)
 
-    fun saveResume(r: Resume) { store.saveResume(account, r); resumes = store.resumes(account) }
+    fun saveResume(r: Resume, upNext: Boolean = false) { store.saveResume(account, r, upNext); resumes = store.resumes(account) }
+    fun removeResume(key: String) { store.removeResume(account, key); resumes = store.resumes(account); message = "Removed from Continue watching" }
 
     private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
 
@@ -128,7 +155,7 @@ class AppState(val ctx: Context) {
         val a = account ?: return@coroutineScope
         val x = api
         syncSteps.clear()
-        syncSteps += listOf(SyncStep("Signing in"), SyncStep("Live channels"), SyncStep("Movies"), SyncStep("Series"))
+        syncSteps += listOf(SyncStep("Signing in"), SyncStep("Live channels"), SyncStep("Movies"), SyncStep("Series"), SyncStep("TV guide"))
         fun set(i: Int, s: StepState, d: String = "") { syncSteps[i] = syncSteps[i].copy(state = s, detail = d) }
 
         set(0, StepState.Busy)
@@ -159,10 +186,19 @@ class AppState(val ctx: Context) {
             async { step(2, "vod", x::vodCategories, x::downloadVods) { c, r -> vodCats = c; movies = parseVods(r); movies.size } },
             async { step(3, "series", x::seriesCategories, x::downloadSeries) { c, r -> seriesCats = c; series = parseSeries(r); series.size } },
         ).forEach { it.await() }
+        // the guide maps onto channels, so it comes last
+        set(4, StepState.Busy, "Downloading…")
+        val n = refreshGuide(force = true)
+        set(4, if (n > 0) StepState.Done else StepState.Failed, if (n > 0) "%,d channels".format(n) else guideStatus)
     }
 
-    /** Short EPG for a channel, fetched at most every 30 min. */
-    suspend fun loadEpg(id: Int) {
+    fun programmesFor(c: Channel): List<Programme>? =
+        c.epgId.takeIf { it.isNotEmpty() }?.let { guide[it] }?.takeIf { it.isNotEmpty() } ?: epg[c.id]
+
+    /** Short EPG for a channel the full guide doesn't cover, fetched at most every 30 min. */
+    suspend fun loadEpg(c: Channel) {
+        if (c.epgId.isNotEmpty() && !guide[c.epgId].isNullOrEmpty()) return
+        val id = c.id
         val now = System.currentTimeMillis()
         val last = epgFetched[id]
         val list = epg[id]
@@ -170,6 +206,35 @@ class AppState(val ctx: Context) {
         epgFetched[id] = now
         val fresh = runCatching { epgGate.withPermit { withContext(Dispatchers.IO) { api.shortEpg(id) } } }.getOrNull() ?: return
         epg[id] = fresh
+    }
+
+    /**
+     * Full TV guide: read from the cache when it's under 12 h old, otherwise download the provider's XMLTV
+     * and keep 2 h back to 24 h ahead. Failure leaves whatever guide we had.
+     */
+    suspend fun refreshGuide(force: Boolean = false): Int {
+        val a = account ?: return 0
+        val file = store.cacheFile(a, "guide")
+        val now = System.currentTimeMillis() / 1000
+        val fresh = store.guideAfterMs()?.let { System.currentTimeMillis() - file.lastModified() < it } ?: true
+        if (!force && file.exists() && fresh) {
+            if (guide.isEmpty()) runCatching { guide = withContext(Dispatchers.IO) { readGuide(file, now) } }
+            guideStatus = "Updated " + fmtTime(file.lastModified() / 1000) + " · ${"%,d".format(guide.size)} channels"
+            return guide.size
+        }
+        val wanted = channels.mapNotNullTo(HashSet()) { it.epgId.takeIf { id -> id.isNotEmpty() } }
+        if (wanted.isEmpty()) { guideStatus = "Your provider doesn't link channels to a guide"; return 0 }
+        guideStatus = "Downloading…"
+        return try {
+            val g = withContext(Dispatchers.IO) { api.guide(wanted, now - 2 * 3600, now + 24 * 3600).also { writeGuide(file, it) } }
+            guide = g
+            guideStatus = "Updated " + fmtTime(now) + " · ${"%,d".format(g.size)} channels"
+            g.size
+        } catch (e: OutOfMemoryError) {
+            guideStatus = "Too large for this device"; 0
+        } catch (e: Exception) {
+            guideStatus = "Couldn't download: ${e.message}"; 0
+        }
     }
 
     fun signIn(a: Account) {
@@ -181,8 +246,9 @@ class AppState(val ctx: Context) {
         player.stop()
         store.activeIndex = store.playlists().indexOf(a).coerceAtLeast(0)
         account = a
-        epg.clear(); epgFetched.clear()
+        epg.clear(); epgFetched.clear(); guide = emptyMap(); guideStatus = ""
         favourites = store.favourites(a)
+        hidden = store.hidden(a)
         resumes = store.resumes(a)
         liveCats = emptyList(); channels = emptyList(); vodCats = emptyList(); movies = emptyList(); seriesCats = emptyList(); series = emptyList()
         if (hasCache(a)) { libraryLoading = true; go(Screen.Home) } else go(Screen.Sync)
@@ -203,5 +269,8 @@ class AppState(val ctx: Context) {
 fun fmtDate(epochSec: Long): String =
     java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(epochSec * 1000))
 
+/** 24-hour or 12-hour clock, from Settings → Appearance. */
+var clock24 = true
+
 fun fmtTime(epochSec: Long): String =
-    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(epochSec * 1000))
+    java.text.SimpleDateFormat(if (clock24) "HH:mm" else "h:mm a", java.util.Locale.getDefault()).format(java.util.Date(epochSec * 1000))

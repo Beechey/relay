@@ -146,12 +146,24 @@ fun App(app: AppState, onExit: () -> Unit) {
     // background refresh of a cached catalogue, then a silent update check
     LaunchedEffect(app.account) {
         app.loadLibrary()
-        val stale = app.account?.let { System.currentTimeMillis() - app.store.cacheTime(it) > 12 * 3600_000 } ?: false
-        if (app.account != null && app.screen == Screen.Home && app.store.refreshOnStart && stale) runCatching { app.sync() }
+        // playlist refresh on the schedule chosen in Settings (every start / daily / weekly / monthly / manually)
+        val stale = app.account?.let { a -> app.store.refreshAfterMs()?.let { System.currentTimeMillis() - app.store.cacheTime(a) > it } } ?: false
+        if (app.account != null && app.screen == Screen.Home && stale) runCatching { app.sync() }
         if (Updater.enabled && app.store.checkUpdates) runCatching {
             val r = withContext(Dispatchers.IO) { Updater.latest(app.store.betaUpdates) }
             if (r != null && Updater.isNewer(r)) { app.update = r; updatePrompt = r.version != app.store.skippedVersion }
         }
+    }
+
+    // stop playback on screens with nowhere to show it (e.g. back from fullscreen to Home): otherwise audio plays on unseen
+    LaunchedEffect(app.screen, compact) {
+        val showsVideo = app.onPlayerScreen || app.screen is Screen.Live || (app.screen == Screen.Guide && !compact)
+        if (!showsVideo && !app.inPip) app.player.stop()
+    }
+
+    // full TV guide: once the library is in memory, load it from cache or refresh it (12 h)
+    LaunchedEffect(app.account, app.libraryLoading, app.channels.isNotEmpty()) {
+        if (app.account != null && !app.libraryLoading && app.channels.isNotEmpty() && app.screen != Screen.Sync) app.refreshGuide()
     }
 
     val activity = androidx.compose.ui.platform.LocalContext.current as? MainActivity
