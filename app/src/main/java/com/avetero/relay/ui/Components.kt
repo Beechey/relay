@@ -37,6 +37,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -224,6 +227,8 @@ fun TvEditable(
     LaunchedEffect(editing) { if (editing) { runCatching { inner.requestFocus() }; keyboard?.show() } }
     fun stop() { editing = false; runCatching { outer.requestFocus() } }
     Box(modifier.focusRequester(outer).onFocusChanged { hover = it.isFocused }
+        // touch on a TV-sized layout (landscape tablets): a tap starts typing straight away
+        .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial); editing = true } }
         .onPreviewKeyEvent { e ->
             val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
             if (!editing && ok && e.type == KeyEventType.KeyDown) { editing = true; true } else false

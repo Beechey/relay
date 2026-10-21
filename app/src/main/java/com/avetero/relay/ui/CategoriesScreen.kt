@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -230,10 +231,11 @@ private fun ActionPanel(
     moving: Boolean, picked: List<Category>, range: String, was: List<Int>, listed: Int, custom: Boolean,
     onRemote: () -> Unit, onTop: () -> Unit, onBottom: () -> Unit, onTickAll: () -> Unit, onClear: () -> Unit, onHide: (Boolean) -> Unit, onReset: () -> Unit,
     onDrop: () -> Unit, onCancel: () -> Unit, dropFocus: androidx.compose.ui.focus.FocusRequester,
-) = Column(Modifier.width(280.dp).padding(bottom = 20.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+) = Column(Modifier.width(280.dp).padding(bottom = 20.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface)
+    .verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     val any = picked.isNotEmpty()
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        T(if (moving) range else "${picked.size}", 44, Heavy, lineHeight = 46)
+        T(if (moving) range else "${picked.size}", 38, Heavy, lineHeight = 40)
         T(if (moving) "new place" else "ticked", 14, color = C.Muted, modifier = Modifier.padding(bottom = 6.dp))
     }
     if (moving) Label("Was")
