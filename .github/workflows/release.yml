@@ -1,0 +1,35 @@
+# Tag v1.2.3 (or v1.2.3-beta.1) on this private repo -> signed APK published as a release on the public
+# aveterosystems/relay-releases repo, which the app checks for updates.
+# Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, RELEASES_TOKEN (contents:write on relay-releases).
+name: release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check tag matches versionName
+        run: grep -q "versionName = \"${GITHUB_REF_NAME#v}\"" app/build.gradle.kts || { echo "Tag $GITHUB_REF_NAME doesn't match versionName in app/build.gradle.kts"; exit 1; }
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
+      - name: Build signed APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :app:testReleaseUnitTest :app:assembleRelease
+      - run: cp app/build/outputs/apk/release/app-release.apk "relay-iptv-${GITHUB_REF_NAME#v}.apk"
+      - uses: softprops/action-gh-release@v2
+        with:
+          repository: aveterosystems/relay-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: Relay IPTV ${{ github.ref_name }}
+          files: relay-iptv-*.apk
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: RELEASE_NOTES.md
