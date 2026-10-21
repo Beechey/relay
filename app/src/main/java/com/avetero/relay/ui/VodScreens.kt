@@ -393,7 +393,7 @@ fun fmtDur(ms: Long): String {
 /** Board 09: movie / episode player with seek, tracks, speed and next-episode card. */
 @Composable
 fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>) {
-    FullscreenVideo()
+    FullscreenVideo(app.inPip)
     val p = app.player.player
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }

@@ -129,7 +129,8 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     if (phone) Column(Modifier.weight(1f).fillMaxHeight()) {
         if (playing != null) {
             FocusSurface({ app.push(Screen.LivePlayer(playing, list)) }, Modifier.fillMaxWidth().aspectRatio(16f / 9f), idle = Color.Black, shape = RoundedCornerShape(0.dp), label = "Watch fullscreen") { _ ->
-                PlayerSurface(app.player.player, Modifier.fillMaxSize())
+                // keyed on PiP: the floating window borrows the video surface, so rebuild this one afterwards
+                androidx.compose.runtime.key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize()) }
                 Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(10.dp))
                 Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
                 app.player.error?.let { T("Can't play: $it", 13, Bold, C.Error, Modifier.align(Alignment.BottomStart).padding(10.dp)) }
@@ -167,7 +168,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen:
         if (playing == null) Box(Modifier.size(404.dp, 227.dp).clip(RoundedCornerShape(14.dp)).background(C.Control)) {
             T("Press OK on a channel to preview", 13, color = C.Muted, modifier = Modifier.align(Alignment.Center))
         } else FocusSurface({ onFullscreen(playing) }, Modifier.size(404.dp, 227.dp), idle = C.Control, shape = RoundedCornerShape(14.dp), label = "Watch fullscreen") { f ->
-            if (playing != null) PlayerSurface(app.player.player, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp).clip(RoundedCornerShape(11.dp)))
+            if (playing != null) androidx.compose.runtime.key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp).clip(RoundedCornerShape(11.dp))) }
             else T("Press OK on a channel to preview", 13, color = sub(f), modifier = Modifier.align(Alignment.Center))
             if (playing != null) Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(12.dp))
             if (playing != null) Badge("Fullscreen", if (f) C.Text else C.Ground, if (f) C.OnLight else C.Soft, Modifier.align(Alignment.BottomEnd).padding(12.dp))
@@ -197,7 +198,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen:
 /** Board 06: fullscreen live with info bar; up/down and channel keys zap. */
 @Composable
 fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
-    FullscreenVideo()
+    FullscreenVideo(app.inPip)
     var index by remember { mutableIntStateOf(list.indexOfFirst { it.id == start.id }.coerceAtLeast(0)) }
     val c = list.getOrElse(index) { start }
     var showInfo by remember { mutableStateOf(true) }

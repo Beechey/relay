@@ -67,9 +67,17 @@ class MainActivity : ComponentActivity() {
         packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
         !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
+    /** The video fills the window while a player is showing; telling Android lets it animate from there. */
+    private fun pipParams(autoEnter: Boolean? = null): PictureInPictureParams {
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        window.decorView.let { v -> if (v.width > 0) b.setSourceRectHint(android.graphics.Rect(0, 0, v.width, v.height)) }
+        if (Build.VERSION.SDK_INT >= 31 && autoEnter != null) b.setAutoEnterEnabled(autoEnter).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+
     fun enterPip() {
-        if (!canPip || app.player.url == null) return
-        enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+        if (!canPip || app.player.url == null || isInPictureInPictureMode) return
+        runCatching { enterPictureInPictureMode(pipParams()) }
     }
 
     /**
@@ -78,14 +86,14 @@ class MainActivity : ComponentActivity() {
      */
     fun setAutoPip(enabled: Boolean) {
         if (!canPip || Build.VERSION.SDK_INT < 31) return
-        setPictureInPictureParams(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
-            .setAutoEnterEnabled(enabled).setSeamlessResizeEnabled(true).build())
+        runCatching { setPictureInPictureParams(pipParams(autoEnter = enabled)) }
     }
 
-    // older Android: Home / recent apps while a video is playing shrinks it to a floating window by hand
+    // Home, swipe-home or recent apps while a video is playing: shrink it to a floating window.
+    // Also on Android 12+, where auto-enter can be skipped (e.g. fullscreen with the bars hidden).
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT < 31 && app.onPlayerScreen && app.player.playing) enterPip()
+        if (app.pipEligible) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -147,7 +155,7 @@ fun App(app: AppState, onExit: () -> Unit) {
     }
 
     val activity = androidx.compose.ui.platform.LocalContext.current as? MainActivity
-    val autoPip = app.onPlayerScreen && app.player.playing
+    val autoPip = app.pipEligible
     LaunchedEffect(autoPip) { activity?.setAutoPip(autoPip) }
 
     BackHandler {
@@ -176,6 +184,10 @@ fun App(app: AppState, onExit: () -> Unit) {
             Screen.Favourites -> FavouritesScreen(app, nav)
             Screen.More -> MoreScreen(app, nav)
             is Screen.Settings -> SettingsScreen(app, s.section, nav)
+        }
+        // PiP from Live TV's preview: the floating window shows only the video
+        if (app.inPip && !app.onPlayerScreen) Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+            com.avetero.relay.PlayerSurface(app.player.player, Modifier.fillMaxSize())
         }
         app.message?.let { msg ->
             LaunchedEffect(msg) { delay(2_500); app.message = null }
