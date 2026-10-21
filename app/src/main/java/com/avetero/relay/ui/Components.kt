@@ -159,7 +159,7 @@ fun Rail(active: Tab, onSelect: (Tab) -> Unit) {
         Modifier.width(72.dp).fillMaxHeight().background(Color(0xFF080A0F)).padding(vertical = 24.dp).focusRestorer(),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 16, Heavy, C.OnLight) }
+        LogoMark(40.dp)
         Spacer(Modifier.height(18.dp))
         Tab.entries.filter { it != Tab.More }.forEach { t ->
             if (t == Tab.Settings) Spacer(Modifier.weight(1f))

@@ -89,7 +89,7 @@ fun LoginScreen(app: AppState) {
     val phone = compact()
     val intro: @Composable () -> Unit = {
         Column(Modifier.then(if (phone) Modifier.fillMaxWidth() else Modifier.width(380.dp)), verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
-            Box(Modifier.size(if (phone) 44.dp else 56.dp).clip(RoundedCornerShape(14.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", if (phone) 20 else 24, Heavy, C.OnLight) }
+            LogoMark(if (phone) 48.dp else 64.dp)
             T("Add your playlist", if (phone) 28 else 40, Heavy, maxLines = 2, lineHeight = if (phone) 32 else 44)
             T("Sign in with the Xtream Codes details from your provider. Live TV, movies, series and the TV guide load automatically.", if (phone) 14 else 16, color = C.Soft, maxLines = 4, lineHeight = if (phone) 21 else 26)
             if (app.store.playlists().isNotEmpty()) Btn("Back", { app.back() }, Modifier.width(120.dp), height = 44.dp)
@@ -164,7 +164,7 @@ fun SyncScreen(app: AppState) {
     Box(Modifier.fillMaxSize().background(C.Ground), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(16.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 20, Heavy, C.OnLight) }
+                LogoMark(52.dp)
                 Column {
                     T("Loading ${a?.name ?: ""}", 28, Heavy)
                     T(a?.server ?: "", 14, color = C.Muted, mono = true)
