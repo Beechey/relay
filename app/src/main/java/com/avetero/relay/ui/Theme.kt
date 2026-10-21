@@ -91,6 +91,17 @@ object Icons {
     val Chevron = icon("M9 5l7 7-7 7")
     val Pip = icon("M3 5h18v14H3zM12 12h6v4h-6z")
     val More = icon("M4 6h16M4 12h16M4 18h16")
+    val Eye = icon("M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 1 0 6a3 3 0 1 1 0-6")
+    val EyeOff = icon("M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6")
+    val Move = icon("M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4")
+    val Grip = icon("M6 9h12M6 15h12")
+    val Check = icon("M5 12.5l4.5 4.5L19 7.5")
+    val Up = icon("M12 19V5M5 12l7-7 7 7")
+    val Down = icon("M12 5v14M5 12l7 7 7-7")
+    val Top = icon("M5 4h14M12 20V9M6 15l6-6 6 6")
+    val Bottom = icon("M5 20h14M12 4v11M6 9l6 6 6-6")
+    val Volume = icon("M4 9h4l5-4v14l-5-4H4zM16.5 9a4 4 0 0 1 0 6")
+    val Muted = icon("M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6")
     val Warn = icon("M12 3l10 18H2zM12 10v4M12 17.5v.5")
 }
 

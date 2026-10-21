@@ -56,16 +56,16 @@ class Xtream(private val account: Account) {
 
     fun liveCategories() = parseCategories(get(apiUrl("get_live_categories")))
     // catalogue lists can be hundreds of MB: stream them to disk, never into a String
-    fun downloadChannels(to: File) = download(apiUrl("get_live_streams"), to)
+    fun downloadChannels(to: File, progress: (Long, Long) -> Unit) = download(apiUrl("get_live_streams"), to, progress)
     fun vodCategories() = parseCategories(get(apiUrl("get_vod_categories")))
-    fun downloadVods(to: File) = download(apiUrl("get_vod_streams"), to)
+    fun downloadVods(to: File, progress: (Long, Long) -> Unit) = download(apiUrl("get_vod_streams"), to, progress)
     fun seriesCategories() = parseCategories(get(apiUrl("get_series_categories")))
-    fun downloadSeries(to: File) = download(apiUrl("get_series"), to)
+    fun downloadSeries(to: File, progress: (Long, Long) -> Unit) = download(apiUrl("get_series"), to, progress)
     fun vodInfo(id: Int) = parseVodInfo(get(apiUrl("get_vod_info", "&vod_id=$id")))
     fun seriesInfo(id: Int) = parseSeriesInfo(get(apiUrl("get_series_info", "&series_id=$id")))
     /** Full guide (XMLTV), stream-parsed straight off the network; only [wanted] channels in [from]..[to] are kept. */
-    fun guide(wanted: Set<String>, from: Long, to: Long): Guide =
-        open("$base/xmltv.php?username=${enc(account.user)}&password=${enc(account.pass)}") { parseXmltv(it, wanted, from, to) }
+    fun guide(wanted: Set<String>, from: Long, to: Long, progress: ((Long, Long) -> Unit)? = null, onCount: (Int) -> Unit = {}): Guide =
+        open("$base/xmltv.php?username=${enc(account.user)}&password=${enc(account.pass)}", progress = progress) { parseXmltv(it, wanted, from, to, onCount) }
 
     fun shortEpg(streamId: Int, limit: Int = 8) =
         parseEpg(get(apiUrl("get_short_epg", "&stream_id=$streamId&limit=$limit")))
@@ -73,14 +73,15 @@ class Xtream(private val account: Account) {
 
 internal fun normaliseServer(s: String) = s.trim().trimEnd('/').let { if ("://" in it) it else "http://$it" }
 
-internal fun <T> open(url: String, ua: String = "IPTVSmartersPlayer", read: (InputStream) -> T): T = (URL(url).openConnection() as HttpURLConnection).run {
+/** [progress] gets (bytes read, total bytes or -1 when the server doesn't say), at most every 256 KB. */
+internal fun <T> open(url: String, ua: String = "IPTVSmartersPlayer", progress: ((Long, Long) -> Unit)? = null, read: (InputStream) -> T): T = (URL(url).openConnection() as HttpURLConnection).run {
     connectTimeout = 15_000
     readTimeout = 120_000
     // some panels reject unknown user agents
     setRequestProperty("User-Agent", ua)
     try {
         if (responseCode !in 200..299) throw IOException("Server returned HTTP $responseCode")
-        inputStream.use(read)
+        inputStream.use { input -> read(if (progress == null) input else Counting(input, contentLengthLong, progress)) }
     } finally {
         disconnect()
     }
@@ -89,9 +90,9 @@ internal fun <T> open(url: String, ua: String = "IPTVSmartersPlayer", read: (Inp
 internal fun get(url: String): String = open(url) { it.bufferedReader().readText() }
 
 /** Streams to a temp file, then renames, so a failed download never replaces a good cache. */
-internal fun download(url: String, to: File) {
+internal fun download(url: String, to: File, progress: ((Long, Long) -> Unit)? = null) {
     val tmp = File(to.path + ".part")
-    open(url) { input -> tmp.outputStream().use { input.copyTo(it, 64 * 1024) } }
+    open(url, progress = progress) { input -> tmp.outputStream().use { input.copyTo(it, 64 * 1024) } }
     if (!tmp.renameTo(to)) throw IOException("Couldn't save ${to.name}")
 }
 
@@ -99,7 +100,16 @@ internal fun download(url: String, to: File) {
  * Streams a top-level JSON array of objects, handing each object's scalar fields (as strings) to [item].
  * Nested values are skipped. Anything that isn't an array (panel error objects) yields an empty list.
  */
-internal fun <T> readObjects(r: Reader, item: (Map<String, String>) -> T?): List<T> = JsonReader(r).use { j ->
+/** Counts bytes as they're read, for progress bars. */
+internal class Counting(input: InputStream, private val total: Long, private val progress: (Long, Long) -> Unit) : java.io.FilterInputStream(input) {
+    private var read = 0L
+    private var reported = 0L
+    private fun add(n: Int) { if (n > 0) { read += n; if (read - reported >= 256 * 1024) { reported = read; progress(read, total) } } }
+    override fun read(): Int = super.read().also { if (it >= 0) add(1) }
+    override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { add(it) }
+}
+
+internal fun <T> readObjects(r: Reader, onCount: (Int) -> Unit = {}, item: (Map<String, String>) -> T?): List<T> = JsonReader(r).use { j ->
     if (j.peek() != JsonToken.BEGIN_ARRAY) return emptyList()
     val out = ArrayList<T>()
     val fields = HashMap<String, String>()
@@ -118,8 +128,10 @@ internal fun <T> readObjects(r: Reader, item: (Map<String, String>) -> T?): List
         }
         j.endObject()
         item(fields)?.let(out::add)
+        if (out.size % 250 == 0) onCount(out.size)
     }
     j.endArray()
+    onCount(out.size)
     out
 }
 
@@ -135,7 +147,7 @@ internal fun parseCategories(json: String): List<Category> =
     JSONArray(json).objects().map { Category(it.str("category_id"), it.str("category_name")) }
 
 internal fun parseChannels(json: String) = parseChannels(StringReader(json))
-internal fun parseChannels(r: Reader): List<Channel> = readObjects(r) {
+internal fun parseChannels(r: Reader, onCount: (Int) -> Unit = {}): List<Channel> = readObjects(r, onCount) {
     Channel(
         id = it["stream_id"]?.toIntOrNull() ?: return@readObjects null,
         num = it["num"]?.toIntOrNull() ?: 0,
@@ -148,7 +160,7 @@ internal fun parseChannels(r: Reader): List<Channel> = readObjects(r) {
 }
 
 internal fun parseVods(json: String) = parseVods(StringReader(json))
-internal fun parseVods(r: Reader): List<Vod> = readObjects(r) {
+internal fun parseVods(r: Reader, onCount: (Int) -> Unit = {}): List<Vod> = readObjects(r, onCount) {
     Vod(
         id = it["stream_id"]?.toIntOrNull() ?: return@readObjects null,
         name = it["name"].orEmpty(),
@@ -161,7 +173,7 @@ internal fun parseVods(r: Reader): List<Vod> = readObjects(r) {
 }
 
 internal fun parseSeries(json: String) = parseSeries(StringReader(json))
-internal fun parseSeries(r: Reader): List<Series> = readObjects(r) {
+internal fun parseSeries(r: Reader, onCount: (Int) -> Unit = {}): List<Series> = readObjects(r, onCount) {
     Series(
         id = it["series_id"]?.toIntOrNull() ?: return@readObjects null,
         name = it["name"].orEmpty(),

@@ -66,6 +66,11 @@ class Store(private val ctx: Context) {
     fun hidden(a: Account?): Set<String> = prefs.getStringSet(key(a, "hidden"), emptySet())!!.toSet()
     fun setHidden(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "hidden"), set).apply()
 
+    /** Custom category order for "live", "vod" or "series" (category ids, first to last); empty = provider order. */
+    fun order(a: Account?, type: String): List<String> =
+        JSONArray(prefs.getString(key(a, "order_$type"), "[]")).let { arr -> (0 until arr.length()).map { arr.getString(it) } }
+    fun setOrder(a: Account?, type: String, ids: List<String>) = prefs.edit().putString(key(a, "order_$type"), JSONArray(ids).toString()).apply()
+
     /** Recently played ids, newest first. kind is "recent" (channels), "rmovie" or "rseries". */
     fun recents(a: Account?, kind: String): List<Int> =
         prefs.getString(key(a, kind), "")!!.split(',').mapNotNull { it.toIntOrNull() }

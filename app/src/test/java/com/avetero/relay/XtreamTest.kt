@@ -65,4 +65,16 @@ class XtreamTest {
             "assets":[{"name":"notes.txt","url":"u0"},{"name":"app-release.apk","url":"https://api/asset/1","browser_download_url":"https://dl","size":14200000}]}"""))!!
         assertEquals(Release("0.2.0", "notes", "https://api/asset/1", 14200000, "2026-10-19"), r)
     }
+
+    @Test fun progressCounts() {
+        val json = (1..600).joinToString(",", "[", "]") { """{"stream_id":"$it","name":"C$it"}""" }
+        val counts = mutableListOf<Int>()
+        assertEquals(600, parseChannels(java.io.StringReader(json)) { counts += it }.size)
+        assertEquals(listOf(250, 500, 600), counts)
+
+        val bytes = ByteArray(600 * 1024)
+        var last = 0L
+        Counting(bytes.inputStream(), bytes.size.toLong()) { read, total -> last = read; assertEquals(bytes.size.toLong(), total) }.readBytes()
+        assertTrue(last >= 512 * 1024)
+    }
 }

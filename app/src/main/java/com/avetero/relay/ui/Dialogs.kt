@@ -86,6 +86,7 @@ fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Bool
         MenuItem(if (fav) "Remove from favourites" else "Add to favourites", if (fav) Icons.StarFilled else Icons.Star, { app.toggleFav("c${c.id}"); onDismiss() }, first)
         if (inPlayer) {
             MenuItem("Audio, subtitles & quality", Icons.Settings, { tracks = true })
+            MenuItem(if (app.player.muted) "Unmute" else "Mute", if (app.player.muted) Icons.Volume else Icons.Muted, { app.player.toggleMute(); onDismiss() })
         } else {
             MenuItem("Show in TV guide", Icons.Guide, { onDismiss(); app.go(Screen.Guide) })
             MenuItem("Watch fullscreen", Icons.Play, { onDismiss(); app.push(Screen.LivePlayer(c, app.channelsIn(c.categoryId))) })
@@ -266,5 +267,21 @@ fun EpisodesDialog(episodes: List<PlayItem>, current: PlayItem, onPick: (PlayIte
             }
         }
         Btn("Close", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
+    }
+}
+
+/** Hold-OK menu on a category: move it, open the bulk reorder screen ([onMove] with null), or hide it. */
+@Composable
+fun CategoryMenu(name: String, onMove: (com.avetero.relay.Move?) -> Unit, onHide: (() -> Unit)?, onDismiss: () -> Unit) = Dialog(onDismiss) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    Panel(360) {
+        T(name, 18, Heavy, maxLines = 2)
+        MenuItem("Move to top", Icons.Top, { onMove(com.avetero.relay.Move.Top) }, first)
+        MenuItem("Move up one", Icons.Up, { onMove(com.avetero.relay.Move.Up) })
+        MenuItem("Move down one", Icons.Down, { onMove(com.avetero.relay.Move.Down) })
+        MenuItem("Move to bottom", Icons.Bottom, { onMove(com.avetero.relay.Move.Bottom) })
+        MenuItem("Reorder several…", Icons.More, { onMove(null) })
+        if (onHide != null) MenuItem("Hide category", Icons.Warn, onHide)
     }
 }

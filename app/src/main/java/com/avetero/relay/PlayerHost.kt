@@ -55,6 +55,9 @@ class PlayerHost(ctx: Context, private val store: Store) {
     /** A stream is loaded and meant to be playing (true through buffering pauses). */
     var active by mutableStateOf(false)
         private set
+    var muted by mutableStateOf(false)
+        private set
+    fun toggleMute() { muted = !muted; player.volume = if (muted) 0f else 1f }
     var tracks by mutableStateOf(Tracks.EMPTY)
         private set
 

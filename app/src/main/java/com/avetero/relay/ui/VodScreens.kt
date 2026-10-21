@@ -128,14 +128,15 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
         if (g.id == groupId) groupId = ALL
         app.message = "Hidden “${g.name}”"
     }
-    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it }, onHide = hideVod)
+    val moveVod = categoryMover(app, if (series) "series" else "vod")
+    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it }, onHide = hideVod, onMove = moveVod)
     Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
         if (phone) {
             T(if (series) "Series" else "Movies", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
             val current = groups.firstOrNull { it.id == groupId }
             CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }, onHide = hideVod) { drawer = false }
+            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }, onHide = hideVod, onMove = moveVod) { drawer = false }
         }
         val sortRow: @Composable () -> Unit = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -473,6 +474,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         if (app.player.playing) { delay(5_000); showUi = false; runCatching { root.requestFocus() } }
     }
     LaunchedEffect(showUi) { if (showUi) runCatching { playBtn.requestFocus() } }
+    // Back first hides the controls; the next Back leaves the player
+    androidx.activity.compose.BackHandler(showUi && !app.inPip && !tracksOpen && !episodesOpen) { showUi = false; runCatching { root.requestFocus() } }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -564,6 +567,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { transport() }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 40.dp)
+                        Btn(if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, height = 40.dp)
                         Btn("%.2gx".format(speed), { speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed) }, height = 40.dp)
                         if (episodes.size > 1) Btn("Episodes", { episodesOpen = true }, height = 40.dp)
                         if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 40.dp)
@@ -572,6 +576,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 } else Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 44.dp)
+                        IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, size = 44.dp)
                         Btn("%.2gx".format(speed), {
                             speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
                         }, height = 44.dp, focusRequester = speedBtn)

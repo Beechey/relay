@@ -92,6 +92,10 @@ class MainActivity : ComponentActivity() {
 
     // Home, swipe-home or recent apps while a video is playing: shrink it to a floating window.
     // Also on Android 12+, where auto-enter can be skipped (e.g. fullscreen with the bars hidden).
+    // a screen can take the remote over wholesale (Category order's move mode), whatever has focus
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        (::app.isInitialized && app.keyOverride?.invoke(event) == true) || super.dispatchKeyEvent(event)
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (app.pipEligible) enterPip()
