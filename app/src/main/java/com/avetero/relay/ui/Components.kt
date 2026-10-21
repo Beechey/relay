@@ -204,11 +204,23 @@ data class Group(val id: String, val name: String, val count: Int)
 @Composable
 fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
     var focused by remember { mutableStateOf(false) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     androidx.compose.foundation.text.BasicTextField(
         value, onChange, singleLine = true,
+        // text fields swallow D-pad Up/Down; on TV that would trap focus in the box
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down) }),
         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 15.sp),
         cursorBrush = androidx.compose.ui.graphics.SolidColor(C.Accent),
         modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) false
+                else when (e.key) {
+                    Key.DirectionDown -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Down)
+                    Key.DirectionUp -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Up)
+                    else -> false
+                }
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
         decorationBox = { inner ->
             Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)).background(if (focused) Color(0xFF2A3347) else C.Control).padding(horizontal = 12.dp),
@@ -227,12 +239,23 @@ fun List<Group>.matching(q: String): List<Group> = if (q.isBlank()) this else no
 
 /** The scrolling list of categories, shared by the TV column and the phone drawer. */
 @Composable
-fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier, focusSelected: Boolean = false) {
     if (groups.isEmpty()) T("No categories match", 14, color = C.Muted, modifier = Modifier.padding(12.dp))
-    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    val selectedFocus = remember { FocusRequester() }
+    // TV: start on the current category so the remote has somewhere to begin
+    LaunchedEffect(focusSelected) {
+        if (focusSelected) {
+            groups.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.let { state.scrollToItem(it) }
+            kotlinx.coroutines.delay(100)
+            runCatching { selectedFocus.requestFocus() }
+        }
+    }
+    LazyColumn(modifier, state, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         items(groups, key = { it.id }) { g ->
             val on = g.id == selected
-            FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp)) { f ->
+            FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp),
+                focusRequester = if (on && focusSelected) selectedFocus else null) { f ->
                 Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     T(g.name, 15, if (on || f) Bold else FontWeight.Medium, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
                     T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
@@ -288,7 +311,7 @@ fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelec
                         IconBtn(Icons.Back, "Close", onDismiss, size = 40.dp)
                     }
                     FilterField(q, { q = it }, "Find a category")
-                    CategoryList(remember(groups, q) { groups.matching(q) }, selected, { onSelect(it); onDismiss() }, Modifier.weight(1f))
+                    CategoryList(remember(groups, q) { groups.matching(q) }, selected, { onSelect(it); onDismiss() }, Modifier.weight(1f), focusSelected = !compact())
                 }
             }
             Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(remember { MutableInteractionSource() }, null, onClick = onDismiss))
