@@ -1,14 +1,6 @@
-# Relay IPTV 0.1.0
+# Relay IPTV 0.1.1
 
-First release.
+- New Relay logo: app icon (adapts to your launcher's shape), Android TV banner and in-app mark
+- Live preview on TV is only selectable when something is playing
 
-- Xtream Codes sign-in, saved on the device with automatic sign-in
-- Live TV with groups, preview, fullscreen player, channel zapping, audio and subtitle switching
-- TV guide (now and next from your provider)
-- Movies and series: browse, details, resume, next-episode autoplay
-- Search, favourites, settings, multiple playlists
-- Android TV layout with full remote control
-- Phone and tablet layout: bottom tabs, portrait and landscape, swipe to change channel, double-tap to skip
-- In-app updates from this page
-
-Install: download `relay-iptv-0.1.0.apk` below and open it on your device (allow installs from this source when asked).
+Already on 0.1.0? The app offers this update itself — choose **Install now** when asked.
