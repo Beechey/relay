@@ -50,6 +50,36 @@ Relay talks directly to your provider's Xtream Codes API (`player_api.php`). The
 - **Playback** – AndroidX Media3 (ExoPlayer) plays live MPEG-TS and HLS, and movie and episode files.
 - **Updates** – releases are published to the public [`relay-releases`](https://github.com/Beechey/relay-releases) repository. The app checks it on start and installs the new APK through Android's installer. Every release is signed with the same key, so updates install over the previous version and keep your settings.
 
+## Project layout
+
+The app is one Gradle module, organised by feature. Every feature folder has the same shape: a `…Screen.kt` for the page, and the parts only that page uses beside it. Anything used by more than one feature lives in `ui/components` or `ui/theme`.
+
+```
+app/src/main/java/com/avetero/relay/
+├── MainActivity.kt        picture-in-picture, remote key routing, entry point
+├── app/                   AppState (what the app knows), Screen (where you are), RelayApp (screen switch)
+├── data/
+│   ├── model/             plain data: channels, movies, series, programmes, resume points
+│   ├── xtream/            Xtream Codes API client, HTTP, JSON parsers
+│   ├── epg/               XMLTV guide parser and its cache
+│   ├── store/             saved settings, playlists and catalogue cache
+│   └── update/            in-app updates from GitHub releases
+├── player/                ExoPlayer host, video surface, fullscreen handling
+├── ui/
+│   ├── theme/             colours, type, icons, TV / phone scaling
+│   └── components/        buttons, focus, navigation rail, text fields, dialogs, artwork
+├── feature/
+│   ├── home/  live/  guide/  vod/  search/  favourites/
+│   ├── playback/          track picker and error card shared by both players
+│   ├── categories/        Manage categories (order and hide)
+│   ├── settings/          Settings and its sections/
+│   ├── onboarding/        sign-in and first sync
+│   └── update/            the update dialog
+└── util/                  date and time formatting
+```
+
+Unit tests mirror the same packages under `app/src/test`.
+
 ## Building from source
 
 Requirements: JDK 17 and the Android SDK (platform 35, build-tools 35).
