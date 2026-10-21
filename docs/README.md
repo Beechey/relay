@@ -40,8 +40,8 @@ Every screen in these docs links to a board by its number and file, e.g. **04 Li
 
 ## Current status (21 Oct 2026)
 
-- Project scaffold: `settings.gradle.kts`, `build.gradle.kts`, `app/build.gradle.kts`, manifest (leanback + launcher, cleartext allowed), vector icon and banner.
-- `app/src/main/java/com/avetero/iptv/Xtream.kt` is the live-channel client (login, categories, streams, short EPG, URL building).
-- `app/src/test/java/com/avetero/iptv/XtreamTest.kt` has URL, channel and EPG parsing tests.
-- **Not yet buildable on this Mac.** It has no Android SDK, no Gradle and no JDK 17. See [M0 in the roadmap](07-roadmap.md#m0--toolchain--build).
-- There are no UI files yet. All screens are still to be built from the canvas.
+- All boards 01–17 are built in Compose under `app/src/main/java/com/avetero/relay/` (see [01-architecture](01-architecture.md) for the layout). It builds, unit tests pass, and it runs in the Android TV emulator.
+- Not built yet: xmltv guide download, catch-up, reminders, favourites reorder, the TV guide / appearance / parental / remote settings sections, phone layouts, bundled fonts. Tracked in [07-roadmap](07-roadmap.md).
+- Repos: source in private `aveterosystems/relay`, release APKs in public `aveterosystems/relay-releases` (the app's update source).
+- Build locally with JDK 17: `./gradlew :app:assembleDebug` (Gradle uses `org.gradle.java.home` from `~/.gradle/gradle.properties`).
+- Release signing key lives outside the repo in `~/.relay-signing/` and in the source repo's Actions secrets.
