@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +52,7 @@ fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRai
     if (phone) Column(Modifier.weight(1f).fillMaxHeight()) {
         T("Settings", 26, Heavy, modifier = Modifier.padding(16.dp))
         GroupChips(sections.map { Group(it.first, it.second, 0) }, section) { app.stack[app.stack.lastIndex] = Screen.Settings(it) }
+        if (section == "hidden") { CategoryManager(app, Modifier.weight(1f).padding(horizontal = 16.dp)); return@WithRail }
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Spacer(Modifier.height(4.dp)) }
             item { SectionContent(app, section) }
@@ -70,6 +73,7 @@ fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRai
         Spacer(Modifier.weight(1f))
         T("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 12, color = C.Dim, modifier = Modifier.padding(start = 12.dp))
     }
+    if (section == "hidden") { CategoryManager(app, Modifier.weight(1f).fillMaxHeight().padding(start = 40.dp, end = 40.dp, top = 28.dp)); return@WithRail }
     LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Spacer(Modifier.height(14.dp)) }
         item { SectionContent(app, section) }
@@ -83,7 +87,6 @@ private fun SectionContent(app: AppState, section: String) = when (section) {
     "guide" -> GuideSettings(app)
     "player" -> PlayerSettings(app)
     "appearance" -> AppearanceSettings(app)
-    "hidden" -> HiddenSettings(app)
     "updates" -> UpdateSettings(app)
     else -> PlaylistSettings(app)
 }
@@ -262,20 +265,59 @@ private fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrange
     app.update?.let { if (showDialog) UpdateDialog(app, it) { showDialog = false } }
 }
 
-/** Settings → Hidden categories: everything hidden with a long-press, with a way back. */
+/**
+ * Settings → Hidden categories: every category with an on/off switch, filterable, with bulk
+ * "Hide all listed" / "Show all listed" for whatever the filter matches. Terms are comma-separated, and
+ * "Not containing" flips the match: e.g. "UK|, US|" + Not containing + Hide all listed keeps only UK and US.
+ */
 @Composable
-private fun HiddenSettings(app: AppState) = Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-    val rows = app.hidden.mapNotNull { key ->
-        val (type, id) = key.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-        val (label, cats) = when (type) { "live" -> "Live TV" to app.liveCats; "vod" -> "Movies" to app.vodCats; else -> "Series" to app.seriesCats }
-        cats.firstOrNull { it.id == id }?.let { Triple(key, it.name, label) }
-    }.sortedWith(compareBy({ it.third }, { it.second }))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        T("Hidden categories", if (compact()) 20 else 24, Heavy, modifier = Modifier.weight(1f))
-        if (rows.isNotEmpty()) Btn("Show all", { app.hidden.forEach { app.setCategoryHidden(it, false) } }, height = 44.dp)
+private fun CategoryManager(app: AppState, modifier: Modifier) = Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    var type by rememberSaveable { mutableStateOf("live") }
+    var q by rememberSaveable { mutableStateOf("") }
+    val cats = when (type) { "vod" -> app.vodCats; "series" -> app.seriesCats; else -> app.liveCats }
+    var exclude by rememberSaveable { mutableStateOf(false) }
+    // comma-separated terms; "not containing" lists what matches none of them (keep UK| and US|, hide the rest)
+    val terms = remember(q) { q.split(',').map { norm(it.trim()) }.filter { it.isNotEmpty() } }
+    val shown = remember(cats, terms, exclude) {
+        if (terms.isEmpty()) cats else cats.filter { c -> norm(c.name).let { n -> terms.any { n.contains(it) } } != exclude }
     }
-    if (rows.isEmpty()) T("Nothing hidden. Hold OK on a category (or press and hold on a phone) to hide it from lists, All, the guide and search.", 14, color = C.Muted, maxLines = 4, lineHeight = 21)
-    rows.forEach { (key, name, label) ->
-        SettingRow(name, label, value = "Show") { app.setCategoryHidden(key, false) }
+    val hiddenHere = cats.count { "$type:${it.id}" in app.hidden }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Title("Hidden categories")
+        Spacer(Modifier.weight(1f))
+        T("${"%,d".format(app.hidden.size)} hidden", 13, color = C.Muted)
+    }
+    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF11151F)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        listOf("live" to "Live TV", "vod" to "Movies", "series" to "Series").forEach { (k, label) ->
+            FocusSurface({ type = k }, Modifier.height(40.dp), selected = type == k, shape = RoundedCornerShape(9.dp)) { f ->
+                T(label, 14, Bold, if (f) C.OnLight else if (type == k) C.Text else C.Muted, Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
+            }
+        }
+    }
+    FilterField(q, { q = it }, "Filter, e.g. AR| — several: UK|, US|")
+    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF11151F)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        listOf(false to "Containing", true to "Not containing").forEach { (v, label) ->
+            FocusSurface({ exclude = v }, Modifier.height(36.dp), selected = exclude == v, shape = RoundedCornerShape(9.dp)) { f ->
+                T(label, 13, Bold, if (f) C.OnLight else if (exclude == v) C.Text else C.Muted, Modifier.align(Alignment.Center).padding(horizontal = 14.dp))
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Btn("Hide all listed", { app.setCategoriesHidden(shown.map { "$type:${it.id}" }, true) }, height = 40.dp, style = BtnStyle.Destructive, enabled = shown.isNotEmpty())
+        Btn("Show all listed", { app.setCategoriesHidden(shown.map { "$type:${it.id}" }, false) }, height = 40.dp, enabled = shown.isNotEmpty())
+        T("${"%,d".format(shown.size)} listed · ${"%,d".format(hiddenHere)} hidden here", 12, color = C.Dim)
+    }
+    LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items(shown, key = { it.id }) { c ->
+            val key = "$type:${c.id}"
+            val visible = key !in app.hidden
+            FocusSurface({ app.setCategoryHidden(key, visible) }, Modifier.fillMaxWidth().height(56.dp), idle = C.Surface, shape = RoundedCornerShape(12.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    T(c.name, 15, Bold, if (visible) fg(f) else sub(f), Modifier.weight(1f))
+                    T(if (visible) "Shown" else "Hidden", 13, Bold, sub(f))
+                    Toggle(visible, f)
+                }
+            }
+        }
     }
 }

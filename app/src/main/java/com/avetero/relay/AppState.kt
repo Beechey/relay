@@ -113,6 +113,11 @@ class AppState(val ctx: Context) {
         message = if (isFav(key)) "Added to favourites" else "Removed from favourites"
     }
 
+    fun setCategoriesHidden(keys: Collection<String>, hide: Boolean) {
+        hidden = if (hide) hidden + keys else hidden - keys.toSet()
+        store.setHidden(account, hidden)
+    }
+
     fun setCategoryHidden(key: String, hide: Boolean) {
         hidden = if (hide) hidden + key else hidden - key
         store.setHidden(account, hidden)
