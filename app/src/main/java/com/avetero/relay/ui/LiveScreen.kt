@@ -164,7 +164,10 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Live, nav) {
 private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen: (Channel) -> Unit) {
     Column(Modifier.width(440.dp).fillMaxHeight().padding(start = 8.dp, end = 28.dp, top = 28.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         // the preview itself is a button: OK or a click goes fullscreen
-        FocusSurface({ playing?.let(onFullscreen) }, Modifier.size(404.dp, 227.dp), idle = C.Control, shape = RoundedCornerShape(14.dp), label = "Watch fullscreen") { f ->
+        // only a focus stop when there's something to make fullscreen
+        if (playing == null) Box(Modifier.size(404.dp, 227.dp).clip(RoundedCornerShape(14.dp)).background(C.Control)) {
+            T("Press OK on a channel to preview", 13, color = C.Muted, modifier = Modifier.align(Alignment.Center))
+        } else FocusSurface({ onFullscreen(playing) }, Modifier.size(404.dp, 227.dp), idle = C.Control, shape = RoundedCornerShape(14.dp), label = "Watch fullscreen") { f ->
             if (playing != null) PlayerSurface(app.player.player, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp).clip(RoundedCornerShape(11.dp)))
             else T("Press OK on a channel to preview", 13, color = sub(f), modifier = Modifier.align(Alignment.Center))
             if (playing != null) Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(12.dp))
