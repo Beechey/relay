@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.avetero.relay.AppState
 import com.avetero.relay.Channel
+import com.avetero.relay.PlayItem
 import com.avetero.relay.Release
 import com.avetero.relay.Screen
 import com.avetero.relay.Updater
@@ -215,5 +216,46 @@ fun TracksDialog(app: AppState, onDismiss: () -> Unit) = Dialog(onDismiss) {
             }
         }
         Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
+    }
+}
+
+/** Every episode of the show from inside the player, so you can jump several ahead or back. */
+@Composable
+fun EpisodesDialog(episodes: List<PlayItem>, current: PlayItem, onPick: (PlayItem) -> Unit, onDismiss: () -> Unit) = Dialog(onDismiss) {
+    val at = episodes.indexOf(current).coerceAtLeast(0)
+    val list = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (at - 2).coerceAtLeast(0))
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Column(Modifier.widthIn(max = 520.dp).fillMaxWidth().heightIn(max = 560.dp).clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        T("Episodes", 18, Heavy, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
+        // several seasons: one button each that jumps to the season's first episode
+        val seasons = episodes.map { it.meta }.distinct()
+        if (seasons.size > 1) {
+            val scope = rememberCoroutineScope()
+            androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                items(seasons.size) { i ->
+                    val first = episodes.indexOfFirst { it.meta == seasons[i] }
+                    FocusSurface({ scope.launch { list.scrollToItem(first) } }, Modifier.height(40.dp), selected = episodes[at].meta == seasons[i], idle = C.Control, shape = RoundedCornerShape(20.dp)) { f ->
+                        T(seasons[i].substringAfterLast(" · "), 14, Bold, fg(f), Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
+                    }
+                }
+            }
+        }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false), state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(episodes.size) { i ->
+                val e = episodes[i]
+                val season = e.meta.substringAfterLast(" · ")
+                if (i == 0 || episodes[i - 1].meta != e.meta) Label(season, Modifier.padding(start = 8.dp, top = if (i > 0) 10.dp else 0.dp))
+                FocusSurface({ if (i == at) onDismiss() else onPick(e) }, Modifier.fillMaxWidth().height(52.dp), selected = i == at, shape = RoundedCornerShape(10.dp),
+                    focusRequester = if (i == at) focus else null) { f ->
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        T(e.title, 15, Bold, fg(f), Modifier.weight(1f))
+                        if (i == at) T("Playing", 13, Heavy, if (f) C.OnLight else C.Accent)
+                    }
+                }
+            }
+        }
+        Btn("Close", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
     }
 }

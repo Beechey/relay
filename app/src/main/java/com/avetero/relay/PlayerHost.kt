@@ -27,6 +27,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -37,7 +38,9 @@ import androidx.media3.ui.PlayerView
 class PlayerHost(ctx: Context, private val store: Store) {
     private val bufferMs = when (store.buffer) { "Small" -> 15_000; "Large" -> 60_000; else -> 30_000 }
 
-    val player: ExoPlayer = ExoPlayer.Builder(ctx)
+    // the FFmpeg extension decodes Dolby (AC-3/E-AC-3), DTS and TrueHD where the device has no decoder for them
+    val player: ExoPlayer = ExoPlayer.Builder(ctx, DefaultRenderersFactory(ctx)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON).setEnableDecoderFallback(true))
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx,
             DefaultHttpDataSource.Factory().setUserAgent("IPTVSmartersPlayer").setAllowCrossProtocolRedirects(true))))
         .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(minOf(15_000, bufferMs), bufferMs, 1_500, 3_000).build())
@@ -57,7 +60,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
 
     init {
         player.addListener(object : Player.Listener {
-            override fun onPlayerError(e: PlaybackException) { error = e.errorCodeName.removePrefix("ERROR_CODE_").replace('_', ' ').lowercase() }
+            override fun onPlayerError(e: PlaybackException) { error = explain(e) }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { active = playWhenReady && url != null }
             override fun onTracksChanged(t: Tracks) { tracks = t }
@@ -74,10 +77,34 @@ class PlayerHost(ctx: Context, private val store: Store) {
             .setPreferredAudioLanguage(store.audioLang.ifEmpty { null })
             .setPreferredTextLanguage(store.subLang.ifEmpty { null })
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitles).build()
+        // release the decoders first: reusing one across a resolution change leaves the old picture showing around the new one
+        player.stop()
         player.setMediaItem(MediaItem.fromUri(url), startMs)
         player.prepare()
         player.playWhenReady = true
         active = true
+    }
+
+    /** A sentence the viewer can act on, rather than ExoPlayer's error code. */
+    private fun explain(e: PlaybackException): String {
+        val f = (e as? androidx.media3.exoplayer.ExoPlaybackException)?.takeIf { it.type == androidx.media3.exoplayer.ExoPlaybackException.TYPE_RENDERER }?.rendererFormat
+        if (f != null && f.sampleMimeType?.startsWith("video/") == true) {
+            val codec = when {
+                f.sampleMimeType == androidx.media3.common.MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+                f.sampleMimeType == androidx.media3.common.MimeTypes.VIDEO_H265 -> "HEVC"
+                else -> f.sampleMimeType!!.removePrefix("video/").uppercase()
+            }
+            val size = if (f.height >= 2000) "4K " else if (f.height > 0) "${f.height}p " else ""
+            return "This device can't decode this $size$codec video. Try the HD version of the channel."
+        }
+        return when (e.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+                "The channel didn't respond. It may be off air (event channels only stream during the event)."
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                "Your provider refused this stream. It may be offline, or your connection limit is reached."
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> "The stream fell behind. Retry to jump back to live."
+            else -> "The stream stopped or the format isn't supported (" + e.errorCodeName.removePrefix("ERROR_CODE_").replace('_', ' ').lowercase() + ")."
+        }
     }
 
     fun retry() = url?.let { u -> url = null; play(u) }

@@ -66,11 +66,12 @@ class Store(private val ctx: Context) {
     fun hidden(a: Account?): Set<String> = prefs.getStringSet(key(a, "hidden"), emptySet())!!.toSet()
     fun setHidden(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "hidden"), set).apply()
 
-    fun recentChannels(a: Account?): List<Int> =
-        prefs.getString(key(a, "recent"), "")!!.split(',').mapNotNull { it.toIntOrNull() }
+    /** Recently played ids, newest first. kind is "recent" (channels), "rmovie" or "rseries". */
+    fun recents(a: Account?, kind: String): List<Int> =
+        prefs.getString(key(a, kind), "")!!.split(',').mapNotNull { it.toIntOrNull() }
 
-    fun addRecent(a: Account?, id: Int) = prefs.edit()
-        .putString(key(a, "recent"), (listOf(id) + recentChannels(a).filter { it != id }).take(12).joinToString(",")).apply()
+    fun addRecent(a: Account?, kind: String, id: Int) = prefs.edit()
+        .putString(key(a, kind), (listOf(id) + recents(a, kind).filter { it != id }).take(20).joinToString(",")).apply()
 
     fun resumes(a: Account?): List<Resume> = JSONArray(prefs.getString(key(a, "resume"), "[]")).let { arr ->
         (0 until arr.length()).map { arr.getJSONObject(it) }.map {

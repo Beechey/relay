@@ -13,7 +13,7 @@ android {
         applicationId = "com.avetero.relay"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.1.4"
+        versionName = "0.1.5"
         // 1.2.3 -> 10203, so every tagged release installs over the last
         versionCode = versionName!!.substringBefore('-').split('.').map { it.toInt() }.let { (a, b, c) -> a * 10000 + b * 100 + c }
         // GitHub updates: updateRepo=owner/name in gradle.properties; updateToken only for a private repo, in local.properties (never commit it)
@@ -58,6 +58,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
     // streaming JSON reader: catalogue lists can be hundreds of MB
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")

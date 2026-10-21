@@ -49,6 +49,7 @@ import com.avetero.relay.ui.Tab
 import com.avetero.relay.ui.UpdateDialog
 import com.avetero.relay.ui.VodGridScreen
 import com.avetero.relay.ui.VodPlayerScreen
+import com.avetero.relay.ui.WithRail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -189,9 +190,10 @@ fun App(app: AppState, onExit: () -> Unit) {
             Screen.Guide -> GuideScreen(app, nav)
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
             is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
-            is Screen.MovieDetail -> MovieDetailScreen(app, s.vod)
-            is Screen.SeriesDetail -> SeriesDetailScreen(app, s.series)
-            is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next)
+            // details keep the rail / bottom tabs so navigation is always in the same place
+            is Screen.MovieDetail -> WithRail(Tab.Movies, nav) { MovieDetailScreen(app, s.vod) }
+            is Screen.SeriesDetail -> WithRail(Tab.Series, nav) { SeriesDetailScreen(app, s.series) }
+            is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next, s.episodes)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
             Screen.More -> MoreScreen(app, nav)
