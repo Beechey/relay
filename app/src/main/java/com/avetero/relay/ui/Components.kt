@@ -19,6 +19,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,9 +76,11 @@ fun FocusSurface(
     var focused by remember { mutableStateOf(false) }
     var longPressed by remember { mutableStateOf(false) }
     val bg = when { focused -> C.Text; selected -> C.Raised; else -> idle }
+    // phones are touch-first: no initial focus, so nothing looks selected that the user didn't tap
+    val autoFocus = focusRequester != null && !compact()
     Box(
         modifier
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(if (autoFocus) Modifier.focusRequester(focusRequester!!) else Modifier)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus?.invoke() }
             .onPreviewKeyEvent { e ->
                 val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
@@ -122,7 +130,26 @@ fun IconBtn(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Mod
 
 enum class Tab(val icon: ImageVector, val label: String) {
     Home(Icons.Home, "Home"), Live(Icons.Live, "Live TV"), Guide(Icons.Guide, "TV Guide"), Movies(Icons.Movies, "Movies"),
-    Series(Icons.Series, "Series"), Favourites(Icons.Star, "Favourites"), Search(Icons.Search, "Search"), Settings(Icons.Settings, "Settings")
+    Series(Icons.Series, "Series"), Favourites(Icons.Star, "Favourites"), Search(Icons.Search, "Search"), Settings(Icons.Settings, "Settings"),
+    More(Icons.More, "More"), // phone bottom bar only
+}
+
+private val bottomTabs = listOf(Tab.Home, Tab.Live, Tab.Movies, Tab.Series, Tab.More)
+
+/** Phone bottom tab bar; Guide, Favourites, Search and Settings live under More. */
+@Composable
+fun BottomBar(active: Tab, onSelect: (Tab) -> Unit) {
+    val shown = if (active in bottomTabs) active else Tab.More
+    Row(Modifier.fillMaxWidth().background(Color(0xFF080A0F)).navigationBarsPadding().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+        bottomTabs.forEach { t ->
+            FocusSurface({ onSelect(t) }, Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp), shape = RoundedCornerShape(12.dp), label = t.label) { f ->
+                val color = when { f -> C.OnLight; t == shown -> C.Accent; else -> C.Muted }
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Ico(t.icon, color, 22.dp); T(t.label, 11, Bold, color)
+                }
+            }
+        }
+    }
 }
 
 /** Nav rail (Rail.dc.html). */
@@ -134,7 +161,7 @@ fun Rail(active: Tab, onSelect: (Tab) -> Unit) {
     ) {
         Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(C.Accent), contentAlignment = Alignment.Center) { T("R", 16, Heavy, C.OnLight) }
         Spacer(Modifier.height(18.dp))
-        Tab.entries.forEach { t ->
+        Tab.entries.filter { it != Tab.More }.forEach { t ->
             if (t == Tab.Settings) Spacer(Modifier.weight(1f))
             FocusSurface({ onSelect(t) }, Modifier.size(48.dp), selected = t == active, label = t.label) { f ->
                 Ico(t.icon, when { f -> C.OnLight; t == active -> C.Accent; else -> C.Muted }, modifier = Modifier.align(Alignment.Center))
@@ -143,10 +170,31 @@ fun Rail(active: Tab, onSelect: (Tab) -> Unit) {
     }
 }
 
-/** Rail + content, the frame of most screens. */
+/** Rail + content on TV; content + bottom tab bar on phones. The frame of most screens. */
 @Composable
 fun WithRail(active: Tab, onSelect: (Tab) -> Unit, content: @Composable RowScope.() -> Unit) =
-    Row(Modifier.fillMaxSize().background(C.Ground)) { Rail(active, onSelect); content() }
+    if (compact()) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding()) {
+        Row(Modifier.weight(1f).fillMaxWidth(), content = content)
+        BottomBar(active, onSelect)
+    } else Row(Modifier.fillMaxSize().background(C.Ground)) { Rail(active, onSelect); content() }
+
+/** Phone: a horizontal strip of category chips replacing the TV group column. */
+@Composable
+fun GroupChips(groups: List<Group>, selected: String, onSelect: (String) -> Unit) {
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(selected) { groups.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.let { state.scrollToItem(it) } }
+    LazyRow(Modifier.fillMaxWidth(), state, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(groups, key = { it.id }) { g ->
+            val on = g.id == selected
+            FocusSurface({ onSelect(g.id) }, Modifier.height(36.dp), idle = if (on) C.Accent else C.Control, shape = RoundedCornerShape(18.dp)) { f ->
+                Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T(g.name, 13, Bold, if (f || on) C.OnLight else C.Soft)
+                    T("%,d".format(g.count), 12, color = if (f || on) C.OnLightSub else C.Dim)
+                }
+            }
+        }
+    }
+}
 
 data class Group(val id: String, val name: String, val count: Int)
 
@@ -236,7 +284,7 @@ fun Logo(url: String, name: String, focused: Boolean, modifier: Modifier = Modif
 @Composable
 fun EmptyState(title: String, body: String, action: String? = null, onAction: () -> Unit = {}) =
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(420.dp).clip(RoundedCornerShape(18.dp)).background(C.Surface).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(16.dp).widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(C.Surface).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(title, 20, Heavy)
             T(body, 14, color = Color(0xFFC9CED8), maxLines = 4, lineHeight = 21)
             if (action != null) Btn(action, onAction, style = BtnStyle.Light, height = 44.dp)

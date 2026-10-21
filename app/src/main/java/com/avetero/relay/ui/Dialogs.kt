@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +37,7 @@ import kotlinx.coroutines.withContext
 
 @Composable
 private fun Panel(width: Int, content: @Composable () -> Unit) =
-    Column(Modifier.width(width.dp).clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
+    Column(Modifier.widthIn(max = width.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.Surface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { content() }
 
 @Composable
 private fun MenuItem(text: String, icon: ImageVector, onClick: () -> Unit, focusRequester: FocusRequester? = null) =

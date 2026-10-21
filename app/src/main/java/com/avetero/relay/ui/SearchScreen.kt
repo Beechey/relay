@@ -65,7 +65,8 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         }
     }
 
-    Column(Modifier.width(360.dp).fillMaxHeight().background(C.Panel).padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val phone = compact()
+    if (!phone) Column(Modifier.width(360.dp).fillMaxHeight().background(C.Panel).padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Label("Search everything")
         Box(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(C.Control).padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
             T(q.ifEmpty { "Type with the keys below" }, 22, Bold, if (q.isEmpty()) C.Dim else Color.White)
@@ -84,8 +85,10 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         }
     }
 
-    LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 32.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (phone) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Box(Modifier.height(6.dp)) }
+        // phones type with their own keyboard
+        if (phone) item { Field("Search channels, movies and series", q, { q = it }) }
         val (chans, ser, mov) = results
         if (q.length >= 2 && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T("No results for “$q”", 16, Bold, C.Muted) }
         if (chans.isNotEmpty()) item {
@@ -120,7 +123,7 @@ private fun ResultRow(title: String, count: Int, content: androidx.compose.found
     }
 
 @Composable
-fun PosterTile(image: String, title: String, seed: Int, onClick: () -> Unit) =
-    FocusSurface(onClick, Modifier.size(120.dp, 180.dp), shape = RoundedCornerShape(10.dp)) { f ->
+fun PosterTile(image: String, title: String, seed: Int, width: androidx.compose.ui.unit.Dp = 120.dp, onClick: () -> Unit) =
+    FocusSurface(onClick, Modifier.size(width, width * 1.5f), shape = RoundedCornerShape(10.dp)) { f ->
         Art(image, title, seed, Modifier.fillMaxSize().padding(if (f) 5.dp else 0.dp), 12)
     }

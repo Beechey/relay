@@ -26,6 +26,7 @@ sealed interface Screen {
     data class VodPlayer(val item: PlayItem, val next: List<PlayItem> = emptyList()) : Screen
     data object Search : Screen
     data object Favourites : Screen
+    data object More : Screen
     data class Settings(val section: String = "playlists") : Screen
 }
 

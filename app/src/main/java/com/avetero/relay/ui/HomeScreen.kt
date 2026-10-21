@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -31,26 +33,30 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     val recent = app.store.recentChannels(app.account).mapNotNull { id -> app.channels.firstOrNull { it.id == id } }
-    Column(Modifier.weight(1f).fillMaxSize().padding(horizontal = 40.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+    val phone = compact()
+    Column(Modifier.weight(1f).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = if (phone) 16.dp else 40.dp, vertical = if (phone) 16.dp else 28.dp),
+        verticalArrangement = Arrangement.spacedBy(if (phone) 20.dp else 28.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 T(listOfNotNull(app.account?.name, app.info?.expires?.let { "expires " + fmtDate(it) }).joinToString(" · "), 13, Semi, C.Muted)
                 val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
                 T(if (app.libraryLoading) "Loading your library…" else when (h) { in 5..11 -> "Good morning"; in 12..17 -> "Good afternoon"; else -> "Good evening" }, 30, Heavy)
             }
-            Clock(22)
+            if (!phone) Clock(22)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 10.dp else 20.dp)) {
             listOf(
                 Triple(Tab.Live, "%,d channels".format(app.channels.size), Screen.Live),
                 Triple(Tab.Movies, "%,d titles".format(app.movies.size), Screen.VodGrid(false)),
                 Triple(Tab.Series, "%,d shows".format(app.series.size), Screen.VodGrid(true)),
             ).forEachIndexed { i, (tab, count, screen) ->
-                FocusSurface({ app.go(screen) }, Modifier.weight(1f).height(150.dp), idle = C.Surface, shape = RoundedCornerShape(18.dp),
+                FocusSurface({ app.go(screen) }, Modifier.weight(1f).height(if (phone) 112.dp else 150.dp), idle = C.Surface, shape = RoundedCornerShape(18.dp),
                     focusRequester = if (i == 0) first else null) { f ->
-                    Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                        Ico(tab.icon, if (f) C.OnLight else C.Accent, 30.dp)
-                        Row(verticalAlignment = Alignment.Bottom) {
+                    Column(Modifier.fillMaxSize().padding(if (phone) 14.dp else 22.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                        Ico(tab.icon, if (f) C.OnLight else C.Accent, if (phone) 24.dp else 30.dp)
+                        if (phone) Column {
+                            T(tab.label, 17, Heavy, fg(f)); T(count, 12, Semi, sub(f))
+                        } else Row(verticalAlignment = Alignment.Bottom) {
                             T(tab.label, 24, Heavy, fg(f), Modifier.weight(1f))
                             T(count, 14, Semi, sub(f))
                         }
@@ -69,9 +75,9 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
                             vod != null -> app.push(Screen.MovieDetail(vod))
                             ser != null -> app.push(Screen.SeriesDetail(ser))
                         }
-                    }, Modifier.width(272.dp)) { f ->
+                    }, Modifier.width(if (phone) 220.dp else 272.dp)) { f ->
                         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(Modifier.fillMaxWidth().height(146.dp)) {
+                            Box(Modifier.fillMaxWidth().height(if (phone) 118.dp else 146.dp)) {
                                 Art(r.image, r.title, r.key.hashCode(), Modifier.fillMaxSize(), showTitle = false)
                                 ProgressLine(r.pos / r.dur.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth().align(Alignment.BottomStart), height = 4.dp)
                             }
@@ -95,5 +101,24 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Home, nav) {
                 }
             }
         }
+    }
+}
+
+/** Phone "More" tab: the rail destinations that don't fit in the bottom bar. */
+@Composable
+fun MoreScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.More, nav) {
+    Column(Modifier.weight(1f).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        T("More", 26, Heavy, modifier = Modifier.padding(bottom = 6.dp))
+        listOf(Tab.Guide to "Now and next across your channels", Tab.Favourites to "Channels, movies and series you've starred",
+            Tab.Search to "Find channels, movies and series", Tab.Settings to "Playlists, player and updates").forEach { (t, desc) ->
+            FocusSurface({ nav(t) }, Modifier.fillMaxWidth().height(72.dp), idle = C.Surface, shape = RoundedCornerShape(14.dp)) { f ->
+                Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Ico(t.icon, if (f) C.OnLight else C.Accent, 24.dp)
+                    Column(Modifier.weight(1f)) { T(t.label, 16, Heavy, fg(f)); T(desc, 13, color = sub(f)) }
+                    Ico(Icons.Chevron, sub(f), 16.dp)
+                }
+            }
+        }
+        T(listOfNotNull(app.account?.name, app.info?.expires?.let { "expires " + fmtDate(it) }).joinToString(" · "), 13, color = C.Muted, modifier = Modifier.padding(top = 10.dp))
     }
 }

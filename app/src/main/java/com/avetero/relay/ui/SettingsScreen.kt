@@ -44,6 +44,21 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRail(Tab.Settings, nav) {
     val sections = listOf("playlists" to "Playlists", "player" to "Player", "updates" to "Updates & about")
+    val phone = compact()
+    if (phone) Column(Modifier.weight(1f).fillMaxHeight()) {
+        T("Settings", 26, Heavy, modifier = Modifier.padding(16.dp))
+        GroupChips(sections.map { Group(it.first, it.second, 0) }, section) { app.stack[app.stack.lastIndex] = Screen.Settings(it) }
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            item { Spacer(Modifier.height(4.dp)) }
+            when (section) {
+                "player" -> item { PlayerSettings(app) }
+                "updates" -> item { UpdateSettings(app) }
+                else -> item { PlaylistSettings(app) }
+            }
+            item { T("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 12, color = C.Dim) }
+        }
+        return@WithRail
+    }
     Column(Modifier.width(260.dp).fillMaxHeight().background(C.Panel).padding(start = 12.dp, end = 12.dp, top = 28.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         T("Settings", 22, Heavy, modifier = Modifier.padding(start = 12.dp, bottom = 18.dp))
         sections.forEach { (key, name) ->
@@ -80,7 +95,7 @@ private fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arran
     LaunchedEffect(a) { if (app.info == null) app.info = runCatching { withContext(Dispatchers.IO) { Xtream(a).login() } }.getOrNull() }
     var refresh by remember { mutableIntStateOf(0) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        T("Playlists", 24, Heavy, modifier = Modifier.weight(1f))
+        T("Playlists", if (compact()) 20 else 24, Heavy, modifier = Modifier.weight(1f))
         Btn("+ Add playlist", { app.push(Screen.Login) }, style = BtnStyle.Primary, height = 44.dp)
     }
     Column(Modifier.clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -92,11 +107,13 @@ private fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arran
             }
         }
         val i = app.info
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Stat("Status", i?.status ?: "Checking…", Modifier.weight(1f))
-            Stat("Expires", i?.expires?.let(::fmtDate) ?: "—", Modifier.weight(1f))
-            Stat("Connections", i?.let { "${it.activeConnections} of ${it.maxConnections}" } ?: "—", Modifier.weight(1f))
-            Stat("Last refreshed", app.store.cacheTime(a).takeIf { it > 0 }?.let { fmtDate(it / 1000) } ?: "—", Modifier.weight(1f))
+        val stats = listOf(
+            "Status" to (i?.status ?: "Checking…"), "Expires" to (i?.expires?.let(::fmtDate) ?: "—"),
+            "Connections" to (i?.let { "${it.activeConnections} of ${it.maxConnections}" } ?: "—"),
+            "Last refreshed" to (app.store.cacheTime(a).takeIf { it > 0 }?.let { fmtDate(it / 1000) } ?: "—"),
+        )
+        stats.chunked(if (compact()) 2 else 4).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { row.forEach { (l, v) -> Stat(l, v, Modifier.weight(1f)) } }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Btn("Refresh now", { app.go(Screen.Sync) }, style = BtnStyle.Light, height = 42.dp)
