@@ -72,10 +72,20 @@ class MainActivity : ComponentActivity() {
         enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
     }
 
-    // Home / recent apps while a video is playing: shrink to a floating window instead of stopping
+    /**
+     * Android 12+: let the system enter PiP itself while a player is showing, so the swipe-home
+     * gesture animates straight into the floating window.
+     */
+    fun setAutoPip(enabled: Boolean) {
+        if (!canPip || Build.VERSION.SDK_INT < 31) return
+        setPictureInPictureParams(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+            .setAutoEnterEnabled(enabled).setSeamlessResizeEnabled(true).build())
+    }
+
+    // older Android: Home / recent apps while a video is playing shrinks it to a floating window by hand
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (app.onPlayerScreen && app.player.playing) enterPip()
+        if (Build.VERSION.SDK_INT < 31 && app.onPlayerScreen && app.player.playing) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -135,6 +145,10 @@ fun App(app: AppState, onExit: () -> Unit) {
             if (r != null && Updater.isNewer(r)) { app.update = r; updatePrompt = r.version != app.store.skippedVersion }
         }
     }
+
+    val activity = androidx.compose.ui.platform.LocalContext.current as? MainActivity
+    val autoPip = app.onPlayerScreen && app.player.playing
+    LaunchedEffect(autoPip) { activity?.setAutoPip(autoPip) }
 
     BackHandler {
         when {
