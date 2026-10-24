@@ -34,5 +34,9 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
         </provider>
+        <!-- Chromecast: which receiver app to talk to (the default media receiver) -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.avetero.relay.player.CastOptions" />
     </application>
 </manifest>

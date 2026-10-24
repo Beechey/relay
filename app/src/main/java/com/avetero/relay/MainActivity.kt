@@ -8,13 +8,13 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.view.KeyEvent
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import com.avetero.relay.app.App
 import com.avetero.relay.app.AppState
 import com.avetero.relay.ui.theme.DesignScale
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var app: AppState
 
     override fun onCreate(savedInstanceState: Bundle?) {
