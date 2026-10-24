@@ -39,7 +39,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
     val player: ExoPlayer = ExoPlayer.Builder(ctx, DefaultRenderersFactory(ctx)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON).setEnableDecoderFallback(true))
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(ctx,
-            DefaultHttpDataSource.Factory().setUserAgent("IPTVSmartersPlayer").setAllowCrossProtocolRedirects(true))))
+            DefaultHttpDataSource.Factory().setUserAgent(UA).setAllowCrossProtocolRedirects(true))))
         .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(minOf(15_000, bufferMs), bufferMs, 1_500, 3_000).build())
         .build()
 
@@ -66,6 +66,11 @@ class PlayerHost(ctx: Context, private val store: Store) {
     var castDevice by mutableStateOf<String?>(null)
         private set
     private var title: String? = null
+    /** What the TV is waiting for while a live channel is being prepared for it, or null. */
+    var castStatus by mutableStateOf<String?>(null)
+        private set
+    private val relay = CastRelay()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
     /** The player the controls drive: the Chromecast while casting, otherwise this device. */
     val current: Player get() = cast?.takeIf { castDevice != null } ?: player
 
@@ -82,27 +87,46 @@ class PlayerHost(ctx: Context, private val store: Store) {
             override fun onCastSessionAvailable() {
                 castDevice = CastContext.getSharedInstance()?.sessionManager?.currentCastSession?.castDevice?.friendlyName ?: "Chromecast"
                 val at = if (player.isCurrentMediaItemLive) 0 else player.currentPosition
-                player.pause()
+                // stop, not pause: providers often allow one connection, and the TV's stream needs it
+                player.stop()
                 url?.let { load(cast, it, at) }
             }
             override fun onCastSessionUnavailable() {
                 val at = if (cast.isCurrentMediaItemLive) 0 else cast.currentPosition
-                castDevice = null
-                url?.let { player.seekTo(at); player.play() }
+                relay.stop()
+                castDevice = null; castStatus = null
+                url?.let { player.setMediaItem(MediaItem.fromUri(it), at); player.prepare(); player.play() }
             }
         })
     }
 
-    /** Sends a stream to the Chromecast. Its receiver can't play raw MPEG-TS, so live channels go as HLS. */
+    /**
+     * Sends a stream to the Chromecast. Live channels (raw MPEG-TS) go through the phone's CastRelay, which turns them
+     * into HLS the receiver accepts; movies and episodes go straight to the TV.
+     */
     private fun load(cast: CastPlayer, url: String, startMs: Long) {
-        val castUrl = if (url.endsWith(".ts")) url.removeSuffix(".ts") + ".m3u8" else url
-        val mime = when (castUrl.substringAfterLast('.').lowercase()) {
+        relay.stop()
+        if ("/live/" in url) {
+            castStatus = "Getting the channel ready for your TV…"
+            // the relay reads the raw stream even when live TV is set to HLS (the provider's HLS only wraps it)
+            relay.start(url.removeSuffix(".m3u8").removeSuffix(".ts") + ".ts", UA, onReady = { local -> main.post {
+                if (this.url != url || castDevice == null) return@post
+                castStatus = null
+                send(cast, local, MimeTypes.APPLICATION_M3U8, C.TIME_UNSET)
+            } }, onError = { reason -> main.post { if (this.url == url) { castStatus = null; error = reason } } })
+            return
+        }
+        val mime = when (url.substringAfterLast('.').lowercase()) {
             "m3u8" -> MimeTypes.APPLICATION_M3U8
             "mkv" -> MimeTypes.VIDEO_MATROSKA
             "webm" -> MimeTypes.VIDEO_WEBM
             else -> MimeTypes.VIDEO_MP4
         }
-        cast.setMediaItem(MediaItem.Builder().setUri(castUrl).setMimeType(mime)
+        send(cast, url, mime, startMs)
+    }
+
+    private fun send(cast: CastPlayer, url: String, mime: String, startMs: Long) {
+        cast.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(mime)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build()).build(), startMs)
         cast.prepare()
         cast.playWhenReady = true
@@ -154,6 +178,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
 
     fun stop() {
         player.stop()
+        relay.stop(); castStatus = null
         if (castDevice != null) cast?.stop()
         url = null
         active = false
@@ -218,5 +243,10 @@ class PlayerHost(ctx: Context, private val store: Store) {
         player.trackSelectionParameters = b.setTrackTypeDisabled(type, false)
             .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, 0)).build()
         return g.getTrackFormat(0).let { it.label ?: it.language ?: "Track ${next + 1}" }
+    }
+
+    private companion object {
+        /** Some panels reject unknown user agents. */
+        const val UA = "IPTVSmartersPlayer"
     }
 }

@@ -178,7 +178,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             },
     ) {
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom)
-        app.player.castDevice?.let { CastingOverlay(it, item.title) }
+        app.player.castDevice?.let { CastingOverlay(it, item.title, app.player.castStatus) }
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
         seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
         if (tracksOpen) TracksDialog(app) { tracksOpen = false; poke++ }
