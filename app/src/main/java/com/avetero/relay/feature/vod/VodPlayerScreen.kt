@@ -55,6 +55,7 @@ import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.PlayItem
 import com.avetero.relay.data.model.Resume
+import com.avetero.relay.feature.playback.CastingOverlay
 import com.avetero.relay.feature.playback.PlayerError
 import com.avetero.relay.feature.playback.TracksDialog
 import com.avetero.relay.player.FullscreenVideo
@@ -63,6 +64,7 @@ import com.avetero.relay.ui.components.Art
 import com.avetero.relay.ui.components.Badge
 import com.avetero.relay.ui.components.Btn
 import com.avetero.relay.ui.components.BtnStyle
+import com.avetero.relay.ui.components.CastButton
 import com.avetero.relay.ui.components.Clock
 import com.avetero.relay.ui.components.FocusSurface
 import com.avetero.relay.ui.components.IconBtn
@@ -81,7 +83,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episodes: List<PlayItem> = emptyList()) {
     FullscreenVideo(app.inPip)
-    val p = app.player.player
+    // the Chromecast while casting, otherwise this device; the effect below restarts when it changes
+    val p = app.player.current
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
     var showUi by remember { mutableStateOf(true) }
@@ -117,10 +120,10 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
     }
     var episodesOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(item.url) {
+    LaunchedEffect(item.url, p) {
         ended = false
         app.addRecentVod(item)
-        app.player.play(item.url, app.store.resumeAt(app.account, item.resumeKey), app.store.subtitlesOn)
+        app.player.play(item.url, app.store.resumeAt(app.account, item.resumeKey), app.store.subtitlesOn, item.title)
         var ticks = 0
         while (true) {
             pos = p.currentPosition; dur = p.duration.coerceAtLeast(0)
@@ -174,7 +177,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 ) { _, d -> dx += d; val secs = (dx / size.width * 180).toInt(); seekHint = (if (secs >= 0) "+" else "−") + "${kotlin.math.abs(secs)} s" }
             },
     ) {
-        PlayerSurface(p, Modifier.fillMaxSize(), zoom)
+        PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom)
+        app.player.castDevice?.let { CastingOverlay(it, item.title) }
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
         seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
         if (tracksOpen) TracksDialog(app) { tracksOpen = false; poke++ }
@@ -198,6 +202,9 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 if (compact()) {
                     val activity = LocalContext.current as? com.avetero.relay.MainActivity
                     IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 44.dp)
+                }
+                if (app.player.canCast) {
+                    CastButton(size = 44.dp)
                 }
                 Clock(18)
             }

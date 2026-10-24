@@ -45,12 +45,14 @@ import com.avetero.relay.data.model.Channel
 import com.avetero.relay.data.model.current
 import com.avetero.relay.data.model.progress
 import com.avetero.relay.data.model.upcoming
+import com.avetero.relay.feature.playback.CastingOverlay
 import com.avetero.relay.feature.playback.PlayerError
 import com.avetero.relay.feature.playback.TracksDialog
 import com.avetero.relay.player.FullscreenVideo
 import com.avetero.relay.player.PlayerSurface
 import com.avetero.relay.ui.components.Badge
 import com.avetero.relay.ui.components.Btn
+import com.avetero.relay.ui.components.CastButton
 import com.avetero.relay.ui.components.Clock
 import com.avetero.relay.ui.components.IconBtn
 import com.avetero.relay.ui.components.KeyHint
@@ -79,7 +81,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
 
     LaunchedEffect(c.id) {
         delay(400) // debounce fast zapping
-        app.player.play(app.liveUrl(c))
+        app.player.play(app.liveUrl(c), title = c.name)
         app.addRecentChannel(c.id)
         app.loadEpg(c)
     }
@@ -111,6 +113,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
             },
     ) {
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
+        app.player.castDevice?.let { CastingOverlay(it, c.name) }
         app.player.error?.let { err ->
             PlayerError(err, onRetry = { app.player.retry() }, onSwitch = {
                 app.hls = !app.hls; app.store.hls = app.hls; app.player.play(app.liveUrl(c))
@@ -125,6 +128,9 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 if (compact()) {
                     val activity = LocalContext.current as? com.avetero.relay.MainActivity
                     IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 48.dp)
+                }
+                if (app.player.canCast) {
+                    CastButton()
                 }
             }
         }

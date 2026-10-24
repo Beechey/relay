@@ -58,6 +58,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-cast:1.5.1")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
     // streaming JSON reader: catalogue lists can be hundreds of MB
     implementation("com.google.code.gson:gson:2.11.0")

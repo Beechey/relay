@@ -1,11 +1,15 @@
 package com.avetero.relay.player
 
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.media3.common.C
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,9 +24,13 @@ import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.avetero.relay.data.store.Store
+import com.google.android.gms.cast.framework.CastContext
 import java.util.Locale
 
-/** The one ExoPlayer; screens attach a PlayerSurface to show it. Buffer setting applies on next app start. */
+/**
+ * The one ExoPlayer; screens attach a PlayerSurface to show it. Buffer setting applies on next app start.
+ * When a Chromecast session starts, playback moves to the CastPlayer and back again when it ends.
+ */
 @OptIn(UnstableApi::class)
 class PlayerHost(ctx: Context, private val store: Store) {
     private val bufferMs = when (store.buffer) { "Small" -> 15_000; "Large" -> 60_000; else -> 30_000 }
@@ -50,19 +58,62 @@ class PlayerHost(ctx: Context, private val store: Store) {
     var tracks by mutableStateOf(Tracks.EMPTY)
         private set
 
+    // Chromecast needs Google Play services, so it's null on Fire TV; TVs don't cast, they're cast to
+    private val cast: CastPlayer? = if (ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) null
+        else runCatching { CastPlayer(CastContext.getSharedInstance(ctx)) }.getOrNull()
+    val canCast get() = cast != null
+    /** Name of the Chromecast playing right now, or null when playing on this device. */
+    var castDevice by mutableStateOf<String?>(null)
+        private set
+    private var title: String? = null
+    /** The player the controls drive: the Chromecast while casting, otherwise this device. */
+    val current: Player get() = cast?.takeIf { castDevice != null } ?: player
+
     init {
-        player.addListener(object : Player.Listener {
+        val listener = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) { error = explain(e) }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { active = playWhenReady && url != null }
             override fun onTracksChanged(t: Tracks) { tracks = t }
+        }
+        player.addListener(listener)
+        cast?.addListener(listener)
+        cast?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
+            override fun onCastSessionAvailable() {
+                castDevice = CastContext.getSharedInstance()?.sessionManager?.currentCastSession?.castDevice?.friendlyName ?: "Chromecast"
+                val at = if (player.isCurrentMediaItemLive) 0 else player.currentPosition
+                player.pause()
+                url?.let { load(cast, it, at) }
+            }
+            override fun onCastSessionUnavailable() {
+                val at = if (cast.isCurrentMediaItemLive) 0 else cast.currentPosition
+                castDevice = null
+                url?.let { player.seekTo(at); player.play() }
+            }
         })
     }
 
-    fun play(url: String, startMs: Long = 0, subtitles: Boolean = false) {
+    /** Sends a stream to the Chromecast. Its receiver can't play raw MPEG-TS, so live channels go as HLS. */
+    private fun load(cast: CastPlayer, url: String, startMs: Long) {
+        val castUrl = if (url.endsWith(".ts")) url.removeSuffix(".ts") + ".m3u8" else url
+        val mime = when (castUrl.substringAfterLast('.').lowercase()) {
+            "m3u8" -> MimeTypes.APPLICATION_M3U8
+            "mkv" -> MimeTypes.VIDEO_MATROSKA
+            "webm" -> MimeTypes.VIDEO_WEBM
+            else -> MimeTypes.VIDEO_MP4
+        }
+        cast.setMediaItem(MediaItem.Builder().setUri(castUrl).setMimeType(mime)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build()).build(), startMs)
+        cast.prepare()
+        cast.playWhenReady = true
+    }
+
+    fun play(url: String, startMs: Long = 0, subtitles: Boolean = false, title: String? = null) {
         if (url == this.url && error == null) return
         this.url = url
+        this.title = title
         error = null
+        if (castDevice != null && cast != null) { player.stop(); load(cast, url, startMs); active = true; return }
         // fresh choices per video: preferred languages from Settings, no leftover overrides from the last one
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides()
@@ -103,6 +154,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
 
     fun stop() {
         player.stop()
+        if (castDevice != null) cast?.stop()
         url = null
         active = false
     }
