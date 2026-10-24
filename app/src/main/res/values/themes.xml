@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppCompat-based so the Cast button and its device picker find an opaque colorPrimary (they crash without one) -->
+    <style name="Theme.Relay" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">#0B0E14</item>
+        <item name="colorPrimaryDark">#0B0E14</item>
+        <item name="colorAccent">#FFB547</item>
+        <item name="android:windowBackground">#0B0E14</item>
+    </style>
+</resources>
