@@ -145,7 +145,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             FocusSurface({ app.push(Screen.LivePlayer(playing, list)) }, Modifier.fillMaxWidth().aspectRatio(16f / 9f), idle = Color.Black, shape = RoundedCornerShape(0.dp), label = "Watch fullscreen") { _ ->
                 // keyed on PiP: the floating window borrows the video surface, so rebuild this one afterwards
                 key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize()) }
-                app.player.castDevice?.let { CastingOverlay(it, playing.name) }
+                app.player.castDevice?.let { CastingOverlay(it, playing.name, app.player.castStatus) }
                 Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(10.dp))
                 Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
                 app.player.error?.let { T(it, 13, Bold, C.Error, maxLines = 3, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) }
@@ -185,7 +185,7 @@ private fun Preview(app: AppState, c: Channel?, playing: Channel?, onFullscreen:
         } else FocusSurface({ onFullscreen(playing) }, Modifier.size(404.dp, 227.dp), idle = C.Control, shape = RoundedCornerShape(14.dp), label = "Watch fullscreen") { f ->
             if (playing != null) key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize().padding(if (f) 4.dp else 0.dp).clip(RoundedCornerShape(11.dp))) }
             else T("Press OK on a channel to preview", 13, color = sub(f), modifier = Modifier.align(Alignment.Center))
-            if (playing != null) app.player.castDevice?.let { CastingOverlay(it, playing.name) }
+            if (playing != null) app.player.castDevice?.let { CastingOverlay(it, playing.name, app.player.castStatus) }
             if (playing != null) Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(12.dp))
             if (playing != null) Badge("Fullscreen", if (f) C.Text else C.Ground, if (f) C.OnLight else C.Soft, Modifier.align(Alignment.BottomEnd).padding(12.dp))
             app.player.error?.let { T(it, 13, Bold, C.Error, maxLines = 3, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)) }
