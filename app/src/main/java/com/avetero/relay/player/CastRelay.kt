@@ -110,10 +110,11 @@ class CastRelay {
 }
 
 /**
- * Cuts a live MPEG-TS stream into HLS segments of about [targetMs] at video keyframes. Each segment starts with the
+ * Cuts a live MPEG-TS stream into HLS segments of about [targetMs] at video keyframes; 6 s with 3 ready before the TV
+ * starts gives it ~18 s of buffer, so brief stalls from the provider don't show as stutter. Each segment starts with the
  * latest PAT and PMT so the TV can decode it on its own. Keeps the last [keep] segments in memory.
  */
-class TsSegmenter(private val targetMs: Long = 4_000, private val keep: Int = 8, private val clock: () -> Long = System::currentTimeMillis) {
+class TsSegmenter(private val targetMs: Long = 6_000, private val keep: Int = 10, private val clock: () -> Long = System::currentTimeMillis) {
     private class Segment(val seq: Long, val durationSec: Double, val bytes: ByteArray)
     private val segments = ArrayDeque<Segment>()
     private var seq = 0L

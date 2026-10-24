@@ -32,7 +32,7 @@ import java.util.Locale
  * When a Chromecast session starts, playback moves to the CastPlayer and back again when it ends.
  */
 @OptIn(UnstableApi::class)
-class PlayerHost(ctx: Context, private val store: Store) {
+class PlayerHost(private val ctx: Context, private val store: Store) {
     private val bufferMs = when (store.buffer) { "Small" -> 15_000; "Large" -> 60_000; else -> 30_000 }
 
     // the FFmpeg extension decodes Dolby (AC-3/E-AC-3), DTS and TrueHD where the device has no decoder for them
@@ -93,7 +93,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
             }
             override fun onCastSessionUnavailable() {
                 val at = if (cast.isCurrentMediaItemLive) 0 else cast.currentPosition
-                relay.stop()
+                stopRelay()
                 castDevice = null; castStatus = null
                 url?.let { player.setMediaItem(MediaItem.fromUri(it), at); player.prepare(); player.play() }
             }
@@ -105,15 +105,16 @@ class PlayerHost(ctx: Context, private val store: Store) {
      * into HLS the receiver accepts; movies and episodes go straight to the TV.
      */
     private fun load(cast: CastPlayer, url: String, startMs: Long) {
-        relay.stop()
+        stopRelay()
         if ("/live/" in url) {
             castStatus = "Getting the channel ready for your TV…"
             // the relay reads the raw stream even when live TV is set to HLS (the provider's HLS only wraps it)
+            CastRelayService.start(ctx, title)
             relay.start(url.removeSuffix(".m3u8").removeSuffix(".ts") + ".ts", UA, onReady = { local -> main.post {
                 if (this.url != url || castDevice == null) return@post
                 castStatus = null
                 send(cast, local, MimeTypes.APPLICATION_M3U8, C.TIME_UNSET)
-            } }, onError = { reason -> main.post { if (this.url == url) { castStatus = null; error = reason } } })
+            } }, onError = { reason -> main.post { if (this.url == url) { stopRelay(); castStatus = null; error = reason } } })
             return
         }
         val mime = when (url.substringAfterLast('.').lowercase()) {
@@ -124,6 +125,8 @@ class PlayerHost(ctx: Context, private val store: Store) {
         }
         send(cast, url, mime, startMs)
     }
+
+    private fun stopRelay() { relay.stop(); CastRelayService.stop(ctx) }
 
     private fun send(cast: CastPlayer, url: String, mime: String, startMs: Long) {
         cast.setMediaItem(MediaItem.Builder().setUri(url).setMimeType(mime)
@@ -178,7 +181,7 @@ class PlayerHost(ctx: Context, private val store: Store) {
 
     fun stop() {
         player.stop()
-        relay.stop(); castStatus = null
+        stopRelay(); castStatus = null
         if (castDevice != null) cast?.stop()
         url = null
         active = false
