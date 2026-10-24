@@ -113,7 +113,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
             },
     ) {
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
-        app.player.castDevice?.let { CastingOverlay(it, c.name, app.player.castStatus) }
+        app.player.castDevice?.let { CastingOverlay(it, c.name) }
         app.player.error?.let { err ->
             PlayerError(err, onRetry = { app.player.retry() }, onSwitch = {
                 app.hls = !app.hls; app.store.hls = app.hls; app.player.play(app.liveUrl(c))

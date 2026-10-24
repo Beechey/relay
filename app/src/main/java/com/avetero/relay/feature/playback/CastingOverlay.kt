@@ -16,11 +16,11 @@ import com.avetero.relay.ui.theme.T
 
 /** Covers the video area while a Chromecast is playing, so the screen says where the picture went. */
 @Composable
-fun CastingOverlay(device: String, title: String, status: String? = null) =
+fun CastingOverlay(device: String, title: String) =
     Box(Modifier.fillMaxSize().background(C.Ground), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Label("Casting to $device")
             T(title, 24, Heavy, maxLines = 2)
-            T(status ?: "Use the controls here, or the Cast notification, to pause and seek.", 14, color = if (status != null) C.Accent else C.Muted)
+            T("Use the controls here, or the Cast notification, to pause and seek.", 14, color = C.Muted)
         }
     }
