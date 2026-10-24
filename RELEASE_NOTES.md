@@ -1,6 +1,6 @@
-# Relay IPTV 0.1.8
+# Relay IPTV 0.1.10
 
-- **Fixed:** opening a channel or movie fullscreen crashed the app on phones and tablets in 0.1.7. Sorry about that
-- **Chromecast:** the Cast button now sits on the same tile as the other player buttons. Tap it, pick your TV, and the video moves there; stop casting and it continues on your phone
+- **Live TV casting relay removed:** this takes the app back to how casting worked in 0.1.8. The experimental relay from 0.1.9, its "Casting to your TV" notification and its background service are gone
+- Everything else is the same as 0.1.8
 
 Already on an earlier version? The app offers this update itself — choose **Install now** when asked.
