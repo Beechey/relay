@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.vod
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
@@ -90,10 +92,15 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
     val info = remember(series) { mutableStateMapOf<Int, Pair<String, String>>() }
     var drawer by remember { mutableStateOf(false) }
     val firstTile = remember { FocusRequester() }
+    // coming back from a title's page: return to that poster rather than the first one
+    val restore = remember(series) { app.browseFocus[series]?.takeIf { (si, ti) -> si < shelves.size && ti < shelves[si].tiles.size } }
+    val restoreTile = remember { FocusRequester() }
     var pageFocused by remember { mutableStateOf(false) }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(windowFocused, shelves.isNotEmpty()) {
-        if (windowFocused && shelves.isNotEmpty()) repeat(15) { if (pageFocused) return@LaunchedEffect; delay(100); runCatching { firstTile.requestFocus() } }
+        if (!windowFocused || shelves.isEmpty()) return@LaunchedEffect
+        if (restore != null) runCatching { state.scrollToItem((if (phone) 2 else 1) + restore.first) }
+        repeat(15) { if (pageFocused) return@LaunchedEffect; delay(100); runCatching { (if (restore != null) restoreTile else firstTile).requestFocus() } }
     }
     // fetch artwork and story only once focus rests on a title, so scrolling doesn't fire a request per poster
     LaunchedEffect(heroTile?.id) {
@@ -153,11 +160,13 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
                 item(key = "shelf:${shelf.title}:$si") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         T(shelf.title, 19, Heavy, modifier = Modifier.padding(start = side))
-                        LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
-                            items(shelf.tiles, key = { it.id }) { t ->
+                        val rowState = rememberLazyListState(if (restore?.first == si) (restore.second - 1).coerceAtLeast(0) else 0)
+                        LazyRow(modifier = Modifier.stopAtEnd(), state = rowState, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
+                            itemsIndexed(shelf.tiles, key = { _, t -> t.id }) { ti, t ->
                                 val w = if (phone) 108.dp else 134.dp
                                 FocusSurface({ open(t) }, Modifier.size(w, w * 1.5f), shape = RoundedCornerShape(16.dp), lift = 1.08f,
-                                    focusRequester = if (si == 0 && t == shelf.tiles.first()) firstTile else null, onFocus = { hero = t },
+                                    focusRequester = when { restore == si to ti -> restoreTile; si == 0 && ti == 0 -> firstTile; else -> null },
+                                    onFocus = { hero = t; app.browseFocus[series] = si to ti },
                                     onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) }) { _ ->
                                     Art(t.image, t.name, t.id, Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)), 13)
                                 }

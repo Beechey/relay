@@ -120,6 +120,8 @@ class AppState(val ctx: Context) {
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
+    // Movies (false) / Series (true): the shelf and poster last focused, so Back from details lands on it again
+    val browseFocus = mutableMapOf<Boolean, Pair<Int, Int>>()
     var hls by mutableStateOf(store.hls)
     /** True until the saved catalogue has been read back (it can be 100+ MB, so never on the main thread). */
     var libraryLoading by mutableStateOf(false)
