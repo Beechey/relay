@@ -217,7 +217,10 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         }
         AnimatedVisibility((showInfo || listOpen) && !app.inPip, Modifier.align(Alignment.BottomCenter).then(if (tv) Modifier.padding(start = if (listOpen) 584.dp else 24.dp, end = 24.dp, bottom = 24.dp) else Modifier), enter = fadeIn(), exit = fadeOut()) {
             val epg = app.programmesFor(c)
-            val now = epg.current()
+            // paused or behind live: show the programme (and how far into it) at the point you're watching
+            val watching = (if (pausedAt != null) pausedAt!! else clock.coerceAtLeast(nowSec())) - behind
+            val now = if (pausedAt == null && behind == 0L) epg.current() else epg?.firstOrNull { watching in it.start until it.end }
+            val nowProgress = now?.let { ((watching - it.start).toFloat() / (it.end - it.start)).coerceIn(0f, 1f) } ?: 0f
             val pad = if (compact()) 16.dp else 40.dp
             // board 02: LIVE and the channel, the programme large, its times either side of the progress, then the keys
             if (tv) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -235,7 +238,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                 T(now?.title ?: c.name, 26, Heavy, maxLines = 2, lineHeight = 30)
                 if (now != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     T(fmtTime(now.start), 12, Semi, C.Muted, mono = true)
-                    ProgressLine(now.progress(), Modifier.weight(1f), C.Glass3, height = 4.dp)
+                    ProgressLine(if (pausedAt == null && behind == 0L) now.progress() else nowProgress, Modifier.weight(1f), C.Glass3, height = 4.dp)
                     T(fmtTime(now.end), 12, Semi, C.Muted, mono = true)
                 } else T("No guide for this channel", 13, Semi, C.Muted)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -257,7 +260,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                 }
                 if (now != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     T(fmtTime(now.start), 13, color = C.Muted, mono = true)
-                    ProgressLine(now.progress(), Modifier.weight(1f), height = 4.dp)
+                    ProgressLine(if (pausedAt == null && behind == 0L) now.progress() else nowProgress, Modifier.weight(1f), height = 4.dp)
                     T(fmtTime(now.end), 13, color = C.Muted, mono = true)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
