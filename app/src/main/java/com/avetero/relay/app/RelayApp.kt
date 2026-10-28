@@ -23,7 +23,6 @@ import com.avetero.relay.data.update.Updater
 import com.avetero.relay.feature.favourites.FavouritesScreen
 import com.avetero.relay.feature.guide.GuideScreen
 import com.avetero.relay.feature.home.HomeScreen
-import com.avetero.relay.feature.home.MoreScreen
 import com.avetero.relay.feature.live.LivePlayerScreen
 import com.avetero.relay.feature.live.LiveScreen
 import com.avetero.relay.feature.onboarding.LoginScreen
@@ -57,7 +56,6 @@ fun App(app: AppState, onExit: () -> Unit) {
             Tab.Home -> Screen.Home; Tab.Live -> Screen.Live(); Tab.Guide -> Screen.Guide
             Tab.Movies -> Screen.VodGrid(false); Tab.Series -> Screen.VodGrid(true)
             Tab.Favourites -> Screen.Favourites; Tab.Search -> Screen.Search; Tab.Settings -> Screen.Settings()
-            Tab.More -> Screen.More
         })
     }
 
@@ -91,8 +89,6 @@ fun App(app: AppState, onExit: () -> Unit) {
     BackHandler {
         when {
             app.stack.size > 1 -> app.back()
-            app.screen in listOf(Screen.Guide, Screen.Favourites, Screen.Search) && compact -> app.go(Screen.More)
-            app.screen is Screen.Settings && compact -> app.go(Screen.More)
             app.screen !in listOf(Screen.Home, Screen.Login, Screen.Sync) -> app.go(Screen.Home)
             else -> exitAsk = true
         }
@@ -113,7 +109,6 @@ fun App(app: AppState, onExit: () -> Unit) {
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next, s.episodes)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
-            Screen.More -> MoreScreen(app, nav)
             is Screen.Settings -> SettingsScreen(app, s.section, nav)
         }
         // PiP from Live TV's preview: the floating window shows only the video

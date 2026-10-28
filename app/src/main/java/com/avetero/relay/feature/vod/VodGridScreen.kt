@@ -131,7 +131,8 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
             Spacer(Modifier.width(12.dp))
             sortRow()
         }
-        if (tiles.isEmpty()) EmptyState(if (query.isNotBlank()) "No matches" else "Nothing here yet",
+        if (tiles.isEmpty() && app.vodLoading) EmptyState("Loading $what…", "Live TV is ready to watch while your ${what} load.")
+        else if (tiles.isEmpty()) EmptyState(if (query.isNotBlank()) "No matches" else "Nothing here yet",
             if (query.isNotBlank()) "Nothing in this category matches “${query.trim()}”." else "This category has no $what.")
         LazyVerticalGrid(if (phone) GridCells.Adaptive(108.dp) else GridCells.Fixed(6), Modifier, gridState,
             contentPadding = PaddingValues(start = if (phone) 12.dp else 0.dp, end = if (phone) 12.dp else 0.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
