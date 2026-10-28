@@ -106,8 +106,8 @@ fun App(app: AppState, onExit: () -> Unit) {
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
             is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
             // details keep the rail / bottom tabs so navigation is always in the same place
-            is Screen.MovieDetail -> WithRail(Tab.Movies, nav) { MovieDetailScreen(app, s.vod) }
-            is Screen.SeriesDetail -> WithRail(Tab.Series, nav) { SeriesDetailScreen(app, s.series) }
+            is Screen.MovieDetail -> WithRail(Tab.Movies, nav, behindDock = true) { MovieDetailScreen(app, s.vod) }
+            is Screen.SeriesDetail -> WithRail(Tab.Series, nav, behindDock = true) { SeriesDetailScreen(app, s.series) }
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next, s.episodes)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
