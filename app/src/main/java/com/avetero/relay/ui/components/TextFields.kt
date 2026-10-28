@@ -1,5 +1,8 @@
 package com.avetero.relay.ui.components
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -80,7 +83,10 @@ fun TvEditable(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     LaunchedEffect(editing) { if (editing) { runCatching { inner.requestFocus() }; keyboard?.show() } }
-    fun stop() { editing = false; runCatching { outer.requestFocus() } }
+    fun stop() { editing = false; keyboard?.hide(); runCatching { outer.requestFocus() } }
+    val scope = rememberCoroutineScope()
+    // leave the box, then move on a frame later, once the box has its focus back (moving at once does nothing)
+    fun leave(d: FocusDirection) { stop(); scope.launch { withFrameNanos { }; focusManager.moveFocus(d) } }
     Box(modifier.focusRequester(outer).onFocusChanged { hover = it.isFocused }
         // touch on a TV-sized layout (landscape tablets): a tap starts typing straight away
         .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(pass = PointerEventPass.Initial); editing = true } }
@@ -91,13 +97,14 @@ fun TvEditable(
         .focusable()) {
         content(
             Modifier.focusRequester(inner).focusProperties { canFocus = editing }
-                .onFocusChanged { if (it.isFocused) innerFocused = true else if (innerFocused) { innerFocused = false; editing = false } }
+                .onFocusChanged { if (it.isFocused) innerFocused = true else if (innerFocused) { innerFocused = false; editing = false; keyboard?.hide() } }
                 .onPreviewKeyEvent { e ->
                     when (e.key) {
                         // KeyUp too, or the app's own Back handler would see it after editing ends
                         Key.Back -> { if (e.type == KeyEventType.KeyUp) stop(); true }
-                        Key.DirectionDown, Key.DirectionUp -> {
-                            if (e.type == KeyEventType.KeyDown) { stop(); focusManager.moveFocus(if (e.key == Key.DirectionDown) FocusDirection.Down else FocusDirection.Up) }
+                        // the remote leaves the box with Up, Down or Right; typing happens on the keyboard, not with the cursor
+                        Key.DirectionDown, Key.DirectionUp, Key.DirectionRight -> {
+                            if (e.type == KeyEventType.KeyDown) leave(when (e.key) { Key.DirectionDown -> FocusDirection.Down; Key.DirectionUp -> FocusDirection.Up; else -> FocusDirection.Right })
                             true
                         }
                         else -> false
@@ -113,10 +120,12 @@ fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, 
     TvEditable(modifier.fillMaxWidth(), focusRequester, startEditing = focusRequester != null) { field, hover, editing ->
         var focused by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
         BasicTextField(
             value, onChange, singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { focusManager.moveFocus(FocusDirection.Down) }),
+            // Done closes the keyboard and moves on, so results are reachable straight away
+            keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); focusManager.moveFocus(FocusDirection.Down) }),
             textStyle = TextStyle(color = if (hover) C.OnLight else Color.White, fontSize = 15.sp),
             cursorBrush = SolidColor(C.Accent),
             modifier = field.fillMaxWidth().onFocusChanged { focused = it.isFocused },
