@@ -29,7 +29,7 @@ import com.avetero.relay.ui.theme.T
 
 /** Board 18: channel long-press menu. */
 @Composable
-fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Boolean = false) = Dialog(onDismiss) {
+fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Boolean = false, onPrevious: (() -> Unit)? = null) = Dialog(onDismiss) {
     var tracks by remember { mutableStateOf(false) }
     if (tracks) TracksDialog(app) { tracks = false; onDismiss() }
     val first = remember { FocusRequester() }
@@ -42,6 +42,7 @@ fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Bool
         val fav = app.isFav("c${c.id}")
         MenuItem(if (fav) "Remove from favourites" else "Add to favourites", if (fav) Icons.StarFilled else Icons.Star, { app.toggleFav("c${c.id}"); onDismiss() }, first)
         if (inPlayer) {
+            if (onPrevious != null) MenuItem("Previous channel", Icons.Back, onPrevious)
             MenuItem("Audio, subtitles & quality", Icons.Settings, { tracks = true })
             MenuItem(if (app.player.muted) "Unmute" else "Mute", if (app.player.muted) Icons.Volume else Icons.Muted, { app.player.toggleMute(); onDismiss() })
         } else {

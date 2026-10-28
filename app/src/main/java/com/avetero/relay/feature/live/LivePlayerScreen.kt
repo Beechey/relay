@@ -1,5 +1,9 @@
 package com.avetero.relay.feature.live
 
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import com.avetero.relay.app.AppState.Companion.ALL
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -69,15 +73,24 @@ import kotlinx.coroutines.delay
 
 /** Board 06: fullscreen live with info bar; up/down and channel keys zap. */
 @Composable
-fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
+fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, openList: Boolean = false, startGroup: String = ALL) {
     FullscreenVideo(app.inPip)
-    var index by remember { mutableIntStateOf(list.indexOfFirst { it.id == start.id }.coerceAtLeast(0)) }
+    val tv = !compact()
+    // the channel list can switch category, so the zapping order follows whatever was picked last
+    var list by remember { mutableStateOf(startList) }
+    var index by remember { mutableIntStateOf(startList.indexOfFirst { it.id == start.id }.coerceAtLeast(0)) }
     val c = list.getOrElse(index) { start }
     var showInfo by remember { mutableStateOf(true) }
     var poke by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     var tracksOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    // TV: the sliding channel list, number entry and the previous channel
+    var listOpen by remember { mutableStateOf(tv && openList) }
+    var listPoke by remember { mutableIntStateOf(0) }
+    var group by remember { mutableStateOf(startGroup) }
+    var digits by remember { mutableStateOf("") }
+    var previous by remember { mutableStateOf<Channel?>(null) }
 
     LaunchedEffect(c.id) {
         delay(400) // debounce fast zapping
@@ -88,20 +101,50 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
     LaunchedEffect(poke) { showInfo = true; delay(5_000); showInfo = false }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
-    fun zap(d: Int) { if (list.isNotEmpty()) { index = Math.floorMod(index + d, list.size); poke++ } }
-    // Back first hides the info bar; the next Back leaves the player
-    BackHandler(showInfo && !app.inPip && !menu && !tracksOpen) { showInfo = false }
+    fun go(to: Channel, inList: List<Channel> = list) {
+        if (to.id != c.id) previous = c
+        list = inList; index = inList.indexOfFirst { it.id == to.id }.coerceAtLeast(0); poke++
+    }
+    fun zap(d: Int) { if (list.isNotEmpty()) { previous = c; index = Math.floorMod(index + d, list.size); poke++ } }
+    fun closeList() { listOpen = false; runCatching { focus.requestFocus() } }
+    // Back closes the channel list, then the info bar; the next Back leaves the player
+    BackHandler((listOpen || showInfo) && !app.inPip && !menu && !tracksOpen) { if (listOpen) closeList() else showInfo = false }
+    // the list tucks itself away when the remote goes quiet
+    LaunchedEffect(listOpen, listPoke) { if (listOpen) { delay(8_000); closeList() } }
+    // typed channel numbers: wait for a pause, then jump
+    LaunchedEffect(digits) {
+        if (digits.isEmpty()) return@LaunchedEffect
+        delay(1_500)
+        val n = digits.toIntOrNull(); digits = ""
+        val inList = list.firstOrNull { it.num == n }
+        val any = inList ?: app.channelsVisible.firstOrNull { it.num == n }
+        if (any != null) go(any, if (inList != null) list else app.channelsIn(ALL)) else app.message = "No channel $n"
+    }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black).focusRequester(focus).focusable()
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (e.key) {
-                    Key.DirectionUp, Key.ChannelUp -> { zap(-1); true }
-                    Key.DirectionDown, Key.ChannelDown -> { zap(1); true }
-                    // hold OK = options (audio, subtitles, quality, favourite); a press shows the info bar
-                    Key.DirectionCenter, Key.Enter -> { if (e.nativeKeyEvent.repeatCount > 0 || e.nativeKeyEvent.isLongPress) menu = true else poke++; true }
-                    Key.Menu -> { menu = true; true }
+                val code = e.nativeKeyEvent.keyCode
+                val digit = when (code) { in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 -> code - android.view.KeyEvent.KEYCODE_0
+                    in android.view.KeyEvent.KEYCODE_NUMPAD_0..android.view.KeyEvent.KEYCODE_NUMPAD_9 -> code - android.view.KeyEvent.KEYCODE_NUMPAD_0; else -> -1 }
+                when {
+                    digit >= 0 -> { if (digits.length < 5) digits += digit; true }
+                    code == android.view.KeyEvent.KEYCODE_LAST_CHANNEL -> { previous?.let { go(it) }; true }
+                    e.key == Key.ChannelUp -> { zap(-1); true }
+                    e.key == Key.ChannelDown -> { zap(1); true }
+                    // with the list open, the arrows move through it instead of zapping
+                    listOpen -> { listPoke++; false }
+                    e.key == Key.DirectionUp -> { zap(-1); true }
+                    e.key == Key.DirectionDown -> { zap(1); true }
+                    tv && e.key == Key.DirectionLeft -> { listOpen = true; listPoke++; true }
+                    // hold OK = options (audio, subtitles, quality, favourite); a press opens the channel list on TV
+                    e.key == Key.DirectionCenter || e.key == Key.Enter -> {
+                        if (e.nativeKeyEvent.repeatCount > 0 || e.nativeKeyEvent.isLongPress) menu = true
+                        else if (tv) { listOpen = true; listPoke++; poke++ } else poke++
+                        true
+                    }
+                    e.key == Key.Menu -> { menu = true; true }
                     else -> false
                 }
             }
@@ -120,7 +163,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
             }, hls = app.hls)
         }
         // phones have no Back key on screen: show one with the info bar
-        AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(!tv && showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
                 IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute(); poke++ }, size = 48.dp)
@@ -137,11 +180,11 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
         AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Ground).padding(horizontal = 12.dp, vertical = 6.dp)) { Clock(22) }
         }
-        AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility((showInfo || listOpen) && !app.inPip, Modifier.align(Alignment.BottomCenter).then(if (tv) Modifier.padding(start = if (listOpen) 584.dp else 24.dp, end = 24.dp, bottom = 24.dp) else Modifier), enter = fadeIn(), exit = fadeOut()) {
             val epg = app.programmesFor(c)
             val now = epg.current()
             val pad = if (compact()) 16.dp else 40.dp
-            Column(Modifier.fillMaxWidth().background(C.Ground).navigationBarsPadding().padding(start = pad, end = pad, top = if (compact()) 16.dp else 28.dp, bottom = if (compact()) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (compact()) 12.dp else 18.dp)) {
+            Column(Modifier.fillMaxWidth().then(if (tv) Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass) else Modifier.background(C.Ground)).navigationBarsPadding().padding(start = pad, end = pad, top = if (compact()) 16.dp else 28.dp, bottom = if (compact()) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (compact()) 12.dp else 18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     if (!compact()) T(if (c.num > 0) c.num.toString() else "", 22, color = C.Muted, mono = true)
                     Logo(c.icon, c.name, false, Modifier.size(if (compact()) 48.dp else 64.dp, if (compact()) 34.dp else 44.dp))
@@ -160,11 +203,36 @@ fun LivePlayerScreen(app: AppState, start: Channel, list: List<Channel>) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val next = epg.upcoming().firstOrNull()
                     T(if (next != null) "Next  ${fmtTime(next.start)} · ${next.title}" else if (compact()) "Swipe ↑↓ to change channel" else "", 14, Bold, C.Muted, Modifier.weight(1f))
-                    if (compact()) Btn("Audio & quality", { tracksOpen = true }, height = 40.dp) else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { KeyHint("▲▼", "Channels"); KeyHint("Hold OK", "Mute, audio & quality"); KeyHint("Back", "Channel list") }
+                    if (compact()) Btn("Audio & quality", { tracksOpen = true }, height = 40.dp) else Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        KeyHint("OK", "Channels"); KeyHint("▲▼", "Zap"); KeyHint("0–9", "Number"); KeyHint("Hold OK", "Options")
+                    }
                 }
             }
         }
-        if (menu) ChannelMenu(app, c, { menu = false; runCatching { focus.requestFocus() } }, inPlayer = true)
+        AnimatedVisibility(listOpen && !app.inPip, Modifier.align(Alignment.TopStart).padding(24.dp), enter = fadeIn() + slideInHorizontally { -it / 3 }, exit = fadeOut() + slideOutHorizontally { -it / 3 }) {
+            // Back must reach the list itself: with a row focused, Compose would otherwise spend the first press clearing focus
+            ChannelOverlay(app, group, { group = it }, c, { ch, l -> go(ch, l); app.store.lastLiveGroup = group }, { listPoke++ },
+                Modifier.onPreviewKeyEvent { e -> if (e.key == Key.Back) { if (e.type == KeyEventType.KeyUp) closeList(); true } else false })
+        }
+        if (digits.isNotEmpty()) Box(Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp).clip(RoundedCornerShape(18.dp)).background(C.Glass).padding(horizontal = 22.dp, vertical = 10.dp)) {
+            T(digits, 44, Heavy, mono = true)
+        }
+        if (menu) ChannelMenu(app, c, { menu = false; runCatching { focus.requestFocus() } }, inPlayer = true, onPrevious = previous?.let { p -> { menu = false; go(p) } })
         if (tracksOpen) TracksDialog(app) { tracksOpen = false; runCatching { focus.requestFocus() } }
     }
+}
+
+/**
+ * TV Live tab (redesign board 02): straight into fullscreen on your last channel, with the channel list open so
+ * you can pick something else. Phones keep the picture-on-top list (LiveScreen).
+ */
+@Composable
+fun LiveTvScreen(app: AppState, group: String?) {
+    val g = group ?: app.store.lastLiveGroup.takeIf { app.store.liveStart == "Last category" && it.isNotEmpty() } ?: ALL
+    val list = remember(g, app.channels, app.hidden, app.favourites) { app.channelsIn(g).ifEmpty { app.channelsIn(ALL) } }
+    // chosen once the channels are in; later plays mustn't restart the screen
+    val start = remember(list.isNotEmpty()) { app.recentChannels.firstNotNullOfOrNull { id -> list.firstOrNull { it.id == id } } ?: list.firstOrNull() }
+    if (start == null) Box(Modifier.fillMaxSize().background(C.Ground), contentAlignment = Alignment.Center) {
+        T(if (app.libraryLoading) "Loading channels…" else "No channels in your playlist", 18, Bold, C.Muted)
+    } else LivePlayerScreen(app, start, list, openList = true, startGroup = g)
 }
