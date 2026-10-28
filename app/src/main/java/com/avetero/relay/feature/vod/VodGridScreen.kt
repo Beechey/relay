@@ -60,25 +60,42 @@ internal const val ALL = "__all"
 
 internal const val RECENT = "__recent"
 
-/** A poster in the grid; movies and series share it. */
-private data class Tile(val id: Int, val name: String, val image: String, val rating: Double, val meta: String, val added: Long)
+internal const val FOR_YOU = "__foryou"
 
-/** Boards 07 + 10. */
+/** A poster in the grid; movies and series share it. */
+internal data class Tile(val id: Int, val name: String, val image: String, val rating: Double, val meta: String, val added: Long)
+
+/**
+ * Movies and Series (redesign board 04). They open on For you: a hero that follows the focused title, then rows by
+ * category. Picking a category opens its full grid with search and sort.
+ */
 @Composable
-fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) = WithRail(if (series) Tab.Series else Tab.Movies, nav) {
+fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) {
+    var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: FOR_YOU) }
+    val rows = androidx.compose.foundation.lazy.rememberLazyListState()
+    val browsing = groupId == FOR_YOU
+    val phone = compact()
+    WithRail(if (series) Tab.Series else Tab.Movies, nav, behindDock = browsing && !phone) {
+        if (browsing) BrowseRows(app, series, rows) { groupId = it } else VodGrid(app, series, groupId) { groupId = it }
+    }
+}
+
+/** Boards 07 + 10: one category as a poster grid, with the category list beside it on TV. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.VodGrid(app: AppState, series: Boolean, groupId: String, setGroup: (String) -> Unit) {
     val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
     val all = remember(series, app.moviesVisible, app.seriesVisible) {
         if (series) app.seriesVisible.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
         else app.moviesVisible.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
     }
     val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
-    var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: if (resumeIds.isNotEmpty()) RESUME else ALL) }
     var drawer by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableIntStateOf(0) }
     val recentIds = if (series) app.recentSeries else app.recentMovies
     val groups = remember(cats, all, resumeIds, recentIds) {
         val counts = all.groupingBy { it.second }.eachCount()
         listOfNotNull(
+            Group(FOR_YOU, "For you", 0),
             Group(RESUME, "Continue watching", resumeIds.size).takeIf { resumeIds.isNotEmpty() },
             Group(RECENT, "Recently watched", recentIds.size).takeIf { recentIds.isNotEmpty() },
             Group(ALL, if (series) "All series" else "All movies", all.size),
@@ -103,18 +120,18 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
     val phone = compact()
     val hideVod: (Group) -> Unit = { g ->
         app.setCategoryHidden((if (series) "series:" else "vod:") + g.id, true)
-        if (g.id == groupId) groupId = ALL
+        if (g.id == groupId) setGroup(ALL)
         app.message = "Hidden “${g.name}”"
     }
     val moveVod = categoryMover(app, if (series) "series" else "vod")
-    if (!phone) GroupColumn("Categories", groups, groupId, { groupId = it }, onHide = hideVod, onMove = moveVod)
+    if (!phone) GroupColumn("Categories", groups, groupId, setGroup, onHide = hideVod, onMove = moveVod)
     Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
         if (phone) {
             T(if (series) "Series" else "Movies", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
             val current = groups.firstOrNull { it.id == groupId }
             CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, { groupId = it }, onHide = hideVod, onMove = moveVod) { drawer = false }
+            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, setGroup, onHide = hideVod, onMove = moveVod) { drawer = false }
         }
         val sortRow: @Composable () -> Unit = {
             SegmentedTabs(listOf(0 to "Recently added", 1 to "A – Z", 2 to "Rating"), sort, { sort = it }, small = true)

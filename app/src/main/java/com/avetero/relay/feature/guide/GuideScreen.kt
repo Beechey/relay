@@ -1,5 +1,10 @@
 package com.avetero.relay.feature.guide
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -100,6 +105,11 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
     val windowEnd = windowStart + 2 * 3600
     var focused by remember { mutableStateOf<Pair<Channel, Programme?>?>(null) }
     val first = remember { FocusRequester() }
+    // Right past the window's end (or Left before its start) moves the window, then focus lands on the programme
+    // airing at that time on the same channel
+    var pending by remember { mutableStateOf<Pair<Int, Long>?>(null) }
+    val pendingFocus = remember { FocusRequester() }
+    LaunchedEffect(pending) { if (pending != null) { delay(60); runCatching { pendingFocus.requestFocus() }; pending = null } }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(list.firstOrNull()?.id, windowFocused) { if (windowFocused) { delay(80); runCatching { first.requestFocus() } } }
     val phone = compact()
@@ -185,8 +195,16 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
                                 val firstFocus = progs.indexOfFirst { nowSec() in it.start until it.end }.takeIf { it >= 0 } ?: 0
                                 progs.forEachIndexed { j, p ->
                                     val s = maxOf(p.start, windowStart); val e = minOf(p.end, windowEnd)
+                                    val target = pending?.takeIf { it.first == c.id && it.second in p.start until p.end }
                                     ProgrammeBlock(app, c, p, perSec * (s - windowStart).toFloat(), perSec * (e - s).toFloat() - 6.dp,
-                                        if (i == 0 && j == firstFocus) first else null, { focused = c to p }) { act(app, c, p, list) }
+                                        when { target != null -> pendingFocus; i == 0 && j == firstFocus && pending == null -> first; else -> null }, { focused = c to p },
+                                        onEdge = { right ->
+                                            when {
+                                                right && p.end >= windowEnd && shift < 22 -> { shift += 1; pending = c.id to maxOf(p.end, windowStart + 3600); true }
+                                                !right && p.start <= windowStart && shift > -2 -> { shift -= 1; pending = c.id to (minOf(p.start, windowStart) - 1); true }
+                                                else -> false
+                                            }
+                                        }) { act(app, c, p, list) }
                                 }
                             }
                         }
@@ -211,11 +229,14 @@ private fun GuidePill(text: String, enabled: Boolean, selected: Boolean = false,
 
 /** One programme: past ones fade, the live one fills with its progress, catch-up and reminders are labelled. */
 @Composable
-private fun ProgrammeBlock(app: AppState, c: Channel, p: Programme, x: Dp, w: Dp, focusRequester: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun ProgrammeBlock(app: AppState, c: Channel, p: Programme, x: Dp, w: Dp, focusRequester: FocusRequester?, onFocus: () -> Unit,
+                           onEdge: (right: Boolean) -> Boolean, onClick: () -> Unit) {
     val now = nowSec()
     val live = now in p.start until p.end
     val past = p.end <= now
-    FocusSurface(onClick, Modifier.offset(x = x).width(w).fillMaxHeight().alpha(if (past) .5f else 1f), idle = Color(0x0FFFFFFF), shape = RoundedCornerShape(14.dp),
+    FocusSurface(onClick, Modifier.offset(x = x).width(w).fillMaxHeight().alpha(if (past) .5f else 1f)
+        .onPreviewKeyEvent { e -> e.type == KeyEventType.KeyDown && (e.key == Key.DirectionRight || e.key == Key.DirectionLeft) && onEdge(e.key == Key.DirectionRight) },
+        idle = Color(0x0FFFFFFF), shape = RoundedCornerShape(14.dp),
         focusRequester = focusRequester, onFocus = onFocus, lift = 1.04f) { f ->
         if (live && !f) Box(Modifier.fillMaxHeight().fillMaxWidth(p.progress()).background(Brush.horizontalGradient(listOf(C.Accent.copy(alpha = .16f), C.Coral.copy(alpha = .26f)))))
         Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
