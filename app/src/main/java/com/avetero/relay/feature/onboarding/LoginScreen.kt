@@ -27,6 +27,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.avetero.relay.ui.components.Pill
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
 import com.avetero.relay.app.AppState
 import com.avetero.relay.data.model.Account
 import com.avetero.relay.data.xtream.Xtream
@@ -43,7 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Board 01. */
+/** Board 09: sign in. shortcut: the "copy from another Relay" list arrives with household sync. */
 @Composable
 fun LoginScreen(app: AppState) {
     var name by remember { mutableStateOf("My provider") }
@@ -75,15 +82,29 @@ fun LoginScreen(app: AppState) {
 
     val phone = compact()
     val intro: @Composable () -> Unit = {
-        Column(Modifier.then(if (phone) Modifier.fillMaxWidth() else Modifier.width(380.dp)), verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
-            LogoMark(if (phone) 48.dp else 64.dp)
-            T("Add your playlist", if (phone) 28 else 40, Heavy, maxLines = 2, lineHeight = if (phone) 32 else 44)
-            T("Sign in with the Xtream Codes details from your provider. Live TV, movies, series and the TV guide load automatically.", if (phone) 14 else 16, color = C.Soft, maxLines = 4, lineHeight = if (phone) 21 else 26)
-            if (app.store.playlists().isNotEmpty()) Btn("Back", { app.back() }, Modifier.width(120.dp), height = 44.dp)
+        Column(Modifier.then(if (phone) Modifier.fillMaxWidth() else Modifier.width(500.dp)), verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 16.dp)) {
+            LogoMark(if (phone) 48.dp else 56.dp)
+            T("Add your playlist", if (phone) 34 else 54, Heavy, maxLines = 2, lineHeight = if (phone) 36 else 54)
+            T("Sign in with the Xtream Codes login from your provider. Live TV, movies, series and the TV guide load by themselves.", if (phone) 15 else 16, color = C.Soft, maxLines = 4, lineHeight = if (phone) 22 else 26)
+            Column(Modifier.padding(top = if (phone) 4.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(
+                    "Find the server, username and password your provider sent you",
+                    if (phone) "Type them in here" else "Type them here, or from the Fire TV or Google TV app on your phone",
+                    "Live TV is ready in seconds; movies, series and the guide follow",
+                ).forEachIndexed { n, step ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(34.dp).clip(CircleShape).background(C.Glass2)) { T("${n + 1}", 14, Heavy, C.Accent, Modifier.align(Alignment.Center), mono = true) }
+                        T(step, 15, color = C.Soft, maxLines = 2, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+            if (app.store.playlists().isNotEmpty()) Btn("Back", { app.back() }, Modifier.padding(top = 8.dp), height = 48.dp)
         }
     }
     val form: @Composable (Modifier) -> Unit = { mod ->
-        Column(mod.clip(RoundedCornerShape(20.dp)).background(Color(0xFF11151F)).padding(if (phone) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(mod.clip(RoundedCornerShape(30.dp)).background(C.Glass).padding(if (phone) 22.dp else 30.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Pill("Xtream Codes")
+            T("Your provider's login", 22, Heavy)
             Field("Playlist name", name, { name = it })
             Field("Server URL", server, { server = it }, hint = "Include the port, e.g. :8080", keyboard = KeyboardType.Uri, mono = true)
             if (phone) {
@@ -94,13 +115,19 @@ fun LoginScreen(app: AppState) {
                 Field("Password", pass, { pass = it }, Modifier.weight(1f), password = true, error = error != null)
             }
             if (error != null) T(error!!, 13, Bold, C.Error, maxLines = 2)
-            Btn(if (busy) "Signing in…" else "Sign in & load playlist", ::submit, Modifier.fillMaxWidth(), style = BtnStyle.Primary, height = 56.dp, enabled = !busy, focusRequester = first)
+            Btn(if (busy) "Signing in…" else "Sign in and load playlist", ::submit, Modifier.fillMaxWidth(), style = BtnStyle.Primary, height = 54.dp, enabled = !busy, focusRequester = first)
             T("Your login is stored only on this device.", 13, color = C.Muted, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
-    if (phone) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    // board 09's backdrop: soft blue and teal light, fading into the ground behind the copy
+    val backdrop = Modifier.fillMaxSize().background(C.Ground).drawBehind {
+        drawRect(Brush.radialGradient(listOf(Color(0xFF2F5F9C).copy(alpha = .9f), Color.Transparent), Offset(size.width * .75f, size.height * .25f), size.maxDimension * .5f))
+        drawRect(Brush.radialGradient(listOf(Color(0xFF123A34).copy(alpha = .9f), Color.Transparent), Offset(size.width * .15f, size.height * .85f), size.maxDimension * .4f))
+        drawRect(Brush.horizontalGradient(.25f to C.Ground.copy(alpha = .9f), 1f to C.Ground.copy(alpha = .3f)))
+    }
+    if (phone) Column(backdrop.statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         intro(); form(Modifier.fillMaxWidth())
-    } else Row(Modifier.fillMaxSize().background(C.Ground).imePadding().padding(horizontal = 64.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(96.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+    } else Row(backdrop.imePadding().padding(horizontal = 96.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(72.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
         intro()
         // scrolls so the focused field stays above the on-screen keyboard
         form(Modifier.width(520.dp).verticalScroll(rememberScrollState()))
