@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.categories
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -25,7 +26,7 @@ fun categoryMover(app: AppState, type: String): (Group, Move?) -> Unit = { g, m 
 @Composable
 fun CategoryMenu(name: String, onMove: (Move?) -> Unit, onHide: (() -> Unit)?, onDismiss: () -> Unit) = Dialog(onDismiss) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
     Panel(360) {
         T(name, 18, Heavy, maxLines = 2)
         MenuItem("Move to top", Icons.Top, { onMove(Move.Top) }, first)

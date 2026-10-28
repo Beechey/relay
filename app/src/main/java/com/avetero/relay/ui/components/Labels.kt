@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.avetero.relay.ui.theme.Bold
 import com.avetero.relay.ui.theme.C
 import com.avetero.relay.ui.theme.Heavy
+import com.avetero.relay.ui.theme.Semi
 import com.avetero.relay.ui.theme.T
 import com.avetero.relay.util.fmtTime
 import kotlinx.coroutines.delay
@@ -62,8 +63,8 @@ fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, track: Color = 
 
 @Composable
 fun KeyHint(key: String, action: String) = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    Box(Modifier.clip(RoundedCornerShape(5.dp)).background(C.Control).padding(horizontal = 7.dp, vertical = 3.dp)) { T(key, 12, Bold) }
-    T(action, 12, color = C.Muted)
+    Box(Modifier.clip(RoundedCornerShape(6.dp)).background(C.Glass2).padding(horizontal = 7.dp, vertical = 3.dp)) { T(key, 11, Bold, C.Soft, mono = true) }
+    T(action, 12, Semi, C.Muted)
 }
 
 /** Centered message used for empty/error states (board 19). */

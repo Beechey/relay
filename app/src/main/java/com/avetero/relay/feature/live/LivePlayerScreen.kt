@@ -1,5 +1,10 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.ui.theme.Semi
+import androidx.compose.ui.graphics.Brush
+import com.avetero.relay.ui.components.Pill
+import com.avetero.relay.ui.components.LivePill
+import com.avetero.relay.ui.components.settle
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.avetero.relay.app.AppState.Companion.ALL
 import androidx.compose.animation.slideOutHorizontally
@@ -99,7 +104,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         app.loadEpg(c)
     }
     LaunchedEffect(poke) { showInfo = true; delay(5_000); showInfo = false }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { focus.settle() }
 
     fun go(to: Channel, inList: List<Channel> = list) {
         if (to.id != c.id) previous = c
@@ -178,12 +183,30 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
             }
         }
         AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp), enter = fadeIn(), exit = fadeOut()) {
-            Box(Modifier.clip(RoundedCornerShape(8.dp)).background(C.Ground).padding(horizontal = 12.dp, vertical = 6.dp)) { Clock(22) }
+            Box(Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(horizontal = 16.dp, vertical = 8.dp)) { Clock(20) }
         }
         AnimatedVisibility((showInfo || listOpen) && !app.inPip, Modifier.align(Alignment.BottomCenter).then(if (tv) Modifier.padding(start = if (listOpen) 584.dp else 24.dp, end = 24.dp, bottom = 24.dp) else Modifier), enter = fadeIn(), exit = fadeOut()) {
             val epg = app.programmesFor(c)
             val now = epg.current()
             val pad = if (compact()) 16.dp else 40.dp
+            // board 02: LIVE and the channel, the programme large, its times either side of the progress, then the keys
+            if (tv) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LivePill()
+                    T(listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name).joinToString(" · "), 13, Semi, C.Muted, Modifier.weight(1f))
+                    if (app.isFav("c${c.id}")) Pill("★ Favourite")
+                    if (c.archive) Pill("Catch-up")
+                }
+                T(now?.title ?: c.name, 26, Heavy, maxLines = 2, lineHeight = 30)
+                if (now != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    T(fmtTime(now.start), 12, Semi, C.Muted, mono = true)
+                    ProgressLine(now.progress(), Modifier.weight(1f), C.Glass3, height = 4.dp)
+                    T(fmtTime(now.end), 12, Semi, C.Muted, mono = true)
+                } else T("No guide for this channel", 13, Semi, C.Muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    KeyHint("◀", "Channels"); KeyHint("▲▼", "Zap"); KeyHint("0–9", "Go to number"); KeyHint("Hold OK", "Favourite, audio, previous")
+                }
+            } else
             Column(Modifier.fillMaxWidth().then(if (tv) Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass) else Modifier.background(C.Ground)).navigationBarsPadding().padding(start = pad, end = pad, top = if (compact()) 16.dp else 28.dp, bottom = if (compact()) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (compact()) 12.dp else 18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     if (!compact()) T(if (c.num > 0) c.num.toString() else "", 22, color = C.Muted, mono = true)
@@ -208,6 +231,9 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                     }
                 }
             }
+        }
+        AnimatedVisibility(tv && listOpen && !app.inPip, Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to C.Ground.copy(alpha = .55f), .55f to Color.Transparent)))
         }
         AnimatedVisibility(listOpen && !app.inPip, Modifier.align(Alignment.TopStart).padding(24.dp), enter = fadeIn() + slideInHorizontally { -it / 3 }, exit = fadeOut() + slideOutHorizontally { -it / 3 }) {
             // Back must reach the list itself: with a row focused, Compose would otherwise spend the first press clearing focus

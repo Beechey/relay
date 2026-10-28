@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +67,7 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
     val item = PlayItem(app.api.vodUrl(vod), vod.name, listOfNotNull(info?.year?.ifEmpty { null }, info?.genre?.ifEmpty { null }).joinToString(" · ").ifEmpty { "Movie" }, vod.icon, key, vodId = vod.id)
     val more = remember(vod) { app.moviesVisible.filter { it.categoryId == vod.categoryId && it.id != vod.id }.take(12) }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
 
     if (compact()) {
         Column(Modifier.fillMaxSize().background(C.Ground).verticalScroll(rememberScrollState())) {

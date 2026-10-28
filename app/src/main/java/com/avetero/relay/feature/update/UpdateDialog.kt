@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.update
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -60,7 +61,7 @@ fun UpdateDialog(app: AppState, r: Release, onDismiss: () -> Unit) = Dialog(onDi
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
     Panel(440) {
         Badge("Update available", C.Accent, C.OnLight)
         T("Version ${r.version} is ready", 26, Heavy)

@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -115,7 +116,7 @@ private fun androidx.compose.foundation.layout.RowScope.VodGrid(app: AppState, s
     val gridState = rememberLazyGridState()
     val first = remember { FocusRequester() }
     LaunchedEffect(groupId, sort) { gridState.scrollToItem(0) }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
 
     val phone = compact()
     val hideVod: (Group) -> Unit = { g ->

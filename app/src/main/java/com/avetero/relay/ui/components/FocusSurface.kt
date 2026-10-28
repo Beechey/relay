@@ -78,3 +78,9 @@ fun FocusSurface(
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
 }
+
+/**
+ * A dialog or new screen often can't take focus on its first frame (its window isn't focused yet), and a single
+ * request is silently dropped. Keep asking for half a second.
+ */
+suspend fun FocusRequester.settle() = repeat(10) { runCatching { requestFocus() }; kotlinx.coroutines.delay(50) }

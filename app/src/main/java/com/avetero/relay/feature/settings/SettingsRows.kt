@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.settings
 
+import com.avetero.relay.ui.components.settle
 import com.avetero.relay.ui.theme.LiveGradient
 import com.avetero.relay.ui.components.ProgressLine
 import androidx.compose.ui.graphics.graphicsLayer
@@ -82,7 +83,7 @@ internal fun ChoiceRow(label: String, desc: String?, options: List<String>, curr
     SettingRow(label, desc, value = shown) { open = true }
     if (open) Dialog({ open = false }) {
         val first = remember { FocusRequester() }
-        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        LaunchedEffect(Unit) { first.settle() }
         Panel(420, padding = 20.dp, spacing = 6.dp) {
             DialogTitle(label)
             options.forEach { o -> OptionRow(o, o == shown, { shown = o; onPick(o); open = false }, focusRequester = if (o == shown) first else null) }
