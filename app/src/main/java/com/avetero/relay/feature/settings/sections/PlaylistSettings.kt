@@ -87,11 +87,11 @@ internal fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arra
     }
     SettingsGroup {
         ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
-        var downloadHidden by remember { mutableStateOf(app.store.downloadHidden) }
-        SettingRow("Download hidden categories",
-            if (downloadHidden) "Turn off to skip them: refreshing gets faster and uses less space. Applies at the next refresh."
-            else "Hidden categories aren't downloaded. Show one again and it downloads then.", toggle = downloadHidden) {
-            downloadHidden = !downloadHidden; app.store.downloadHidden = downloadHidden
+        var skip by remember { mutableStateOf(!app.store.downloadHidden) }
+        SettingRow("Skip hidden categories",
+            if (skip) "Hidden categories aren't downloaded. Show one again and it downloads then."
+            else "Turn on to stop downloading what you've hidden: refreshing gets faster and uses less space. Applies at the next refresh.", toggle = skip) {
+            skip = !skip; app.store.downloadHidden = !skip
         }
         SettingRow("Clear saved data", "Deletes the saved catalogue and guide, then downloads them again") { app.clearCacheAndReload() }
     }
