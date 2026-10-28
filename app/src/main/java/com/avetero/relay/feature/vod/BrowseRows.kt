@@ -164,7 +164,7 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
                         LazyRow(modifier = Modifier.stopAtEnd(), state = rowState, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
                             itemsIndexed(shelf.tiles, key = { _, t -> t.id }) { ti, t ->
                                 val w = if (phone) 108.dp else 134.dp
-                                FocusSurface({ open(t) }, Modifier.size(w, w * 1.5f), shape = RoundedCornerShape(16.dp), lift = 1.08f,
+                                FocusSurface({ app.browseFocus[series] = si to ti; open(t) }, Modifier.size(w, w * 1.5f), shape = RoundedCornerShape(16.dp), lift = 1.08f,
                                     focusRequester = when { restore == si to ti -> restoreTile; si == 0 && ti == 0 -> firstTile; else -> null },
                                     onFocus = { hero = t; app.browseFocus[series] = si to ti },
                                     onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) }) { _ ->

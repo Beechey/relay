@@ -71,10 +71,10 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
     LaunchedEffect(Unit) { first.settle() }
 
     if (compact()) {
-        Column(Modifier.fillMaxSize().background(C.Ground).verticalScroll(rememberScrollState())) {
+        // the back arrow stays put while the page scrolls
+        Box(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().background(C.Ground).verticalScroll(rememberScrollState())) {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                 Art(info?.backdrop?.ifEmpty { null } ?: vod.icon, "", vod.id, Modifier.fillMaxSize(), showTitle = false)
-                IconBtn(Icons.Back, "Back", { app.back() }, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 44.dp)
             }
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -102,6 +102,8 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
                     }
                 }
             }
+        }
+        IconBtn(Icons.Back, "Back", { app.back() }, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 44.dp, round = true)
         }
         return
     }

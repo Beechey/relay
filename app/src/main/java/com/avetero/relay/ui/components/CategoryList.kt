@@ -64,7 +64,7 @@ fun GroupChips(groups: List<Group>, selected: String, onSelect: (String) -> Unit
             FocusSurface({ onSelect(g.id) }, Modifier.height(36.dp), idle = if (on) C.Accent else C.Control, shape = RoundedCornerShape(18.dp)) { f ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     T(g.name, 13, Bold, if (f || on) C.OnLight else C.Soft)
-                    T("%,d".format(g.count), 12, color = if (f || on) C.OnLightSub else C.Dim)
+                    if (g.count > 0) T("%,d".format(g.count), 12, color = if (f || on) C.OnLightSub else C.Dim)
                 }
             }
         }
