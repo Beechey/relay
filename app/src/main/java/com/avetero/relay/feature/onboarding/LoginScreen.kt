@@ -119,12 +119,7 @@ fun LoginScreen(app: AppState) {
             T("Your login is stored only on this device.", 13, color = C.Muted, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
-    // board 09's backdrop: soft blue and teal light, fading into the ground behind the copy
-    val backdrop = Modifier.fillMaxSize().background(C.Ground).drawBehind {
-        drawRect(Brush.radialGradient(listOf(Color(0xFF2F5F9C).copy(alpha = .9f), Color.Transparent), Offset(size.width * .75f, size.height * .25f), size.maxDimension * .5f))
-        drawRect(Brush.radialGradient(listOf(Color(0xFF123A34).copy(alpha = .9f), Color.Transparent), Offset(size.width * .15f, size.height * .85f), size.maxDimension * .4f))
-        drawRect(Brush.horizontalGradient(.25f to C.Ground.copy(alpha = .9f), 1f to C.Ground.copy(alpha = .3f)))
-    }
+    val backdrop = Modifier.welcomeBackdrop()
     if (phone) Column(backdrop.statusBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         intro(); form(Modifier.fillMaxWidth())
     } else Row(backdrop.imePadding().padding(horizontal = 96.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(72.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
@@ -132,4 +127,11 @@ fun LoginScreen(app: AppState) {
         // scrolls so the focused field stays above the on-screen keyboard
         form(Modifier.width(520.dp).verticalScroll(rememberScrollState()))
     }
+}
+
+/** Board 09's backdrop, shared by sign-in and loading: soft blue and teal light fading into the ground behind the copy. */
+internal fun Modifier.welcomeBackdrop() = fillMaxSize().background(C.Ground).drawBehind {
+    drawRect(Brush.radialGradient(listOf(Color(0xFF2F5F9C).copy(alpha = .9f), Color.Transparent), Offset(size.width * .75f, size.height * .25f), size.maxDimension * .5f))
+    drawRect(Brush.radialGradient(listOf(Color(0xFF123A34).copy(alpha = .9f), Color.Transparent), Offset(size.width * .15f, size.height * .85f), size.maxDimension * .4f))
+    drawRect(Brush.horizontalGradient(.25f to C.Ground.copy(alpha = .9f), 1f to C.Ground.copy(alpha = .3f)))
 }

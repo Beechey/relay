@@ -72,6 +72,10 @@ class Store(private val ctx: Context) {
     fun reminders(a: Account?): Set<String> = prefs.getStringSet(key(a, "reminders"), emptySet())!!.toSet()
     fun setReminders(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "reminders"), set).apply()
 
+    // per device: what this person has searched for, newest first
+    fun recentSearches(): List<String> = prefs.getString("recentSearches", "")!!.split('\n').filter { it.isNotBlank() }
+    fun addRecentSearch(q: String) = prefs.edit().putString("recentSearches", (listOf(q) + recentSearches().filterNot { it.equals(q, true) }).take(8).joinToString("\n")).apply()
+
     fun recents(a: Account?, kind: String): List<Int> =
         prefs.getString(key(a, kind), "")!!.split(',').mapNotNull { it.toIntOrNull() }
 

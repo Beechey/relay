@@ -42,12 +42,13 @@ import com.avetero.relay.ui.components.BtnStyle
 import com.avetero.relay.ui.components.ProgressLine
 import com.avetero.relay.ui.theme.Bold
 import com.avetero.relay.ui.theme.C
+import com.avetero.relay.ui.theme.LiveGradient
 import com.avetero.relay.ui.theme.Heavy
 import com.avetero.relay.ui.theme.LogoMark
 import com.avetero.relay.ui.theme.Semi
 import com.avetero.relay.ui.theme.T
 
-/** Board 02. */
+/** Loading after sign-in, styled like board 09. */
 @Composable
 fun SyncScreen(app: AppState) {
     var error by remember { mutableStateOf<String?>(null) }
@@ -57,12 +58,12 @@ fun SyncScreen(app: AppState) {
         try { app.sync(); app.go(Screen.Home) } catch (e: Exception) { error = e.message ?: "Couldn't load the playlist" }
     }
     val a = app.account
-    Box(Modifier.fillMaxSize().background(C.Ground), contentAlignment = Alignment.Center) {
+    Box(Modifier.welcomeBackdrop(), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(16.dp).widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LogoMark(52.dp)
                 Column {
-                    T("Loading ${a?.name ?: ""}", 28, Heavy)
+                    T("Loading ${a?.name ?: ""}", 34, Heavy)
                     T(a?.server ?: "", 14, color = C.Muted, mono = true)
                 }
             }
@@ -70,8 +71,8 @@ fun SyncScreen(app: AppState) {
             val overall = if (app.syncSteps.isEmpty()) 0f else app.syncSteps.sumOf { s ->
                 when (s.state) { StepState.Done, StepState.Failed -> 1.0; StepState.Busy -> s.progress.fraction.coerceAtLeast(0f) * 0.9; else -> 0.0 }
             }.toFloat() / app.syncSteps.size
-            ProgressLine(animateFloatAsState(overall, label = "overall").value, Modifier.fillMaxWidth(), C.Control, height = 6.dp)
-            Column(Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xFF11151F)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ProgressLine(animateFloatAsState(overall, label = "overall").value, Modifier.fillMaxWidth(), C.Glass3, height = 6.dp)
+            Column(Modifier.clip(RoundedCornerShape(26.dp)).background(C.Glass).padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 app.syncSteps.forEach { s -> SyncRow(s) }
             }
             if (error != null) {
@@ -102,7 +103,7 @@ private fun SyncRow(s: SyncStep) {
                 StepState.Done -> Color(0xFF2E8A5B) to "✓"
                 StepState.Busy -> C.Accent to "…"
                 StepState.Failed -> C.Error to "!"
-                StepState.Todo -> Color(0xFF1F2636) to ""
+                StepState.Todo -> C.Glass2 to ""
             }
             Box(Modifier.size(24.dp).clip(RoundedCornerShape(12.dp)).background(dot), contentAlignment = Alignment.Center) {
                 T(mark, 13, Heavy, if (s.state == StepState.Done) Color.White else C.OnLight)
@@ -118,17 +119,18 @@ private fun SyncRow(s: SyncStep) {
             T(detail, 13, color = if (s.state == StepState.Failed) C.Error else if (s.state == StepState.Busy) C.Text else C.Muted, mono = s.state != StepState.Failed)
         }
         if (s.unit.isNotEmpty()) {
-            val bar = if (s.state == StepState.Done) Color(0xFF2E8A5B) else if (s.state == StepState.Failed) C.Error else C.Accent
+            // progress glows with the live-and-progress gradient; finished steps settle to green
+            val bar = if (s.state == StepState.Done) Color(0xFF2E8A5B) else if (s.state == StepState.Failed) C.Error else null
             when {
                 s.state == StepState.Busy && p.fraction < 0 -> {
                     // size unknown: a segment sweeping across
                     val x by rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "x")
-                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.Control)) {
-                        Box(Modifier.fillMaxWidth(0.25f).height(4.dp).graphicsLayer { translationX = (size.width * 4f) * x - size.width }.background(bar))
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(C.Glass2)) {
+                        Box(Modifier.fillMaxWidth(0.25f).height(4.dp).graphicsLayer { translationX = (size.width * 4f) * x - size.width }.background(LiveGradient))
                     }
                 }
                 else -> ProgressLine(animateFloatAsState(when (s.state) { StepState.Done, StepState.Failed -> 1f; StepState.Busy -> p.fraction; else -> 0f }, label = "bar").value,
-                    Modifier.fillMaxWidth(), C.Control, bar, height = 4.dp)
+                    Modifier.fillMaxWidth(), C.Glass2, bar, height = 4.dp)
             }
         }
     }
