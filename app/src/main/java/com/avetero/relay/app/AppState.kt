@@ -38,7 +38,9 @@ import com.avetero.relay.util.fmtDate
 import com.avetero.relay.util.fmtTime
 import java.io.File
 import java.io.Reader
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
@@ -159,11 +161,41 @@ class AppState(val ctx: Context) {
     fun setCategoriesHidden(keys: Collection<String>, hide: Boolean) {
         hidden = if (hide) hidden + keys else hidden - keys.toSet()
         store.setHidden(account, hidden)
+        if (!hide) fetchShown(keys)
     }
 
-    fun setCategoryHidden(key: String, hide: Boolean) {
-        hidden = if (hide) hidden + key else hidden - key
-        store.setHidden(account, hidden)
+    fun setCategoryHidden(key: String, hide: Boolean) = setCategoriesHidden(listOf(key), hide)
+
+    private val bg = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** With hidden categories not downloaded, a category that comes back has nothing in it yet: fetch just that one. */
+    private fun fetchShown(keys: Collection<String>) {
+        val a = account ?: return
+        if (store.downloadHidden) return
+        val x = api
+        bg.launch {
+            val dir = store.cacheFile(a, "live").parentFile
+            val byType = keys.groupBy({ it.substringBefore(':') }, { it.substringAfter(':') })
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    byType["live"]?.let { ids ->
+                        val have = channels.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseChannels(x.categoryStreams("get_live_streams", it)) }
+                        if (add.isNotEmpty()) { channels = channels + add; CatalogueCache.writeChannels(File(dir, "live.bin"), channels) }
+                    }
+                    byType["vod"]?.let { ids ->
+                        val have = movies.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseVods(x.categoryStreams("get_vod_streams", it)) }
+                        if (add.isNotEmpty()) { movies = movies + add; CatalogueCache.writeVods(File(dir, "vod.bin"), movies) }
+                    }
+                    byType["series"]?.let { ids ->
+                        val have = series.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseSeries(x.categoryStreams("get_series", it)) }
+                        if (add.isNotEmpty()) { series = series + add; CatalogueCache.writeSeries(File(dir, "series.bin"), series) }
+                    }
+                }
+            }.onFailure { message = "Couldn't download that category: ${it.message}" }
+        }
     }
 
     fun clearCacheAndReload() {
@@ -249,7 +281,12 @@ class AppState(val ctx: Context) {
         info = withContext(Dispatchers.IO) { x.login() }
         set(0, StepState.Done, info?.expires?.let { "Active · expires " + fmtDate(it) } ?: "Active")
 
-        suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (File, (Long, Long) -> Unit) -> Unit,
+        // with hidden categories skipped, ask the provider for the kept ones only
+        fun kept(type: String, action: String, all: (File, (Long, Long) -> Unit) -> Unit): (List<Category>, File, (Long, Long) -> Unit) -> Unit = { c, f, p ->
+            if (store.downloadHidden || hidden.none { it.startsWith("$type:") }) all(f, p)
+            else x.downloadCategories(action, c.map { it.id }.filter { "$type:$it" !in hidden }, f, p)
+        }
+        suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (List<Category>, File, (Long, Long) -> Unit) -> Unit,
                          apply: (List<Category>, Reader, (Int) -> Unit) -> Int) {
             set(i, StepState.Busy, "Downloading…")
             val p = syncSteps[i].progress
@@ -257,7 +294,7 @@ class AppState(val ctx: Context) {
                 val file = store.cacheFile(a, name)
                 val c = withContext(Dispatchers.IO) {
                     val c = cats()
-                    download(file, p::onBytes)
+                    download(c, file, p::onBytes)
                     store.writeCache(a, name + "_cats", org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString())
                     c
                 }
@@ -276,9 +313,9 @@ class AppState(val ctx: Context) {
             }
         }
         listOf(
-            async { step(1, "live", x::liveCategories, x::downloadChannels) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } },
-            async { step(2, "vod", x::vodCategories, x::downloadVods) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } },
-            async { step(3, "series", x::seriesCategories, x::downloadSeries) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } },
+            async { step(1, "live", x::liveCategories, kept("live", "get_live_streams", x::downloadChannels)) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } },
+            async { step(2, "vod", x::vodCategories, kept("vod", "get_vod_streams", x::downloadVods)) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } },
+            async { step(3, "series", x::seriesCategories, kept("series", "get_series", x::downloadSeries)) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } },
         ).forEach { it.await() }
         // fresh compact copies, so the next start reads these instead of the JSON
         withContext(Dispatchers.IO) {
