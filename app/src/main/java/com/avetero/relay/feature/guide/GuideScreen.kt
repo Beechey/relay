@@ -215,7 +215,7 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
             // the now-line only when "now" is inside the window being shown
             if (nowSec() in windowStart until windowEnd) {
                 val nowX = nameW + perSec * (nowSec() - windowStart).toFloat()
-                Box(Modifier.offset(x = nowX, y = 40.dp).width(2.dp).fillMaxHeight().background(LiveGradient))
+                Box(Modifier.offset(x = nowX).padding(top = 40.dp).width(2.dp).fillMaxHeight().background(LiveGradient))
             }
         }
     }

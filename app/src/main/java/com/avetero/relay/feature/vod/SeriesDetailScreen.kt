@@ -89,16 +89,15 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
     }
 
     if (compact()) {
-        LazyColumn(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        Box(Modifier.fillMaxSize()) { LazyColumn(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding(), contentPadding = PaddingValues(top = 56.dp, bottom = 24.dp)) {
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Art(s.cover, s.name, s.id, Modifier.size(96.dp, 144.dp), showTitle = false)
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             T(s.name, 22, Heavy, maxLines = 3, lineHeight = 26)
                             if (s.rating > 0) Badge("%.1f".format(s.rating), C.Accent, C.OnLight)
-                            T(listOfNotNull(s.year.ifEmpty { null }, "${seasons.size} seasons".takeIf { seasons.isNotEmpty() }, info?.genre?.ifEmpty { null }).joinToString(" · "), 13, Semi, C.Soft, maxLines = 3)
+                            T(listOfNotNull(s.year.ifEmpty { null }, (if (seasons.size == 1) "1 season" else "${seasons.size} seasons").takeIf { seasons.isNotEmpty() }, info?.genre?.ifEmpty { null }).joinToString(" · "), 13, Semi, C.Soft, maxLines = 3)
                         }
                     }
                     val target = resumeEp ?: eps.firstOrNull()
@@ -137,6 +136,8 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
                     }
                 }
             }
+        }
+        IconBtn(Icons.Back, "Back", { app.back() }, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp), size = 44.dp, round = true)
         }
         return
     }

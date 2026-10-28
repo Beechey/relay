@@ -32,8 +32,8 @@ internal fun PlayerSettings(app: AppState) = Column(verticalArrangement = Arrang
         if (compact()) SettingRow("Picture-in-picture when leaving", "Keep watching in a floating window when you go home", toggle = s.pipOnLeave) { s.pipOnLeave = !s.pipOnLeave; tick++ }
     }
     SettingsGroup {
-        SegmentRow("Skip back", "Left on the remote", listOf("5 s", "10 s", "15 s", "30 s"), "${s.skipBackSec} s") { s.skipBackSec = it.removeSuffix(" s").toInt() }
-        SegmentRow("Skip forward", "Right on the remote", listOf("10 s", "15 s", "30 s", "60 s"), "${s.skipFwdSec} s") { s.skipFwdSec = it.removeSuffix(" s").toInt() }
+        SegmentRow("Skip back", if (compact()) "Double-tap the left side" else "Left on the remote", listOf("5 s", "10 s", "15 s", "30 s"), "${s.skipBackSec} s") { s.skipBackSec = it.removeSuffix(" s").toInt() }
+        SegmentRow("Skip forward", if (compact()) "Double-tap the right side" else "Right on the remote", listOf("10 s", "15 s", "30 s", "60 s"), "${s.skipFwdSec} s") { s.skipFwdSec = it.removeSuffix(" s").toInt() }
         SegmentRow("Picture", "Fit shows the whole picture; Fill crops to the screen", listOf("Fit", "Fill"), if (s.zoomDefault) "Fill" else "Fit") { s.zoomDefault = it == "Fill" }
         SegmentRow("Buffer", "Bigger rides out slow connections, starts slower. Applies next start.", listOf("Small", "Medium", "Large"), s.buffer) { s.buffer = it }
     }
