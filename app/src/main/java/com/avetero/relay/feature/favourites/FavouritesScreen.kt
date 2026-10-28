@@ -80,7 +80,7 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourite
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 T(c.name, 16, Heavy, fg(f))
                                 T(now?.title ?: "No programme info", 13, color = sub(f))
-                                ProgressLine(now?.progress() ?: 0f, Modifier.fillMaxWidth(), if (f) C.LightTrack else C.Track, if (f) C.OnLight else C.Accent)
+                                ProgressLine(now?.progress() ?: 0f, Modifier.fillMaxWidth(), if (f) C.LightTrack else C.Track, if (f) C.OnLight else null)
                             }
                         }
                     }
