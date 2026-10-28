@@ -93,6 +93,8 @@ private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, sc
     val heroItems = app.resumes.take(4)
     var index by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
+    // the hero sits under the dock; whenever it has focus, show it whole rather than half scrolled
+    LaunchedEffect(heroFocused) { if (heroFocused) scroll.animateScrollTo(0) }
     val info = remember { mutableStateMapOf<String, HeroInfo>() }
     val resumeBtn = remember { FocusRequester() }
     val liveFirst = remember { FocusRequester() }
