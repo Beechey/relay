@@ -122,6 +122,11 @@ class AppState(val ctx: Context) {
     var message by mutableStateOf<String?>(null)
     // kept here so coming back from a result still shows your search
     var searchQuery by mutableStateOf("")
+    // search keys (lower-case, accents removed) per list, built once per library load
+    private val searchKeys = java.util.IdentityHashMap<List<*>, List<String>>()
+    fun <T> searchKeys(list: List<T>, name: (T) -> String): List<String> =
+        synchronized(searchKeys) { searchKeys[list] } ?: list.map { com.avetero.relay.ui.components.norm(name(it)) }
+            .also { synchronized(searchKeys) { if (searchKeys.size > 6) searchKeys.clear(); searchKeys[list] = it } }
     // Movies (false) / Series (true): the shelf and poster last focused, so Back from details lands on it again
     val browseFocus = mutableMapOf<Boolean, Pair<Int, Int>>()
     var hls by mutableStateOf(store.hls)
