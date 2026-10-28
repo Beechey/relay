@@ -50,6 +50,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.avetero.relay.ui.theme.LiveGradient
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.media3.common.Player
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
@@ -79,7 +84,7 @@ import com.avetero.relay.ui.theme.compact
 import com.avetero.relay.util.fmtDur
 import kotlinx.coroutines.delay
 
-/** Board 09: movie / episode player with seek, tracks, speed and next-episode card. */
+/** Board 06: movie / episode player with seek, tracks, speed and next-episode card. */
 @Composable
 fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episodes: List<PlayItem> = emptyList()) {
     FullscreenVideo(app.inPip)
@@ -185,20 +190,22 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         if (episodesOpen) EpisodesDialog(episodes, item, { episodesOpen = false; playEpisode(it) }) { episodesOpen = false; poke++ }
 
         if (!app.inPip && next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
-            Row(Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = if (compact()) 16.dp else 40.dp, bottom = if (showUi) 196.dp else 40.dp).widthIn(max = 480.dp)
-                .clip(RoundedCornerShape(14.dp)).background(C.Ground).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Art(next.first().image, "", 1, Modifier.size(112.dp, 63.dp), showTitle = false)
-                Column(Modifier.weight(1f)) {
-                    T("Next episode in ${(dur - pos) / 1000} s", 13, Bold, C.Accent); T(next.first().title, 15, Heavy, maxLines = 2, lineHeight = 20)
+            Row(Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = if (compact()) 16.dp else 40.dp, bottom = if (showUi) 196.dp else 40.dp).widthIn(max = 400.dp)
+                .clip(RoundedCornerShape(20.dp)).background(C.Glass).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Art(next.first().image, "", 1, Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(12.dp)), showTitle = false)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    T("Up next in ${(dur - pos) / 1000} s", 13, Semi, C.Muted); T(next.first().title, 14, Heavy, maxLines = 2, lineHeight = 18)
+                    Btn("Play now", ::playNext, style = BtnStyle.Primary, height = 34.dp)
                 }
-                Btn("Play", ::playNext, style = BtnStyle.Primary, height = 40.dp)
             }
         }
 
         AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
-            Row(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).statusBarsPadding().height(if (compact()) 72.dp else 96.dp).padding(horizontal = if (compact()) 16.dp else 40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
-                Column(Modifier.weight(1f)) { T(item.meta, 13, Semi, C.Muted); T(item.title, 22, Heavy) }
+            // board 06: a soft fade, not a bar, so the picture stays visible
+            Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))).statusBarsPadding().height(if (compact()) 72.dp else 120.dp)
+                .padding(horizontal = if (compact()) 16.dp else 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (compact()) IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { T(item.meta, 13, Semi, C.Soft); T(item.title, if (compact()) 18 else 24, Heavy) }
                 if (compact()) {
                     val activity = LocalContext.current as? com.avetero.relay.MainActivity
                     IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 44.dp)
@@ -206,32 +213,37 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 if (app.player.canCast) {
                     CastButton(size = 44.dp)
                 }
-                Clock(18)
+                Box(Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass3).padding(horizontal = 16.dp, vertical = 8.dp)) { Clock(18) }
             }
         }
         AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
             val pad = if (compact()) 16.dp else 40.dp
-            Column(Modifier.fillMaxWidth().background(Color(0xE60B0E14)).navigationBarsPadding().padding(start = pad, end = pad, top = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))).navigationBarsPadding()
+                .padding(start = pad, end = pad, top = 90.dp, bottom = if (compact()) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    T(fmtDur(pos), 14, mono = true)
-                    Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF2A3142))) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (p.bufferedPosition.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color(0xFF4A5368)))
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(C.Accent))
+                    T(fmtDur(pos), 14, Bold, mono = true)
+                    val played = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
+                    BoxWithConstraints(Modifier.weight(1f).height(18.dp), contentAlignment = Alignment.CenterStart) {
+                        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = .2f))) {
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (p.bufferedPosition.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color.White.copy(alpha = .18f)))
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(played).background(LiveGradient))
+                        }
+                        Box(Modifier.offset(x = maxWidth * played - 9.dp).size(18.dp).clip(CircleShape).background(C.Text))
                     }
-                    T("−" + fmtDur((dur - pos).coerceAtLeast(0)), 14, color = C.Muted, mono = true)
+                    T("−" + fmtDur((dur - pos).coerceAtLeast(0)), 14, Bold, mono = true)
                 }
                 val phone = compact()
                 val transport: @Composable () -> Unit = {
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconBtn(Icons.Back, "Back ${back / 1000} seconds", { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) },
-                            if (phone) Modifier else Modifier.focusProperties { left = speedBtn }, size = 52.dp, round = true)
+                        SkipBtn("−${back / 1000}", "Back ${back / 1000} seconds", { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) },
+                            if (phone) Modifier else Modifier.focusProperties { left = speedBtn })
                         FocusSurface({ if (p.isPlaying) p.pause() else p.play() }, Modifier.size(68.dp), idle = C.Accent, shape = RoundedCornerShape(34.dp), focusRequester = playBtn,
                             label = if (app.player.playing) "Pause" else "Play") { _ ->
                             Ico(if (app.player.playing) Icons.Pause else Icons.Play, C.OnLight, 24.dp, Modifier.align(Alignment.Center))
                         }
                         // the gap to the side buttons is wide; point the remote at them explicitly
-                        IconBtn(Icons.Chevron, "Forward ${fwd / 1000} seconds", { p.seekTo(p.currentPosition + fwd) },
-                            if (phone) Modifier else Modifier.focusProperties { right = sideBtn }, size = 52.dp, round = true)
+                        SkipBtn("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", { p.seekTo(p.currentPosition + fwd) },
+                            if (phone) Modifier else Modifier.focusProperties { right = sideBtn })
                     }
                 }
                 if (phone) {
@@ -247,7 +259,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 } else Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 44.dp)
-                        IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, size = 44.dp)
+                        IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, size = 44.dp, round = true)
                         Btn("%.2gx".format(speed), {
                             speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
                         }, height = 44.dp, focusRequester = speedBtn)
@@ -255,7 +267,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     transport()
                     Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                         if (episodes.size > 1) Btn("Episodes", { episodesOpen = true }, height = 44.dp, focusRequester = sideBtn)
-                        if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 44.dp, focusRequester = if (episodes.size > 1) null else sideBtn)
+                        if (next.isNotEmpty()) Btn("Next ▶", ::playNext, height = 44.dp, focusRequester = if (episodes.size > 1) null else sideBtn)
                         Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 44.dp, focusRequester = if (episodes.size > 1 || next.isNotEmpty()) null else sideBtn)
                     }
                 }
@@ -263,3 +275,10 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         }
     }
 }
+
+/** Board 06: skip buttons are round glass pills labelled with the seconds they jump. */
+@Composable
+private fun SkipBtn(text: String, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
+    FocusSurface(onClick, modifier.size(52.dp), idle = C.Glass3, shape = CircleShape, label = label) { f ->
+        T(text, 14, Heavy, if (f) C.OnLight else C.Text, Modifier.align(Alignment.Center))
+    }
