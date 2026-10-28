@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.home
 
+import com.avetero.relay.ui.components.stopAtEnd
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -84,11 +87,13 @@ private data class HeroInfo(val backdrop: String, val plot: String)
 @Composable
 fun HomeScreen(app: AppState, nav: (Tab) -> Unit) {
     val scroll = rememberScrollState()
-    WithRail(Tab.Home, nav, behindDock = true, dockHidden = scroll.value > 200) { ForYou(app, scroll) }
+    // For you sits behind the bar, where the normal Down search finds nothing; point Down back at the page
+    val entry = remember { FocusRequester() }
+    WithRail(Tab.Home, nav, behindDock = true, dockHidden = scroll.value > 200, pageEntry = entry) { ForYou(app, scroll, entry) }
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, scroll: androidx.compose.foundation.ScrollState) {
+private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, scroll: androidx.compose.foundation.ScrollState, entry: FocusRequester) {
     val phone = compact()
     // only what's still downloaded: a movie or series part that's switched off drops out
     val heroItems = app.resumes.filter { (it.vodId == 0 || "vod" in app.parts) && (it.seriesId == 0 || "series" in app.parts) }.take(4)
@@ -120,7 +125,7 @@ private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, sc
     val side = if (phone) 20.dp else 64.dp
 
     Box(Modifier.weight(1f).fillMaxSize()) {
-        Column(Modifier.fillMaxSize().onFocusChanged { pageFocused = it.hasFocus }.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(if (phone) 20.dp else 26.dp)) {
+        Column(Modifier.fillMaxSize().onFocusChanged { pageFocused = it.hasFocus }.focusRequester(entry).focusRestorer { FocusRequester.Default }.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(if (phone) 20.dp else 26.dp)) {
             // ---- hero
             Box(Modifier.fillMaxWidth().height(if (phone) 440.dp else 470.dp).onFocusChanged { heroFocused = it.hasFocus }) {
                 Crossfade(r?.key, label = "hero") { key ->
@@ -224,7 +229,7 @@ private fun Shelf(side: Dp, title: String, hint: String? = null, content: LazyLi
             if (hint != null) T(hint, 12, Semi, C.Dim)
         }
         // focused cards grow, so the row keeps room around them
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp), content = content)
+        LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp), content = content)
     }
 
 /** "Live now": the channel, what's on and how far through, over the channel's colour. */

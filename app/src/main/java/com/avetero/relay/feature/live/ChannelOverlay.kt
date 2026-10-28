@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,7 +73,7 @@ fun ChannelOverlay(
         }
         val gi = groups.indexOfFirst { it.id == groupId }.coerceAtLeast(0)
         val pills = rememberLazyListState(initialFirstVisibleItemIndex = (gi - 1).coerceAtLeast(0))
-        LazyRow(state = pills, horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+        LazyRow(modifier = Modifier.stopAtEnd(), state = pills, horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
             itemsIndexed(groups, key = { _, g -> g.id }) { _, g ->
                 val on = g.id == groupId
                 FocusSurface({ onGroup(g.id); onPoke() }, Modifier.height(34.dp), selected = on, idle = C.Glass2, shape = RoundedCornerShape(17.dp), onFocus = onPoke, lift = 1.06f) { f ->

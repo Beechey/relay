@@ -113,7 +113,8 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     fun zap(d: Int) { if (list.isNotEmpty()) { previous = c; index = Math.floorMod(index + d, list.size); poke++ } }
     fun closeList() { listOpen = false; runCatching { focus.requestFocus() } }
     // Back closes the channel list, then the info bar; the next Back leaves the player
-    BackHandler((listOpen || showInfo) && !app.inPip && !menu && !tracksOpen) { if (listOpen) closeList() else showInfo = false }
+    // Back closes the channel list; otherwise it leaves Live (the info bar hides by itself, it doesn't need a press)
+    BackHandler(listOpen && !app.inPip && !menu && !tracksOpen) { closeList() }
     // the list tucks itself away when the remote goes quiet
     LaunchedEffect(listOpen, listPoke) { if (listOpen) { delay(8_000); closeList() } }
     // typed channel numbers: wait for a pause, then jump

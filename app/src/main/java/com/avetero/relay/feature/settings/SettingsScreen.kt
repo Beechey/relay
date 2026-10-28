@@ -62,7 +62,14 @@ import com.avetero.relay.ui.theme.compact
 
 /** Board 08: Settings, one section at a time. shortcut: no Parental lock section yet. */
 @Composable
-fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRail(Tab.Settings, nav) {
+fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) {
+    // Down from the bar lands on the menu, at the section you're in
+    val navFocus = remember { FocusRequester() }
+    SettingsBody(app, section, nav, navFocus)
+}
+
+@Composable
+private fun SettingsBody(app: AppState, section: String, nav: (Tab) -> Unit, navFocus: FocusRequester) = WithRail(Tab.Settings, nav, pageEntry = navFocus) {
     val sections = listOf(
         Triple("playlists", "Playlists", Icons.User), Triple("player", "Playback", Icons.Play), Triple("live", "Live TV and guide", Icons.Live),
         Triple("categories", "Manage categories", Icons.List), Triple("updates", "About and updates", Icons.Settings),
@@ -85,7 +92,6 @@ fun SettingsScreen(app: AppState, section: String, nav: (Tab) -> Unit) = WithRai
         return@WithRail
     }
     // land on the current section, like the other pages; stops once anything here has focus
-    val navFocus = remember { FocusRequester() }
     var pageFocused by remember { mutableStateOf(false) }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(windowFocused) { if (windowFocused) repeat(15) { if (pageFocused) return@LaunchedEffect; delay(100); runCatching { navFocus.requestFocus() } } }

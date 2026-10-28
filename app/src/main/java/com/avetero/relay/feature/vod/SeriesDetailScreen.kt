@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -164,14 +165,14 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
                 info == null -> T("Loading episodes…", 14, color = C.Muted, modifier = Modifier.padding(start = 64.dp))
                 eps.isEmpty() -> T("Your provider hasn't listed any episodes for this series.", 14, color = C.Muted, modifier = Modifier.padding(start = 64.dp))
             }
-            if (eps.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 64.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (eps.isNotEmpty()) LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 64.dp), verticalAlignment = Alignment.CenterVertically) {
                 items(seasons) { n -> PillBtn("Season $n", n == season, { season = n }) }
                 item {
                     val watched = inSeason.count { app.store.watched(app.account, "e${it.id}") }
                     T("${inSeason.size} episodes" + if (watched > 0) " · $watched watched" else "", 13, Semi, C.Muted, Modifier.padding(start = 6.dp))
                 }
             }
-            LazyRow(state = strip, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(start = 64.dp, end = 40.dp, top = 6.dp, bottom = 6.dp)) {
+            LazyRow(modifier = Modifier.stopAtEnd(), state = strip, horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(start = 64.dp, end = 40.dp, top = 6.dp, bottom = 6.dp)) {
                 items(inSeason, key = { it.id }) { e ->
                     val r = app.resumes.firstOrNull { it.key == "e${e.id}" }
                     val watched = app.store.watched(app.account, "e${e.id}")
