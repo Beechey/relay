@@ -1,5 +1,7 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,51 +34,67 @@ import com.avetero.relay.ui.theme.T
 import com.avetero.relay.ui.theme.compact
 
 enum class Tab(val icon: ImageVector, val label: String) {
-    Home(Icons.Home, "Home"), Live(Icons.Live, "Live TV"), Guide(Icons.Guide, "TV Guide"), Movies(Icons.Movies, "Movies"),
+    Home(Icons.Home, "For you"), Live(Icons.Live, "Live"), Guide(Icons.Guide, "Guide"), Movies(Icons.Movies, "Movies"),
     Series(Icons.Series, "Series"), Favourites(Icons.Star, "Favourites"), Search(Icons.Search, "Search"), Settings(Icons.Settings, "Settings"),
-    More(Icons.More, "More"), // phone bottom bar only
 }
 
-private val bottomTabs = listOf(Tab.Home, Tab.Live, Tab.Movies, Tab.Series, Tab.More)
+/** TV top bar: words for the places you browse, icons for the tools. Favourites live inside Live and For you. */
+private val dockTabs = listOf(Tab.Home, Tab.Live, Tab.Guide, Tab.Movies, Tab.Series)
+private val dockTools = listOf(Tab.Search, Tab.Settings)
 
-/** Phone bottom tab bar; Guide, Favourites, Search and Settings live under More. */
+/** Phone bottom bar; Series sits beside Movies under Browse, Settings behind the For you header. */
+private val bottomTabs = listOf(Tab.Home, Tab.Live, Tab.Guide, Tab.Movies, Tab.Search)
+private fun bottomLabel(t: Tab) = if (t == Tab.Movies) "Browse" else t.label
+
+/** Phone: floating glass tab bar. */
 @Composable
 fun BottomBar(active: Tab, onSelect: (Tab) -> Unit) {
-    val shown = if (active in bottomTabs) active else Tab.More
-    Row(Modifier.fillMaxWidth().background(Color(0xFF080A0F)).navigationBarsPadding().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+    val shown = if (active == Tab.Series) Tab.Movies else active
+    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 10.dp).height(66.dp)
+        .clip(RoundedCornerShape(24.dp)).background(C.Glass), verticalAlignment = Alignment.CenterVertically) {
         bottomTabs.forEach { t ->
-            FocusSurface({ onSelect(t) }, Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp), shape = RoundedCornerShape(12.dp), label = t.label) { f ->
+            FocusSurface({ onSelect(t) }, Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp), label = bottomLabel(t)) { f ->
                 val color = when { f -> C.OnLight; t == shown -> C.Accent; else -> C.Muted }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Ico(t.icon, color, 22.dp); T(t.label, 11, Bold, color)
+                    Ico(t.icon, color, 22.dp); T(bottomLabel(t), 10, Bold, if (t == shown && !f) C.Text else color)
                 }
             }
         }
     }
 }
 
-/** Nav rail (Rail.dc.html). */
+/** TV: the floating glass bar along the top. The current place gets a raised pill; focus takes the light fill. */
 @Composable
-fun Rail(active: Tab, onSelect: (Tab) -> Unit) {
-    Column(
-        Modifier.width(72.dp).fillMaxHeight().background(Color(0xFF080A0F)).padding(vertical = 24.dp).focusRestorer(),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        LogoMark(40.dp)
-        Spacer(Modifier.height(18.dp))
-        Tab.entries.filter { it != Tab.More }.forEach { t ->
-            if (t == Tab.Settings) Spacer(Modifier.weight(1f))
-            FocusSurface({ onSelect(t) }, Modifier.size(48.dp), selected = t == active, label = t.label) { f ->
-                Ico(t.icon, when { f -> C.OnLight; t == active -> C.Accent; else -> C.Muted }, modifier = Modifier.align(Alignment.Center))
+fun Dock(active: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) =
+    Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusRestorer(),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        LogoMark(30.dp, Modifier.padding(horizontal = 8.dp))
+        dockTabs.forEach { t ->
+            FocusSurface({ onSelect(t) }, Modifier.height(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.06f) { f ->
+                T(t.label, 15, Bold, when { f -> C.OnLight; t == active -> C.Text; else -> C.Soft }, Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
+            }
+        }
+        Spacer(Modifier.width(6.dp))
+        dockTools.forEach { t ->
+            FocusSurface({ onSelect(t) }, Modifier.size(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.08f) { f ->
+                Ico(t.icon, when { f -> C.OnLight; t == active -> C.Accent; else -> C.Soft }, 20.dp, Modifier.align(Alignment.Center))
             }
         }
     }
-}
 
-/** Rail + content on TV; content + bottom tab bar on phones. The frame of most screens. */
+/** Height the TV top bar takes, for screens that don't put artwork behind it. */
+val DockSpace = 96.dp
+
+/**
+ * The frame of every browsing screen. TV: content full width under the floating top bar ([behindDock] lets a
+ * screen run artwork up behind the bar). Phones: content above the floating bottom bar.
+ */
 @Composable
-fun WithRail(active: Tab, onSelect: (Tab) -> Unit, content: @Composable RowScope.() -> Unit) =
+fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, content: @Composable RowScope.() -> Unit) =
     if (compact()) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding()) {
         Row(Modifier.weight(1f).fillMaxWidth(), content = content)
         BottomBar(active, onSelect)
-    } else Row(Modifier.fillMaxSize().background(C.Ground)) { Rail(active, onSelect); content() }
+    } else Box(Modifier.fillMaxSize().background(C.Ground)) {
+        Row(Modifier.fillMaxSize().padding(top = if (behindDock) 0.dp else DockSpace), content = content)
+        Dock(active, onSelect, Modifier.align(Alignment.TopCenter).padding(top = 22.dp))
+    }

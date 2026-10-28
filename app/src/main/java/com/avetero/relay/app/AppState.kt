@@ -1,5 +1,7 @@
 package com.avetero.relay.app
 
+import kotlinx.coroutines.launch
+import com.avetero.relay.data.store.CatalogueCache
 import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.runtime.derivedStateOf
@@ -109,6 +111,8 @@ class AppState(val ctx: Context) {
     var hls by mutableStateOf(store.hls)
     /** True until the saved catalogue has been read back (it can be 100+ MB, so never on the main thread). */
     var libraryLoading by mutableStateOf(false)
+    /** Movies and series still loading after Live TV is ready (they load in the background, in parallel). */
+    var vodLoading by mutableStateOf(false)
     /** True while the activity is shown as a picture-in-picture window. */
     var inPip by mutableStateOf(false)
     val onPlayerScreen get() = screen is Screen.LivePlayer || screen is Screen.VodPlayer
@@ -174,24 +178,44 @@ class AppState(val ctx: Context) {
 
     private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
 
+    /** Live TV first so it's usable at once; movies and series follow in parallel while you watch. */
     suspend fun loadLibrary() {
         val a = account ?: return
         if (!libraryLoading) return
-        withContext(Dispatchers.IO) { loadCache(a) }
+        val t0 = System.currentTimeMillis()
+        withContext(Dispatchers.IO) {
+            runCatching {
+                liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
+                channels = cached(a, "live", CatalogueCache::readChannels, CatalogueCache::writeChannels, ::parseChannels)
+            }
+        }
         libraryLoading = false
+        val tLive = System.currentTimeMillis() - t0
+        vodLoading = true
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                launch { runCatching {
+                    vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
+                    movies = cached(a, "vod", CatalogueCache::readVods, CatalogueCache::writeVods, ::parseVods)
+                } }
+                launch { runCatching {
+                    seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
+                    series = cached(a, "series", CatalogueCache::readSeries, CatalogueCache::writeSeries, ::parseSeries)
+                } }
+            }
+        }
+        vodLoading = false
+        android.util.Log.i("Relay", "library ready: live ${tLive} ms, everything ${System.currentTimeMillis() - t0} ms")
     }
 
-    private fun loadCache(a: Account) {
-        fun <T> read(name: String, parse: (Reader) -> List<T>): List<T> =
-            store.cacheFile(a, name).takeIf { it.exists() }?.bufferedReader()?.use(parse) ?: emptyList()
-        runCatching {
-            liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
-            channels = read("live", ::parseChannels)
-            vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
-            movies = read("vod", ::parseVods)
-            seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
-            series = read("series", ::parseSeries)
-        }
+    /** Reads the compact copy when it's at least as new as the provider's JSON, else parses the JSON and saves one. */
+    private fun <T> cached(a: Account, name: String, readBin: (File) -> List<T>?, writeBin: (File, List<T>) -> Unit, parse: (Reader) -> List<T>): List<T> {
+        val json = store.cacheFile(a, name).takeIf { it.exists() } ?: return emptyList()
+        val bin = File(json.parentFile, "$name.bin")
+        if (bin.exists() && bin.lastModified() >= json.lastModified()) readBin(bin)?.let { return it }
+        val list = json.bufferedReader().use(parse)
+        runCatching { writeBin(bin, list) }
+        return list
     }
 
     /** Signs in and downloads the catalogue; steps drive board 02. Throws on login failure. */
@@ -238,6 +262,13 @@ class AppState(val ctx: Context) {
             async { step(2, "vod", x::vodCategories, x::downloadVods) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } },
             async { step(3, "series", x::seriesCategories, x::downloadSeries) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } },
         ).forEach { it.await() }
+        // fresh compact copies, so the next start reads these instead of the JSON
+        withContext(Dispatchers.IO) {
+            val dir = store.cacheFile(a, "live").parentFile
+            runCatching { CatalogueCache.writeChannels(File(dir, "live.bin"), channels) }
+            runCatching { CatalogueCache.writeVods(File(dir, "vod.bin"), movies) }
+            runCatching { CatalogueCache.writeSeries(File(dir, "series.bin"), series) }
+        }
         // the guide maps onto channels, so it comes last
         set(4, StepState.Busy, "Downloading…")
         val n = refreshGuide(force = true, syncSteps[4].progress)
