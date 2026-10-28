@@ -70,7 +70,7 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun CategoriesScreen(app: AppState, initialType: String, modifier: Modifier) {
-    var type by rememberSaveable(initialType) { mutableStateOf(initialType) }
+    var type by rememberSaveable(initialType) { mutableStateOf(initialType.takeIf { it in app.parts } ?: listOf("live", "vod", "series").first { it in app.parts }) }
     var q by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf(false) }
     var picked by remember(type) { mutableStateOf(emptySet<String>()) }
@@ -228,7 +228,8 @@ private fun OrderRow(c: Category, pos: Int, count: Int, ticked: Boolean, hidden:
             }
             T(c.name, 15, Bold, when { f || onAccent -> C.OnLight; hidden -> C.Muted; else -> C.Text }, Modifier.weight(1f))
             if (hidden) Box(Modifier.clip(RoundedCornerShape(6.dp)).background(if (f) C.LightTrack else C.Control).padding(horizontal = 8.dp, vertical = 3.dp)) { T("Hidden", 11, Bold, sub) }
-            T("%,d".format(count), 13, color = sub, mono = true)
+            // a hidden category may not be downloaded at all; no count beats a misleading 0
+            if (count > 0 || !hidden) T("%,d".format(count), 13, color = sub, mono = true)
         }
     }
 
@@ -264,7 +265,7 @@ private fun ActionPanel(
     else T("Tick categories with OK, or filter and tick everything listed.", 13, color = C.Muted, maxLines = 3, lineHeight = 19)
     if (moving) {
         Spacer(Modifier.height(2.dp).fillMaxWidth().background(C.Control))
-        PanelBtn("Drop here", Icons.Check, onDrop, key = "OK", style = BtnStyle.Light, focusRequester = dropFocus)
+        PanelBtn("Drop here", Icons.Check, onDrop, key = "OK", style = BtnStyle.Primary, focusRequester = dropFocus)
         PanelBtn("Send to top", Icons.Top, onTop)
         PanelBtn("Cancel move", null, onCancel, quiet = true)
     } else {

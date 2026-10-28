@@ -1,5 +1,7 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.background
@@ -62,7 +64,7 @@ fun GroupChips(groups: List<Group>, selected: String, onSelect: (String) -> Unit
             FocusSurface({ onSelect(g.id) }, Modifier.height(36.dp), idle = if (on) C.Accent else C.Control, shape = RoundedCornerShape(18.dp)) { f ->
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     T(g.name, 13, Bold, if (f || on) C.OnLight else C.Soft)
-                    T("%,d".format(g.count), 12, color = if (f || on) C.OnLightSub else C.Dim)
+                    if (g.count > 0) T("%,d".format(g.count), 12, color = if (f || on) C.OnLightSub else C.Dim)
                 }
             }
         }
@@ -102,7 +104,8 @@ fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Un
     LazyColumn(modifier, state, contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         items(groups, key = { it.id }) { g ->
             val on = g.id == selected
-            FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(44.dp), selected = on, shape = RoundedCornerShape(10.dp),
+            // the current category gets an amber tint (white stays reserved for focus)
+            FocusSurface({ onSelect(g.id) }, Modifier.fillMaxWidth().height(46.dp), idle = if (on) C.Accent.copy(alpha = .14f) else Color.Transparent, shape = RoundedCornerShape(23.dp), lift = 1.04f,
                 focusRequester = if (on && focusSelected) selectedFocus else null,
                 // Favourites / All / Continue watching are built in and can't be hidden
                 onLongClick = when {
@@ -111,9 +114,9 @@ fun CategoryList(groups: List<Group>, selected: String, onSelect: (String) -> Un
                     onHide != null -> ({ confirm = g })
                     else -> null
                 }) { f ->
-                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    T(g.name, 15, if (on || f) Bold else FontWeight.Medium, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
-                    T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
+                Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(g.name, 14, if (on || f) Bold else FontWeight.SemiBold, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.weight(1f))
+                    if (g.count > 0) T("%,d".format(g.count), 13, color = when { f -> C.OnLightSub; on -> C.Accent; else -> C.Dim })
                 }
             }
         }
@@ -129,9 +132,11 @@ fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: 
     val field = remember { FocusRequester() }
     // the field only appears on request: a focused text field on TV pops the keyboard
     LaunchedEffect(searching) { if (searching) runCatching { field.requestFocus() } }
-    Column(modifier.width(220.dp).fillMaxHeight().background(C.Panel).padding(start = 12.dp, end = 12.dp, top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // a floating glass panel, like the Live channel list
+    Column(modifier.padding(start = 24.dp, bottom = 24.dp).width(270.dp).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(C.Glass)
+        .padding(start = 10.dp, end = 10.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Label(title, Modifier.weight(1f))
+            T(title, 18, Heavy, modifier = Modifier.weight(1f))
             IconBtn(Icons.Search, if (searching) "Close category search" else "Search categories", { searching = !searching; if (!searching) q = "" }, size = 36.dp,
                 tint = if (searching) C.Accent else C.Muted)
         }
@@ -144,7 +149,7 @@ fun GroupColumn(title: String, groups: List<Group>, selected: String, onSelect: 
 /** Phone: the button that shows the current category and opens the drawer. */
 @Composable
 fun CategoryButton(name: String, count: Int, onClick: () -> Unit) =
-    FocusSurface(onClick, Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(48.dp), idle = C.Control, shape = RoundedCornerShape(12.dp), label = "Choose category") { f ->
+    FocusSurface(onClick, Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(48.dp), idle = C.Glass2, shape = RoundedCornerShape(24.dp), label = "Choose category") { f ->
         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Ico(Icons.More, if (f) C.OnLight else C.Accent, 20.dp)
             T(name, 15, Bold, fg(f), Modifier.weight(1f))
@@ -161,9 +166,11 @@ fun CategoryDrawer(title: String, groups: List<Group>, selected: String, onSelec
         var q by remember { mutableStateOf("") }
         var shown by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { shown = true }
-        Row(Modifier.fillMaxSize()) {
+        // a glass panel floating over a dimmed screen
+        Row(Modifier.fillMaxSize().background(Color(0x99000000))) {
             AnimatedVisibility(shown, enter = slideInHorizontally { -it }) {
-                Column(Modifier.width(310.dp).fillMaxHeight().background(C.Panel).statusBarsPadding().navigationBarsPadding().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.statusBarsPadding().navigationBarsPadding().padding(16.dp).width(330.dp).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(C.Glass)
+                    .padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         T(title, 20, Heavy, modifier = Modifier.weight(1f).padding(start = 8.dp))
                         IconBtn(Icons.Back, "Close", onDismiss, size = 40.dp)

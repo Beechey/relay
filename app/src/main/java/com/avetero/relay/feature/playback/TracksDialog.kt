@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.playback
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -35,7 +36,7 @@ fun TracksDialog(app: AppState, onDismiss: () -> Unit) = Dialog(onDismiss) {
     ).filter { it.second.isNotEmpty() }
     var tick by remember { mutableStateOf(0) }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
     Panel(460, Modifier.heightIn(max = 560.dp), padding = 20.dp, spacing = 6.dp, scroll = true) {
         DialogTitle("Audio, subtitles & quality")
         if (sections.isEmpty()) T("This stream has a single quality and audio track, and no subtitles.", 14, color = C.Muted, maxLines = 3, modifier = Modifier.padding(8.dp))
@@ -45,6 +46,6 @@ fun TracksDialog(app: AppState, onDismiss: () -> Unit) = Dialog(onDismiss) {
                 OptionRow(o.label, o.selected, { o.pick(); tick++ }, focusRequester = if (si == 0 && oi == 0) first else null)
             }
         }
-        Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
+        Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Primary, height = 44.dp)
     }
 }

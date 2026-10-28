@@ -38,6 +38,8 @@ object Icons {
     val Settings = icon("M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M14 4v4M8 10v4M16 16v4")
     val Play = icon("M7 4l13 8-13 8z", filled = true)
     val Pause = icon("M6 4h4v16H6zM14 4h4v16h-4z", filled = true)
+    val User = icon("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0")
+    val List = icon("M3 6h18M3 12h18M3 18h12")
     val Back = icon("M15 5l-7 7 7 7")
     val Chevron = icon("M9 5l7 7-7 7")
     val Pip = icon("M3 5h18v14H3zM12 12h6v4h-6z")

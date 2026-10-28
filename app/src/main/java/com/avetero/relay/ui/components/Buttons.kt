@@ -24,20 +24,21 @@ import com.avetero.relay.ui.theme.Bold
 import com.avetero.relay.ui.theme.C
 import com.avetero.relay.ui.theme.Heavy
 import com.avetero.relay.ui.theme.Ico
+import com.avetero.relay.ui.theme.LiveGradient
 import com.avetero.relay.ui.theme.T
 
 @Composable
 internal fun PanelBtn(text: String, icon: ImageVector?, onClick: () -> Unit, key: String? = null, style: BtnStyle = BtnStyle.Secondary,
                      quiet: Boolean = false, danger: Boolean = false, enabled: Boolean = true, focusRequester: FocusRequester? = null) =
     FocusSurface({ if (enabled) onClick() }, Modifier.fillMaxWidth().height(if (quiet) 38.dp else 44.dp),
-        idle = when { quiet -> Color.Transparent; !enabled -> C.Panel; style == BtnStyle.Primary -> C.Accent; style == BtnStyle.Light -> C.Text; else -> C.Control },
+        idle = when { quiet -> Color.Transparent; !enabled -> C.Panel; style == BtnStyle.Primary -> C.Accent; else -> C.Control },
         shape = RoundedCornerShape(10.dp), focusRequester = focusRequester) { f ->
         val color = when {
             f -> C.OnLight
             !enabled -> C.Dim
             danger -> C.Error
             quiet -> C.Muted
-            style == BtnStyle.Primary || style == BtnStyle.Light -> C.OnLight
+            style == BtnStyle.Primary -> C.OnLight
             else -> C.Text
         }
         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -47,20 +48,21 @@ internal fun PanelBtn(text: String, icon: ImageVector?, onClick: () -> Unit, key
         }
     }
 
-enum class BtnStyle { Primary, Secondary, Destructive, Light }
+/** Primary (amber) is the main action; white is reserved for focus. */
+enum class BtnStyle { Primary, Secondary, Destructive }
 
 @Composable
 fun Btn(
     text: String, onClick: () -> Unit, modifier: Modifier = Modifier, style: BtnStyle = BtnStyle.Secondary,
     icon: ImageVector? = null, height: Dp = 48.dp, focusRequester: FocusRequester? = null, enabled: Boolean = true,
 ) = FocusSurface(
-    onClick = { if (enabled) onClick() }, modifier = modifier.height(height), focusRequester = focusRequester,
-    idle = when { !enabled -> C.Surface; style == BtnStyle.Primary -> C.Accent; style == BtnStyle.Light -> C.Text; else -> C.Control },
+    onClick = { if (enabled) onClick() }, modifier = modifier.height(height), focusRequester = focusRequester, shape = RoundedCornerShape(percent = 50), lift = 1.05f,
+    idle = when { !enabled -> C.Surface; style == BtnStyle.Primary -> C.Accent; else -> C.Control },
 ) { f ->
     val color = when {
         f -> C.OnLight
         !enabled -> C.Dim
-        style == BtnStyle.Primary || style == BtnStyle.Light -> C.OnLight
+        style == BtnStyle.Primary -> C.OnLight
         style == BtnStyle.Destructive -> C.Error
         else -> C.Text
     }
@@ -78,21 +80,29 @@ fun IconBtn(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Mod
 
 @Composable
 fun Toggle(on: Boolean, focused: Boolean) = Box(
-    Modifier.size(52.dp, 30.dp).clip(RoundedCornerShape(15.dp))
-        .background(if (on) C.Accent else if (focused) C.LightTrack else Color(0xFF2A3142)),
+    Modifier.size(48.dp, 28.dp).clip(RoundedCornerShape(14.dp))
+        .then(if (on) Modifier.background(LiveGradient) else Modifier.background(if (focused) C.LightTrack else Color.White.copy(alpha = .14f))),
 ) {
-    Box(Modifier.offset(x = if (on) 26.dp else 4.dp, y = 4.dp).size(22.dp).clip(RoundedCornerShape(11.dp))
-        .background(if (on || focused) C.OnLight else C.Muted))
+    Box(Modifier.offset(x = if (on) 23.dp else 3.dp, y = 3.dp).size(22.dp).clip(RoundedCornerShape(11.dp))
+        .background(if (on || focused) C.OnLight else C.Soft))
 }
 
 /** A row of mutually exclusive options on one track (content type, filter mode, sort order). */
 @Composable
 fun <K> SegmentedTabs(options: List<Pair<K, String>>, selected: K, onSelect: (K) -> Unit, small: Boolean = false) =
-    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(C.Panel).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.clip(RoundedCornerShape(percent = 50)).background(Color.White.copy(alpha = .06f)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEach { (k, label) ->
-            FocusSurface({ onSelect(k) }, Modifier.height(if (small) 34.dp else 40.dp), selected = selected == k, shape = RoundedCornerShape(9.dp)) { f ->
-                T(label, if (small) 13 else 14, Bold, if (f) C.OnLight else if (selected == k) C.Text else C.Muted,
+            val on = selected == k
+            FocusSurface({ onSelect(k) }, Modifier.height(if (small) 30.dp else 36.dp), idle = if (on) C.Glass3 else Color.Transparent, shape = RoundedCornerShape(percent = 50), lift = 1.04f) { f ->
+                T(label, if (small) 12 else 13, Bold, if (f) C.OnLight else if (on) C.Text else C.Muted,
                     Modifier.align(Alignment.Center).padding(horizontal = if (small) 12.dp else 16.dp))
             }
         }
+    }
+
+/** A focusable pill (category jumps, search filters, recent searches). */
+@Composable
+fun PillBtn(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) =
+    FocusSurface(onClick, modifier.height(36.dp), selected = on, idle = C.Glass2, shape = RoundedCornerShape(18.dp), lift = 1.06f, focusRequester = focusRequester) { f ->
+        T(text, 13, Bold, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
     }

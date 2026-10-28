@@ -1,5 +1,6 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.avetero.relay.ui.theme.Bold
 import com.avetero.relay.ui.theme.C
 import com.avetero.relay.ui.theme.Heavy
+import com.avetero.relay.ui.theme.Semi
 import com.avetero.relay.ui.theme.T
 import com.avetero.relay.util.fmtTime
 import kotlinx.coroutines.delay
@@ -53,15 +55,16 @@ fun Badge(text: String, bg: Color = C.Control, color: Color = C.Soft, modifier: 
     Box(modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp)) { T(text, 12, Heavy, color) }
 
 @Composable
-fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, track: Color = C.Track, bar: Color = C.Accent, height: Dp = 3.dp) =
+fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, track: Color = C.Track, bar: Color? = null, height: Dp = 3.dp) =
     Box(modifier.height(height).clip(RoundedCornerShape(height)).background(track)) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).background(bar))
+        // the live gradient unless a caller needs a flat colour (e.g. dark on the light focus fill)
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).then(if (bar != null) Modifier.background(bar) else Modifier.background(com.avetero.relay.ui.theme.LiveGradient)))
     }
 
 @Composable
 fun KeyHint(key: String, action: String) = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-    Box(Modifier.clip(RoundedCornerShape(5.dp)).background(C.Control).padding(horizontal = 7.dp, vertical = 3.dp)) { T(key, 12, Bold) }
-    T(action, 12, color = C.Muted)
+    Box(Modifier.clip(RoundedCornerShape(6.dp)).background(C.Glass2).padding(horizontal = 7.dp, vertical = 3.dp)) { T(key, 11, Bold, C.Soft, mono = true) }
+    T(action, 12, Semi, C.Muted)
 }
 
 /** Centered message used for empty/error states (board 19). */
@@ -71,7 +74,7 @@ fun EmptyState(title: String, body: String, action: String? = null, onAction: ()
         Column(Modifier.padding(16.dp).widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(C.Surface).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(title, 20, Heavy)
             T(body, 14, color = Color(0xFFC9CED8), maxLines = 4, lineHeight = 21)
-            if (action != null) Btn(action, onAction, style = BtnStyle.Light, height = 44.dp)
+            if (action != null) Btn(action, onAction, style = BtnStyle.Primary, height = 44.dp)
         }
     }
 
@@ -81,3 +84,19 @@ fun Clock(size: Int = 13, color: Color = C.Text) {
     LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() / 1000 } }
     T(fmtTime(now), size, color = color, mono = true)
 }
+
+/** A small rounded label on artwork or glass: facts (year, rating), filters, "Continue watching". */
+@Composable
+fun Pill(text: String, modifier: Modifier = Modifier, bg: Color = C.Glass2, color: Color = C.Soft) =
+    Box(modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        T(text, 12, Bold, color)
+    }
+
+/** Red LIVE marker for anything playing now. */
+@Composable
+fun LivePill(modifier: Modifier = Modifier) =
+    Row(modifier.height(22.dp).clip(RoundedCornerShape(11.dp)).background(C.Live).padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+        T("LIVE", 11, Heavy, Color.White)
+    }

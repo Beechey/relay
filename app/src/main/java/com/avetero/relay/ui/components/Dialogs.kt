@@ -49,13 +49,13 @@ fun ConfirmDialog(
     message: String? = null, cancel: String = "Cancel", destructive: Boolean = true,
 ) = Dialog(onDismiss) {
     val cancelFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+    LaunchedEffect(Unit) { cancelFocus.settle() }
     Panel(400) {
         T(title, 20, Heavy, maxLines = 3)
         if (message != null) T(message, 14, color = C.Soft, maxLines = 4, lineHeight = 21)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Btn(confirm, onConfirm, Modifier.weight(1f), style = if (destructive) BtnStyle.Destructive else BtnStyle.Secondary, height = 46.dp)
-            Btn(cancel, onDismiss, Modifier.weight(1f), style = BtnStyle.Light, height = 46.dp, focusRequester = cancelFocus)
+            Btn(cancel, onDismiss, Modifier.weight(1f), style = BtnStyle.Primary, height = 46.dp, focusRequester = cancelFocus)
         }
     }
 }

@@ -1,5 +1,11 @@
 package com.avetero.relay.app
 
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import com.avetero.relay.feature.guide.ReminderCard
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -23,9 +29,9 @@ import com.avetero.relay.data.update.Updater
 import com.avetero.relay.feature.favourites.FavouritesScreen
 import com.avetero.relay.feature.guide.GuideScreen
 import com.avetero.relay.feature.home.HomeScreen
-import com.avetero.relay.feature.home.MoreScreen
 import com.avetero.relay.feature.live.LivePlayerScreen
 import com.avetero.relay.feature.live.LiveScreen
+import com.avetero.relay.feature.live.LiveTvScreen
 import com.avetero.relay.feature.onboarding.LoginScreen
 import com.avetero.relay.feature.onboarding.SyncScreen
 import com.avetero.relay.feature.search.SearchScreen
@@ -57,7 +63,6 @@ fun App(app: AppState, onExit: () -> Unit) {
             Tab.Home -> Screen.Home; Tab.Live -> Screen.Live(); Tab.Guide -> Screen.Guide
             Tab.Movies -> Screen.VodGrid(false); Tab.Series -> Screen.VodGrid(true)
             Tab.Favourites -> Screen.Favourites; Tab.Search -> Screen.Search; Tab.Settings -> Screen.Settings()
-            Tab.More -> Screen.More
         })
     }
 
@@ -91,8 +96,6 @@ fun App(app: AppState, onExit: () -> Unit) {
     BackHandler {
         when {
             app.stack.size > 1 -> app.back()
-            app.screen in listOf(Screen.Guide, Screen.Favourites, Screen.Search) && compact -> app.go(Screen.More)
-            app.screen is Screen.Settings && compact -> app.go(Screen.More)
             app.screen !in listOf(Screen.Home, Screen.Login, Screen.Sync) -> app.go(Screen.Home)
             else -> exitAsk = true
         }
@@ -103,27 +106,27 @@ fun App(app: AppState, onExit: () -> Unit) {
             Screen.Login -> LoginScreen(app)
             Screen.Sync -> SyncScreen(app)
             Screen.Home -> HomeScreen(app, nav)
-            is Screen.Live -> LiveScreen(app, nav, s.group)
+            is Screen.Live -> if (compact) LiveScreen(app, nav, s.group) else LiveTvScreen(app, s.group)
             Screen.Guide -> GuideScreen(app, nav)
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
             is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
             // details keep the rail / bottom tabs so navigation is always in the same place
-            is Screen.MovieDetail -> WithRail(Tab.Movies, nav) { MovieDetailScreen(app, s.vod) }
-            is Screen.SeriesDetail -> WithRail(Tab.Series, nav) { SeriesDetailScreen(app, s.series) }
+            is Screen.MovieDetail -> WithRail(Tab.Movies, nav, behindDock = true) { MovieDetailScreen(app, s.vod) }
+            is Screen.SeriesDetail -> WithRail(Tab.Series, nav, behindDock = true) { SeriesDetailScreen(app, s.series) }
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next, s.episodes)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
-            Screen.More -> MoreScreen(app, nav)
             is Screen.Settings -> SettingsScreen(app, s.section, nav)
         }
         // PiP from Live TV's preview: the floating window shows only the video
         if (app.inPip && !app.onPlayerScreen) Box(Modifier.fillMaxSize().background(Color.Black)) {
             PlayerSurface(app.player.player, Modifier.fillMaxSize())
         }
+        ReminderCard(app, Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 32.dp))
         app.message?.let { msg ->
             LaunchedEffect(msg) { delay(2_500); app.message = null }
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).clip(RoundedCornerShape(12.dp)).background(C.Text).padding(horizontal = 20.dp, vertical = 12.dp)) {
-                T(msg, 15, Bold, C.OnLight)
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).clip(RoundedCornerShape(12.dp)).background(C.Glass).padding(horizontal = 20.dp, vertical = 12.dp)) {
+                T(msg, 15, Bold, C.Text)
             }
         }
     }

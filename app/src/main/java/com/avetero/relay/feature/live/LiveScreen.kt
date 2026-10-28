@@ -131,7 +131,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                                     if (now != null) T("  " + now.minutesLeft(), 13, color = sub(f))
                                 }
                                 T(now?.title ?: "No programme info", 13, color = sub(f))
-                                ProgressLine(now?.progress() ?: 0f, Modifier.fillMaxWidth(), if (f) C.LightTrack else C.Track, if (f) C.OnLight else C.Accent)
+                                ProgressLine(now?.progress() ?: 0f, Modifier.fillMaxWidth(), if (f) C.LightTrack else C.Track, if (f) C.OnLight else null)
                             }
                         }
                     }

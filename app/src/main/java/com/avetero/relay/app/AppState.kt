@@ -1,5 +1,7 @@
 package com.avetero.relay.app
 
+import kotlinx.coroutines.launch
+import com.avetero.relay.data.store.CatalogueCache
 import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.runtime.derivedStateOf
@@ -36,7 +38,9 @@ import com.avetero.relay.util.fmtDate
 import com.avetero.relay.util.fmtTime
 import java.io.File
 import java.io.Reader
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
@@ -63,6 +67,16 @@ class AppState(val ctx: Context) {
     var guideStatus by mutableStateOf("")
     var favourites by mutableStateOf(store.favourites(account))
     var hidden by mutableStateOf(store.hidden(account))
+    // which parts of the playlist are downloaded at all (board 11); the dock, For you and Search follow it
+    var parts by mutableStateOf(store.parts(account))
+    var partLoading by mutableStateOf<String?>(null)
+    val partProgress = StepProgress()
+    // tabs to show: parts that are on, minus any the provider has nothing in (kept while it's still loading)
+    val shownParts by derivedStateOf {
+        parts.filterTo(HashSet()) {
+            when (it) { "live" -> libraryLoading || liveCats.isNotEmpty(); "vod" -> vodLoading || vodCats.isNotEmpty(); else -> vodLoading || seriesCats.isNotEmpty() }
+        }.ifEmpty { parts }
+    }
     // what the user browses: everything except hidden categories
     val liveCatsVisible by derivedStateOf { ordered("live").filter { "live:${it.id}" !in hidden } }
     val vodCatsVisible by derivedStateOf { ordered("vod").filter { "vod:${it.id}" !in hidden } }
@@ -106,9 +120,20 @@ class AppState(val ctx: Context) {
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
+    // kept here so coming back from a result still shows your search
+    var searchQuery by mutableStateOf("")
+    // search keys (lower-case, accents removed) per list, built once per library load
+    private val searchKeys = java.util.IdentityHashMap<List<*>, List<String>>()
+    fun <T> searchKeys(list: List<T>, name: (T) -> String): List<String> =
+        synchronized(searchKeys) { searchKeys[list] } ?: list.map { com.avetero.relay.ui.components.norm(name(it)) }
+            .also { synchronized(searchKeys) { if (searchKeys.size > 6) searchKeys.clear(); searchKeys[list] = it } }
+    // Movies (false) / Series (true): the shelf and poster last focused, so Back from details lands on it again
+    val browseFocus = mutableMapOf<Boolean, Pair<Int, Int>>()
     var hls by mutableStateOf(store.hls)
     /** True until the saved catalogue has been read back (it can be 100+ MB, so never on the main thread). */
     var libraryLoading by mutableStateOf(false)
+    /** Movies and series still loading after Live TV is ready (they load in the background, in parallel). */
+    var vodLoading by mutableStateOf(false)
     /** True while the activity is shown as a picture-in-picture window. */
     var inPip by mutableStateOf(false)
     val onPlayerScreen get() = screen is Screen.LivePlayer || screen is Screen.VodPlayer
@@ -155,11 +180,101 @@ class AppState(val ctx: Context) {
     fun setCategoriesHidden(keys: Collection<String>, hide: Boolean) {
         hidden = if (hide) hidden + keys else hidden - keys.toSet()
         store.setHidden(account, hidden)
+        if (!hide) fetchShown(keys)
     }
 
-    fun setCategoryHidden(key: String, hide: Boolean) {
-        hidden = if (hide) hidden + key else hidden - key
-        store.setHidden(account, hidden)
+    fun setCategoryHidden(key: String, hide: Boolean) = setCategoriesHidden(listOf(key), hide)
+
+    private val bg = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private fun catsJson(c: List<Category>) = org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString()
+
+    /** The download for one part: the whole list, or with hidden categories skipped, only the kept ones. */
+    private fun kept(x: Xtream, type: String): (List<Category>, File, (Long, Long) -> Unit) -> Unit = { c, f, p ->
+        val (action, all) = when (type) {
+            "live" -> "get_live_streams" to x::downloadChannels
+            "vod" -> "get_vod_streams" to x::downloadVods
+            else -> "get_series" to x::downloadSeries
+        }
+        if (store.downloadHidden || hidden.none { it.startsWith("$type:") }) all(f, p)
+        else x.downloadCategories(action, c.map { it.id }.filter { "$type:$it" !in hidden }, f, p)
+    }
+
+    /** Board 11: off removes a part now, from memory and from disk; on downloads it in the background. One always stays on. */
+    fun setPart(type: String, on: Boolean) {
+        val a = account ?: return
+        val next = if (on) parts + type else parts - type
+        if (next.isEmpty()) { message = "Keep at least one of Live TV, Movies or Series"; return }
+        if (next == parts) return
+        parts = next; store.setParts(a, next)
+        if (on) { fetchPart(a, type); return }
+        val dir = store.cacheFile(a, type).parentFile
+        val files = when (type) { "live" -> listOf("live", "live_cats", "guide"); "vod" -> listOf("vod", "vod_cats"); else -> listOf("series", "series_cats") }
+        files.forEach { File(dir, "$it.json").delete(); File(dir, "$it.bin").delete() }
+        when (type) {
+            "live" -> { channels = emptyList(); liveCats = emptyList(); guide = emptyMap(); epg.clear() }
+            "vod" -> { movies = emptyList(); vodCats = emptyList() }
+            else -> { series = emptyList(); seriesCats = emptyList() }
+        }
+    }
+
+    private fun fetchPart(a: Account, type: String) {
+        val x = api
+        val name = when (type) { "live" -> "Live TV"; "vod" -> "Movies"; else -> "Series" }
+        partLoading = type
+        val p = partProgress.apply { fraction = -1f; bytes = 0; count = 0; reading = false }
+        bg.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val c = when (type) { "live" -> x.liveCategories(); "vod" -> x.vodCategories(); else -> x.seriesCategories() }
+                    val file = store.cacheFile(a, type)
+                    kept(x, type)(c, file, p::onBytes)
+                    store.writeCache(a, type + "_cats", catsJson(c))
+                    val bin = File(file.parentFile, "$type.bin")
+                    p.reading = true; p.fraction = 0f
+                    val n = { k: Int -> p.count = k }
+                    Counting(file.inputStream(), file.length(), p::onBytes).bufferedReader().use { r ->
+                        when (type) {
+                            "live" -> { channels = parseChannels(r, n); liveCats = c; CatalogueCache.writeChannels(bin, channels) }
+                            "vod" -> { movies = parseVods(r, n); vodCats = c; CatalogueCache.writeVods(bin, movies) }
+                            else -> { series = parseSeries(r, n); seriesCats = c; CatalogueCache.writeSeries(bin, series) }
+                        }
+                    }
+                }
+            }.onSuccess { message = "$name downloaded" }.onFailure { message = "Couldn't download $name: ${it.message}" }
+            partLoading = null
+            if (type == "live" && account == a) refreshGuide(force = true)
+        }
+    }
+
+    /** With hidden categories not downloaded, a category that comes back has nothing in it yet: fetch just that one. */
+    private fun fetchShown(keys: Collection<String>) {
+        val a = account ?: return
+        if (store.downloadHidden) return
+        val x = api
+        bg.launch {
+            val dir = store.cacheFile(a, "live").parentFile
+            val byType = keys.groupBy({ it.substringBefore(':') }, { it.substringAfter(':') })
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    byType["live"]?.let { ids ->
+                        val have = channels.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseChannels(x.categoryStreams("get_live_streams", it)) }
+                        if (add.isNotEmpty()) { channels = channels + add; CatalogueCache.writeChannels(File(dir, "live.bin"), channels) }
+                    }
+                    byType["vod"]?.let { ids ->
+                        val have = movies.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseVods(x.categoryStreams("get_vod_streams", it)) }
+                        if (add.isNotEmpty()) { movies = movies + add; CatalogueCache.writeVods(File(dir, "vod.bin"), movies) }
+                    }
+                    byType["series"]?.let { ids ->
+                        val have = series.mapTo(HashSet()) { it.categoryId }
+                        val add = ids.filter { it !in have }.flatMap { parseSeries(x.categoryStreams("get_series", it)) }
+                        if (add.isNotEmpty()) { series = series + add; CatalogueCache.writeSeries(File(dir, "series.bin"), series) }
+                    }
+                }
+            }.onFailure { message = "Couldn't download that category: ${it.message}" }
+        }
     }
 
     fun clearCacheAndReload() {
@@ -169,29 +284,70 @@ class AppState(val ctx: Context) {
 
     fun liveUrl(c: Channel) = api.streamUrl(c, hls)
 
-    fun saveResume(r: Resume, upNext: Boolean = false) { store.saveResume(account, r, upNext); resumes = store.resumes(account) }
+    /** Watch a past or running programme from its start, on channels with catch-up. */
+    fun catchupUrl(c: Channel, p: Programme) =
+        api.catchupUrl(c, p.start, ((p.end - p.start) / 60).toInt().coerceAtLeast(1), info?.timezone ?: "UTC")
+
+    /** Live TV from [startSec] onwards, from the provider's archive (live pause on catch-up channels). */
+    fun catchupFrom(c: Channel, startSec: Long) = api.catchupUrl(c, startSec, 240, info?.timezone ?: "UTC")
+
+    var reminders by mutableStateOf(store.reminders(account))
+    private fun reminderKey(c: Channel, p: Programme) = "${c.id}|${p.start}|${p.title}"
+    fun hasReminder(c: Channel, p: Programme) = reminderKey(c, p) in reminders
+    fun toggleReminder(c: Channel, p: Programme) {
+        val k = reminderKey(c, p)
+        reminders = if (k in reminders) reminders - k else reminders + k
+        store.setReminders(account, reminders)
+        message = if (k in reminders) "We'll remind you when ${p.title} starts" else "Reminder removed"
+    }
+    fun dropReminder(k: String) { reminders = reminders - k; store.setReminders(account, reminders) }
+
+    fun saveResume(r: Resume, upNext: Boolean = false) {
+        if (r.key.startsWith("cu")) return // catch-up programmes don't belong in Continue watching
+        store.saveResume(account, r, upNext); resumes = store.resumes(account)
+    }
     fun removeResume(key: String) { store.removeResume(account, key); resumes = store.resumes(account); message = "Removed from Continue watching" }
 
-    private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
+    private fun hasCache(a: Account) = store.parts(a).any { store.cacheFile(a, it).exists() }
 
+    /** Live TV first so it's usable at once; movies and series follow in parallel while you watch. */
     suspend fun loadLibrary() {
         val a = account ?: return
         if (!libraryLoading) return
-        withContext(Dispatchers.IO) { loadCache(a) }
+        val t0 = System.currentTimeMillis()
+        withContext(Dispatchers.IO) {
+            if ("live" in parts) runCatching {
+                liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
+                channels = cached(a, "live", CatalogueCache::readChannels, CatalogueCache::writeChannels, ::parseChannels)
+            }
+        }
         libraryLoading = false
+        val tLive = System.currentTimeMillis() - t0
+        vodLoading = true
+        withContext(Dispatchers.IO) {
+            coroutineScope {
+                if ("vod" in parts) launch { runCatching {
+                    vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
+                    movies = cached(a, "vod", CatalogueCache::readVods, CatalogueCache::writeVods, ::parseVods)
+                } }
+                if ("series" in parts) launch { runCatching {
+                    seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
+                    series = cached(a, "series", CatalogueCache::readSeries, CatalogueCache::writeSeries, ::parseSeries)
+                } }
+            }
+        }
+        vodLoading = false
+        android.util.Log.i("Relay", "library ready: live ${tLive} ms, everything ${System.currentTimeMillis() - t0} ms")
     }
 
-    private fun loadCache(a: Account) {
-        fun <T> read(name: String, parse: (Reader) -> List<T>): List<T> =
-            store.cacheFile(a, name).takeIf { it.exists() }?.bufferedReader()?.use(parse) ?: emptyList()
-        runCatching {
-            liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
-            channels = read("live", ::parseChannels)
-            vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
-            movies = read("vod", ::parseVods)
-            seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
-            series = read("series", ::parseSeries)
-        }
+    /** Reads the compact copy when it's at least as new as the provider's JSON, else parses the JSON and saves one. */
+    private fun <T> cached(a: Account, name: String, readBin: (File) -> List<T>?, writeBin: (File, List<T>) -> Unit, parse: (Reader) -> List<T>): List<T> {
+        val json = store.cacheFile(a, name).takeIf { it.exists() } ?: return emptyList()
+        val bin = File(json.parentFile, "$name.bin")
+        if (bin.exists() && bin.lastModified() >= json.lastModified()) readBin(bin)?.let { return it }
+        val list = json.bufferedReader().use(parse)
+        runCatching { writeBin(bin, list) }
+        return list
     }
 
     /** Signs in and downloads the catalogue; steps drive board 02. Throws on login failure. */
@@ -199,15 +355,18 @@ class AppState(val ctx: Context) {
         val a = account ?: return@coroutineScope
         val x = api
         syncSteps.clear()
-        syncSteps += listOf(SyncStep("Signing in"), SyncStep("Live channels", unit = "channels"), SyncStep("Movies", unit = "movies"),
-            SyncStep("Series", unit = "series"), SyncStep("TV guide", unit = "programmes"))
+        // parts that are off get no step at all; the guide lists channels, so it goes with Live TV
+        syncSteps += listOfNotNull(SyncStep("Signing in"), SyncStep("Live channels", unit = "channels").takeIf { "live" in parts },
+            SyncStep("Movies", unit = "movies").takeIf { "vod" in parts }, SyncStep("Series", unit = "series").takeIf { "series" in parts },
+            SyncStep("TV guide", unit = "programmes").takeIf { "live" in parts })
+        fun at(label: String) = syncSteps.indexOfFirst { it.label == label }
         fun set(i: Int, s: StepState, d: String = "") { syncSteps[i] = syncSteps[i].copy(state = s, detail = d) }
 
         set(0, StepState.Busy)
         info = withContext(Dispatchers.IO) { x.login() }
         set(0, StepState.Done, info?.expires?.let { "Active · expires " + fmtDate(it) } ?: "Active")
 
-        suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (File, (Long, Long) -> Unit) -> Unit,
+        suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (List<Category>, File, (Long, Long) -> Unit) -> Unit,
                          apply: (List<Category>, Reader, (Int) -> Unit) -> Int) {
             set(i, StepState.Busy, "Downloading…")
             val p = syncSteps[i].progress
@@ -215,8 +374,8 @@ class AppState(val ctx: Context) {
                 val file = store.cacheFile(a, name)
                 val c = withContext(Dispatchers.IO) {
                     val c = cats()
-                    download(file, p::onBytes)
-                    store.writeCache(a, name + "_cats", org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString())
+                    download(c, file, p::onBytes)
+                    store.writeCache(a, name + "_cats", catsJson(c))
                     c
                 }
                 set(i, StepState.Busy, "Reading…")
@@ -233,16 +392,26 @@ class AppState(val ctx: Context) {
                 set(i, StepState.Failed, e.message ?: "Failed")
             }
         }
-        listOf(
-            async { step(1, "live", x::liveCategories, x::downloadChannels) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } },
-            async { step(2, "vod", x::vodCategories, x::downloadVods) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } },
-            async { step(3, "series", x::seriesCategories, x::downloadSeries) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } },
+        listOfNotNull(
+            if ("live" in parts) async { step(at("Live channels"), "live", x::liveCategories, kept(x, "live")) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } } else null,
+            if ("vod" in parts) async { step(at("Movies"), "vod", x::vodCategories, kept(x, "vod")) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } } else null,
+            if ("series" in parts) async { step(at("Series"), "series", x::seriesCategories, kept(x, "series")) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } } else null,
         ).forEach { it.await() }
+        // fresh compact copies, so the next start reads these instead of the JSON
+        withContext(Dispatchers.IO) {
+            val dir = store.cacheFile(a, "live").parentFile
+            runCatching { CatalogueCache.writeChannels(File(dir, "live.bin"), channels) }
+            runCatching { CatalogueCache.writeVods(File(dir, "vod.bin"), movies) }
+            runCatching { CatalogueCache.writeSeries(File(dir, "series.bin"), series) }
+        }
         // the guide maps onto channels, so it comes last
-        set(4, StepState.Busy, "Downloading…")
-        val n = refreshGuide(force = true, syncSteps[4].progress)
-        syncSteps[4].progress.fraction = 1f
-        set(4, if (n > 0) StepState.Done else StepState.Failed, if (n > 0) "%,d channels".format(n) else guideStatus)
+        val g = at("TV guide")
+        if (g >= 0) {
+            set(g, StepState.Busy, "Downloading…")
+            val n = refreshGuide(force = true, syncSteps[g].progress)
+            syncSteps[g].progress.fraction = 1f
+            set(g, if (n > 0) StepState.Done else StepState.Failed, if (n > 0) "%,d channels".format(n) else guideStatus)
+        }
     }
 
     fun programmesFor(c: Channel): List<Programme>? =
@@ -302,7 +471,9 @@ class AppState(val ctx: Context) {
         epg.clear(); epgFetched.clear(); guide = emptyMap(); guideStatus = ""
         favourites = store.favourites(a)
         hidden = store.hidden(a)
+        parts = store.parts(a)
         orders = loadOrders(a)
+        reminders = store.reminders(a)
         resumes = store.resumes(a)
         recentChannels = store.recents(a, "recent"); recentMovies = store.recents(a, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() }
         recentSeries = store.recents(a, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() }

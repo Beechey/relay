@@ -68,6 +68,14 @@ class Store(private val ctx: Context) {
     fun setOrder(a: Account?, type: String, ids: List<String>) = prefs.edit().putString(key(a, "order_$type"), JSONArray(ids).toString()).apply()
 
     /** Recently played ids, newest first. kind is "recent" (channels), "rmovie" or "rseries". */
+    /** Programmes to be reminded about, as "channelId|startSec|title". */
+    fun reminders(a: Account?): Set<String> = prefs.getStringSet(key(a, "reminders"), emptySet())!!.toSet()
+    fun setReminders(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "reminders"), set).apply()
+
+    // per device: what this person has searched for, newest first
+    fun recentSearches(): List<String> = prefs.getString("recentSearches", "")!!.split('\n').filter { it.isNotBlank() }
+    fun addRecentSearch(q: String) = prefs.edit().putString("recentSearches", (listOf(q) + recentSearches().filterNot { it.equals(q, true) }).take(8).joinToString("\n")).apply()
+
     fun recents(a: Account?, kind: String): List<Int> =
         prefs.getString(key(a, kind), "")!!.split(',').mapNotNull { it.toIntOrNull() }
 
@@ -114,6 +122,12 @@ class Store(private val ctx: Context) {
     var hls: Boolean
         get() = prefs.getBoolean("hls", false)
         set(v) = prefs.edit().putBoolean("hls", v).apply()
+    // what a playlist downloads: "live", "vod", "series"; never empty
+    fun parts(a: Account?): Set<String> = prefs.getStringSet(key(a, "parts"), null)?.toSet()?.takeIf { it.isNotEmpty() } ?: ALL_PARTS
+    fun setParts(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "parts"), set).apply()
+
+    // off: hidden categories aren't downloaded at all
+    var downloadHidden: Boolean get() = bool("downloadHidden", true); set(v) = put("downloadHidden", v)
     var buffer: String
         get() = prefs.getString("buffer", "Medium")!!
         set(v) = prefs.edit().putString("buffer", v).apply()
@@ -165,3 +179,5 @@ class Store(private val ctx: Context) {
         get() = prefs.getString("skipped", "")!!
         set(v) = prefs.edit().putString("skipped", v).apply()
 }
+
+val ALL_PARTS = setOf("live", "vod", "series")

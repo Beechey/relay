@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.update
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -60,7 +61,7 @@ fun UpdateDialog(app: AppState, r: Release, onDismiss: () -> Unit) = Dialog(onDi
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
     Panel(440) {
         Badge("Update available", C.Accent, C.OnLight)
         T("Version ${r.version} is ready", 26, Heavy)
@@ -86,7 +87,7 @@ fun UpdateDialog(app: AppState, r: Release, onDismiss: () -> Unit) = Dialog(onDi
                         error = e.message ?: "Download failed"; progress = null
                     }
                 }
-            }, Modifier.weight(1f), style = BtnStyle.Light, focusRequester = first)
+            }, Modifier.weight(1f), style = BtnStyle.Primary, focusRequester = first)
             Btn("Later", onDismiss, Modifier.weight(1f))
         }
         Btn("Skip this version", { app.store.skippedVersion = r.version; onDismiss() }, Modifier.fillMaxWidth(), height = 40.dp)

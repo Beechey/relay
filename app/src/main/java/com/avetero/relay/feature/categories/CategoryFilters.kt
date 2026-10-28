@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.categories
 
+import com.avetero.relay.ui.components.LocalParts
 import androidx.compose.runtime.Composable
 import com.avetero.relay.data.model.Category
 import com.avetero.relay.ui.components.SegmentedTabs
@@ -12,8 +13,9 @@ internal fun filterCats(cats: List<Category>, q: String, exclude: Boolean): List
 }
 
 @Composable
-internal fun TypeTabs(type: String, onType: (String) -> Unit) =
-    SegmentedTabs(listOf("live" to "Live TV", "vod" to "Movies", "series" to "Series"), type, onType)
+internal fun TypeTabs(type: String, onType: (String) -> Unit) = LocalParts.current.let { parts ->
+    SegmentedTabs(listOf("live" to "Live TV", "vod" to "Movies", "series" to "Series").filter { it.first in parts }, type, onType)
+}
 
 @Composable
 internal fun ExcludeTabs(exclude: Boolean, onExclude: (Boolean) -> Unit) =
