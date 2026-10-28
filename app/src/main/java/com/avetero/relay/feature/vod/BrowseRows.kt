@@ -133,7 +133,7 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().onFocusChanged { pageFocused = it.hasFocus }, state, contentPadding = PaddingValues(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(if (phone) 16.dp else 20.dp)) {
-            if (phone) item(key = "switch") {
+            if (phone && "vod" in app.parts && "series" in app.parts) item(key = "switch") {
                 Column(Modifier.padding(start = side, end = side, top = 14.dp)) {
                     SegmentedTabs(listOf(false to "Movies", true to "Series"), series, { if (it != series) app.go(Screen.VodGrid(it)) })
                 }

@@ -1,5 +1,7 @@
 package com.avetero.relay.ui.components
 
+import com.avetero.relay.data.store.ALL_PARTS
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.remember
@@ -48,6 +50,15 @@ enum class Tab(val icon: ImageVector, val label: String) {
 
 /** TV top bar: words for the places you browse, icons for the tools. Favourites live inside Live and For you. */
 private val dockTabs = listOf(Tab.Home, Tab.Live, Tab.Guide, Tab.Movies, Tab.Series)
+
+/** Which parts of the playlist are downloaded (board 11); a part that's off loses its tab. */
+val LocalParts = compositionLocalOf { ALL_PARTS }
+private fun Tab.shownWith(parts: Set<String>) = when (this) {
+    Tab.Live, Tab.Guide -> "live" in parts
+    Tab.Movies -> "vod" in parts
+    Tab.Series -> "series" in parts
+    else -> true
+}
 private val dockTools = listOf(Tab.Search, Tab.Settings)
 
 /** Phone bottom bar; Series sits beside Movies under Browse, Settings behind the For you header. */
@@ -58,10 +69,12 @@ private fun bottomLabel(t: Tab) = if (t == Tab.Movies) "Browse" else t.label
 @Composable
 fun BottomBar(active: Tab, onSelect: (Tab) -> Unit) {
     val shown = if (active == Tab.Series) Tab.Movies else active
+    val parts = LocalParts.current
     Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 10.dp).height(66.dp)
         .clip(RoundedCornerShape(24.dp)).background(C.Glass), verticalAlignment = Alignment.CenterVertically) {
-        bottomTabs.forEach { t ->
-            FocusSurface({ onSelect(t) }, Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp), label = bottomLabel(t)) { f ->
+        // Browse covers Movies and Series, so it stays while either is on
+        bottomTabs.filter { if (it == Tab.Movies) "vod" in parts || "series" in parts else it.shownWith(parts) }.forEach { t ->
+            FocusSurface({ onSelect(if (t == Tab.Movies && "vod" !in parts) Tab.Series else t) }, Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp), label = bottomLabel(t)) { f ->
                 val color = when { f -> C.OnLight; t == shown -> C.Accent; else -> C.Muted }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Ico(t.icon, color, 22.dp); T(bottomLabel(t), 10, Bold, if (t == shown && !f) C.Text else color)
@@ -77,7 +90,8 @@ fun Dock(active: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) =
     Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusRestorer(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         LogoMark(30.dp, Modifier.padding(horizontal = 8.dp))
-        dockTabs.forEach { t ->
+        val parts = LocalParts.current
+        dockTabs.filter { it.shownWith(parts) }.forEach { t ->
             FocusSurface({ onSelect(t) }, Modifier.height(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.06f) { f ->
                 T(t.label, 15, Bold, when { f -> C.OnLight; t == active -> C.Text; else -> C.Soft }, Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
             }

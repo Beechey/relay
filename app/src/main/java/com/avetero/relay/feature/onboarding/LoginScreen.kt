@@ -1,11 +1,15 @@
 package com.avetero.relay.feature.onboarding
 
+import com.avetero.relay.ui.theme.LiveGradient
+import com.avetero.relay.ui.components.FocusSurface
+import com.avetero.relay.data.store.ALL_PARTS
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -59,6 +63,7 @@ fun LoginScreen(app: AppState) {
     var pass by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var want by remember { mutableStateOf(ALL_PARTS) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     // start on the button: a focused text field on TV pops the on-screen keyboard over the form
@@ -71,6 +76,8 @@ fun LoginScreen(app: AppState) {
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { Xtream(a).login() }
+                // board 11: only what they watch is downloaded, from the very first load
+                app.store.setParts(a, want)
                 app.signIn(a)
             } catch (e: Exception) {
                 error = e.message ?: "Couldn't sign in"
@@ -114,6 +121,15 @@ fun LoginScreen(app: AppState) {
                 Field("Username", user, { user = it }, Modifier.weight(1f), error = error != null)
                 Field("Password", pass, { pass = it }, Modifier.weight(1f), password = true, error = error != null)
             }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                T("What do you watch?", 13, Bold, C.Soft)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("live" to "Live TV", "vod" to "Movies", "series" to "Series").forEach { (k, label) ->
+                        // at least one stays on
+                        WatchChip(label, k in want) { want = if (k in want) (want - k).ifEmpty { want } else want + k }
+                    }
+                }
+            }
             if (error != null) T(error!!, 13, Bold, C.Error, maxLines = 2)
             Btn(if (busy) "Signing in…" else "Sign in and load playlist", ::submit, Modifier.fillMaxWidth(), style = BtnStyle.Primary, height = 54.dp, enabled = !busy, focusRequester = first)
             T("Your login is stored only on this device.", 13, color = C.Muted, modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -135,3 +151,16 @@ internal fun Modifier.welcomeBackdrop() = fillMaxSize().background(C.Ground).dra
     drawRect(Brush.radialGradient(listOf(Color(0xFF123A34).copy(alpha = .9f), Color.Transparent), Offset(size.width * .15f, size.height * .85f), size.maxDimension * .4f))
     drawRect(Brush.horizontalGradient(.25f to C.Ground.copy(alpha = .9f), 1f to C.Ground.copy(alpha = .3f)))
 }
+
+/** Board 11: a part of the playlist to download, ticked or not. */
+@Composable
+private fun WatchChip(label: String, on: Boolean, onClick: () -> Unit) =
+    FocusSurface(onClick, Modifier.height(40.dp), idle = if (on) C.Glass3 else C.Glass2, shape = RoundedCornerShape(20.dp), lift = 1.05f, label = label) { f ->
+        Row(Modifier.align(Alignment.Center).padding(start = 12.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(18.dp).clip(CircleShape).then(
+                when { f && on -> Modifier.background(C.OnLight); on -> Modifier.background(LiveGradient); else -> Modifier.background(if (f) C.LightTrack else C.Glass3) }), contentAlignment = Alignment.Center) {
+                if (on) T("✓", 11, Heavy, if (f) C.Text else C.OnLight)
+            }
+            T(label, 14, Bold, when { f -> C.OnLight; on -> C.Text; else -> C.Muted })
+        }
+    }

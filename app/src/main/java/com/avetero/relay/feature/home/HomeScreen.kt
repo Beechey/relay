@@ -90,7 +90,8 @@ fun HomeScreen(app: AppState, nav: (Tab) -> Unit) {
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, scroll: androidx.compose.foundation.ScrollState) {
     val phone = compact()
-    val heroItems = app.resumes.take(4)
+    // only what's still downloaded: a movie or series part that's switched off drops out
+    val heroItems = app.resumes.filter { (it.vodId == 0 || "vod" in app.parts) && (it.seriesId == 0 || "series" in app.parts) }.take(4)
     var index by remember { mutableIntStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
     // the hero sits under the dock; whenever it has focus, show it whole rather than half scrolled
@@ -137,7 +138,7 @@ private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, sc
                     if (r == null) {
                         Pill(if (app.libraryLoading) "Loading your library…" else greeting())
                         T("Ready when you are", if (phone) 34 else 56, Heavy, lineHeight = if (phone) 36 else 58)
-                        T("Pick a channel below, or browse movies and series.", 15, color = C.Soft, maxLines = 2)
+                        T(if ("vod" in app.parts || "series" in app.parts) "Pick a channel below, or browse movies and series." else "Pick a channel below, or open Live for the full list.", 15, color = C.Soft, maxLines = 2)
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Pill(if (r.meta.startsWith("Up next")) "Up next" else "Continue watching"); Pill(r.meta.removePrefix("Up next · ").substringAfterLast(" · ")) }
                         T(heroTitle(r), if (phone) 36 else 60, Heavy, maxLines = 2, lineHeight = if (phone) 38 else 62)

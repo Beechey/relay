@@ -1,5 +1,17 @@
 package com.avetero.relay.feature.settings
 
+import com.avetero.relay.ui.theme.LiveGradient
+import com.avetero.relay.ui.components.ProgressLine
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import com.avetero.relay.ui.theme.Semi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,13 +58,15 @@ fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) =
 
 /** Label, optional description, and a value with chevron or a toggle. Goes inside a [SettingsGroup]. */
 @Composable
-fun SettingRow(label: String, desc: String? = null, value: String? = null, toggle: Boolean? = null, onClick: () -> Unit) =
+fun SettingRow(label: String, desc: String? = null, value: String? = null, toggle: Boolean? = null, extra: String? = null, progress: Float? = null, onClick: () -> Unit) =
     FocusSurface(onClick, Modifier.fillMaxWidth().heightIn(min = 66.dp), idle = C.Glass, shape = RectangleShape, lift = 1f) { f ->
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 T(label, 15, Bold, fg(f))
                 if (desc != null) T(desc, 13, color = sub(f), maxLines = 2)
+                if (progress != null) LoadingBar(progress, f, Modifier.padding(top = 6.dp))
             }
+            if (extra != null) T(extra, 12, Semi, sub(f), mono = true)
             if (toggle != null) Toggle(toggle, f)
             if (value != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 T(value, 14, Bold, sub(f)); Ico(Icons.Chevron, sub(f), 16.dp)
@@ -97,3 +111,15 @@ internal fun Stat(label: String, value: String, modifier: Modifier) =
     Column(modifier.clip(RoundedCornerShape(14.dp)).background(C.Glass2).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         T(label, 12, color = C.Muted); T(value, 15, Bold)
     }
+
+/** A download's progress; while the size isn't known yet, a short segment sweeps across. */
+@Composable
+internal fun LoadingBar(fraction: Float, focused: Boolean, modifier: Modifier = Modifier) {
+    val track = if (focused) C.LightTrack else C.Glass3
+    if (fraction < 0) {
+        val x by rememberInfiniteTransition(label = "sweep").animateFloat(0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "x")
+        Box(modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(track)) {
+            Box(Modifier.fillMaxWidth(0.25f).height(4.dp).graphicsLayer { translationX = (size.width * 4f) * x - size.width }.background(LiveGradient))
+        }
+    } else ProgressLine(animateFloatAsState(fraction, label = "bar").value, modifier.fillMaxWidth(), track, height = 4.dp)
+}

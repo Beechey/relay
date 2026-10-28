@@ -122,6 +122,10 @@ class Store(private val ctx: Context) {
     var hls: Boolean
         get() = prefs.getBoolean("hls", false)
         set(v) = prefs.edit().putBoolean("hls", v).apply()
+    // what a playlist downloads: "live", "vod", "series"; never empty
+    fun parts(a: Account?): Set<String> = prefs.getStringSet(key(a, "parts"), null)?.toSet()?.takeIf { it.isNotEmpty() } ?: ALL_PARTS
+    fun setParts(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "parts"), set).apply()
+
     // off: hidden categories aren't downloaded at all
     var downloadHidden: Boolean get() = bool("downloadHidden", true); set(v) = put("downloadHidden", v)
     var buffer: String
@@ -175,3 +179,5 @@ class Store(private val ctx: Context) {
         get() = prefs.getString("skipped", "")!!
         set(v) = prefs.edit().putString("skipped", v).apply()
 }
+
+val ALL_PARTS = setOf("live", "vod", "series")
