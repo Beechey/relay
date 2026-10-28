@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.search
 
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.focus.focusProperties
 import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.foundation.background
@@ -84,8 +85,14 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
     var recentTick by remember { mutableIntStateOf(0) }
     val recent = remember(recentTick) { app.store.recentSearches() }
     val box = remember { FocusRequester() }
+    // names prepared for matching once per library load (hundreds of thousands of titles), not on every keystroke
+    val names by produceState<Triple<List<String>, List<String>, List<String>>?>(null, app.channelsVisible, app.seriesVisible, app.moviesVisible) {
+        value = withContext(Dispatchers.Default) { Triple(app.searchKeys(app.channelsVisible) { it.name }, app.searchKeys(app.seriesVisible) { it.name }, app.searchKeys(app.moviesVisible) { it.name }) }
+    }
+    var searching by remember { mutableStateOf(false) }
     // re-runs when the library finishes loading, not only when the text changes
-    LaunchedEffect(q, app.channelsVisible, app.moviesVisible, app.seriesVisible) {
+    LaunchedEffect(q, names) {
+        searching = true
         delay(250)
         val n = norm(q.trim())
         cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
@@ -95,9 +102,12 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         }.take(30)
         results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
             // names that start with the query come first
-            fun <T> List<T>.ranked(name: (T) -> String) = filter { norm(name(it)).contains(n) }.sortedBy { if (norm(name(it)).startsWith(n)) 0 else 1 }.take(30)
-            Triple(app.channelsVisible.ranked { it.name }, app.seriesVisible.ranked { it.name }, app.moviesVisible.ranked { it.name })
+            val (cn, sn, mn) = names ?: return@withContext Triple(emptyList(), emptyList(), emptyList())
+            fun <T> List<T>.ranked(keys: List<String>) = indices.filter { keys.getOrNull(it)?.contains(n) == true }
+                .sortedBy { if (keys[it].startsWith(n)) 0 else 1 }.take(30).map { this[it] }
+            Triple(app.channelsVisible.ranked(cn), app.seriesVisible.ranked(sn), app.moviesVisible.ranked(mn))
         }
+        searching = names == null && n.length >= 2
     }
     // remember what was searched once something is opened from it
     val open = { go: () -> Unit -> if (q.trim().length >= 2) { app.store.addRecentSearch(q.trim()); recentTick++ }; go() }
@@ -145,7 +155,7 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
             }
         }
         if (n.length >= 2 && filter == "all" && top != null) item(key = "top") { TopResult(app, top, chans) { open(it) } }
-        if (n.length >= 2 && cats.isEmpty() && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T(if (app.libraryLoading || app.vodLoading) "Still loading your library…" else "No results for “$q”", 16, Bold, C.Muted) }
+        if (n.length >= 2 && cats.isEmpty() && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T(if (app.libraryLoading || app.vodLoading) "Still loading your library…" else if (searching) "Searching…" else "No results for “$q”", 16, Bold, C.Muted) }
         if (showLive && chans.isNotEmpty()) item {
             ResultRow("Channels", chans.size) {
                 items(chans, key = { it.id }) { c ->
