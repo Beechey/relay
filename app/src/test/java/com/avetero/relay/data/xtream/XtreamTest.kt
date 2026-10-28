@@ -92,4 +92,41 @@ class XtreamTest {
         assertEquals("http://host:8080/timeshift/u/p%20w/30/2026-10-28:19-30/7.ts", x.catchupUrl(Channel(7, 1, "C", "1"), start, 30, "UTC"))
         assertTrue(x.catchupUrl(Channel(7, 1, "C", "1"), start, 30, "Europe/Berlin").contains("/2026-10-28:20-30/"))
     }
+
+    @Test fun downloadsOnlyTheKeptCategoriesAsOneList() {
+        // a bare-bones HTTP server: one canned JSON reply per category_id
+        val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
+        Thread {
+            while (!server.isClosed) {
+                val sock = runCatching { server.accept() }.getOrNull() ?: break
+                Thread {
+                    sock.use {
+                        val line = it.getInputStream().bufferedReader().readLine() ?: return@use
+                        val cat = line.substringAfter("category_id=", "").substringBefore('&').substringBefore(' ')
+                        val body = when (cat) {
+                            "1" -> """[{"stream_id":10,"num":1,"name":"BBC One","category_id":"1"},{"stream_id":11,"num":2,"name":"BBC Two","category_id":"1"}]"""
+                            "2" -> "[]"
+                            "3" -> """[{"stream_id":30,"num":3,"name":"Sky News","category_id":"3"}]"""
+                            else -> """{"user_info":{"auth":0}}"""
+                        }.toByteArray()
+                        it.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray()); write(body); flush()
+                        }
+                    }
+                }.start()
+            }
+        }.start()
+        try {
+            val out = java.io.File.createTempFile("live", ".json")
+            val x = Xtream(Account("t", "http://127.0.0.1:${server.localPort}", "u", "p"))
+            x.downloadCategories("get_live_streams", listOf("1", "2", "3", "9"), out) { _, _ -> }
+            assertEquals(listOf(10, 11, 30), parseChannels(out.readText()).map { it.id })
+        } finally { server.close() }
+    }
+
+    @Test fun arrayBodyIgnoresErrorObjects() {
+        assertEquals("", arrayBody("""{"error":"x"}"""))
+        assertEquals("", arrayBody(" [ ] "))
+        assertEquals("{\"a\":1}", arrayBody("[{\"a\":1}]"))
+    }
 }

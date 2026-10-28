@@ -122,6 +122,8 @@ class Store(private val ctx: Context) {
     var hls: Boolean
         get() = prefs.getBoolean("hls", false)
         set(v) = prefs.edit().putBoolean("hls", v).apply()
+    // off: hidden categories aren't downloaded at all
+    var downloadHidden: Boolean get() = bool("downloadHidden", true); set(v) = put("downloadHidden", v)
     var buffer: String
         get() = prefs.getString("buffer", "Medium")!!
         set(v) = prefs.edit().putString("buffer", v).apply()

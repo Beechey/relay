@@ -228,7 +228,8 @@ private fun OrderRow(c: Category, pos: Int, count: Int, ticked: Boolean, hidden:
             }
             T(c.name, 15, Bold, when { f || onAccent -> C.OnLight; hidden -> C.Muted; else -> C.Text }, Modifier.weight(1f))
             if (hidden) Box(Modifier.clip(RoundedCornerShape(6.dp)).background(if (f) C.LightTrack else C.Control).padding(horizontal = 8.dp, vertical = 3.dp)) { T("Hidden", 11, Bold, sub) }
-            T("%,d".format(count), 13, color = sub, mono = true)
+            // a hidden category may not be downloaded at all; no count beats a misleading 0
+            if (count > 0 || !hidden) T("%,d".format(count), 13, color = sub, mono = true)
         }
     }
 
