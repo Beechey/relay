@@ -1,5 +1,8 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,15 +47,19 @@ fun FocusSurface(
     onFocus: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     label: String? = null,
+    lift: Float = 1.03f,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // focus grows the item a little (cards a lot); no outlines, per the design rules
+    val scale by animateFloatAsState(if (focused) lift else 1f, tween(140), label = "lift")
     var longPressed by remember { mutableStateOf(false) }
     val bg = when { focused -> C.Text; selected -> C.Raised; else -> idle }
     // phones are touch-first: no initial focus, so nothing looks selected that the user didn't tap
     val autoFocus = focusRequester != null && !compact()
     Box(
         modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(if (autoFocus) Modifier.focusRequester(focusRequester!!) else Modifier)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus?.invoke() }
             .onPreviewKeyEvent { e ->

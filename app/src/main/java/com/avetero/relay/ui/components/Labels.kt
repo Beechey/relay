@@ -53,9 +53,10 @@ fun Badge(text: String, bg: Color = C.Control, color: Color = C.Soft, modifier: 
     Box(modifier.clip(RoundedCornerShape(6.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp)) { T(text, 12, Heavy, color) }
 
 @Composable
-fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, track: Color = C.Track, bar: Color = C.Accent, height: Dp = 3.dp) =
+fun ProgressLine(fraction: Float, modifier: Modifier = Modifier, track: Color = C.Track, bar: Color? = null, height: Dp = 3.dp) =
     Box(modifier.height(height).clip(RoundedCornerShape(height)).background(track)) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).background(bar))
+        // the live gradient unless a caller needs a flat colour (e.g. dark on the light focus fill)
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).then(if (bar != null) Modifier.background(bar) else Modifier.background(com.avetero.relay.ui.theme.LiveGradient)))
     }
 
 @Composable
