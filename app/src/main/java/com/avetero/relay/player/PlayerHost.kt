@@ -165,7 +165,7 @@ class PlayerHost(private val ctx: Context, private val store: Store) {
                 else -> f.sampleMimeType!!.removePrefix("video/").uppercase()
             }
             val size = if (f.height >= 2000) "4K " else if (f.height > 0) "${f.height}p " else ""
-            return "This device can't decode this $size$codec video. Try the HD version of the channel."
+            return "This device can't decode this $size$codec video. Try an HD version if your provider has one."
         }
         return when (e.errorCode) {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->

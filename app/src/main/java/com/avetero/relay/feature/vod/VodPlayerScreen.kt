@@ -147,7 +147,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
     }
     LaunchedEffect(showUi) { if (showUi) runCatching { playBtn.requestFocus() } }
     // Back first hides the controls; the next Back leaves the player
-    BackHandler(showUi && !app.inPip && !tracksOpen && !episodesOpen) { showUi = false; runCatching { root.requestFocus() } }
+    BackHandler(showUi && !app.inPip && !tracksOpen && !episodesOpen) { if (app.player.error != null) app.back() else { showUi = false; runCatching { root.requestFocus() } } }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -184,7 +184,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
     ) {
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom)
         app.player.castDevice?.let { CastingOverlay(it, item.title, app.player.castStatus) }
-        app.player.error?.let { PlayerError(it, { app.player.retry() }, null) }
+        app.player.error?.let { PlayerError(it, { app.player.retry() }, null, onBack = { app.back() }) }
         seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
         if (tracksOpen) TracksDialog(app) { tracksOpen = false; poke++ }
         if (episodesOpen) EpisodesDialog(episodes, item, { episodesOpen = false; playEpisode(it) }) { episodesOpen = false; poke++ }
