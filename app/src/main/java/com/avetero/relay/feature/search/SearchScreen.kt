@@ -15,9 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -31,14 +28,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.Channel
 import com.avetero.relay.data.model.Series
 import com.avetero.relay.data.model.Vod
-import com.avetero.relay.ui.components.Field
+import com.avetero.relay.ui.components.Btn
+import com.avetero.relay.ui.components.FilterField
 import com.avetero.relay.ui.components.FocusSurface
 import com.avetero.relay.ui.components.Label
 import com.avetero.relay.ui.components.Logo
@@ -57,15 +54,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Board 12: on-screen keyboard and grouped results. */
+/** Board 12: search box and grouped results. The box uses the device's own keyboard, so phone remote apps and voice work. */
 @Composable
 fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) {
     var q by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf(Triple(emptyList<Channel>(), emptyList<Series>(), emptyList<Vod>())) }
     var cats by remember { mutableStateOf(emptyList<Pair<String, Screen>>()) }
-    val firstKey = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
-    LaunchedEffect(q) {
+    val box = remember { FocusRequester() }
+    // re-runs when the library finishes loading, not only when the text changes
+    LaunchedEffect(q, app.channelsVisible, app.moviesVisible, app.seriesVisible) {
         delay(250)
         val n = norm(q.trim())
         cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
@@ -85,27 +82,16 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
     val phone = compact()
     if (!phone) Column(Modifier.width(360.dp).fillMaxHeight().background(C.Panel).padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Label("Search everything")
-        Box(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(C.Control).padding(horizontal = 18.dp), contentAlignment = Alignment.CenterStart) {
-            T(q.ifEmpty { "Type with the keys below" }, 22, Bold, if (q.isEmpty()) C.Dim else Color.White)
-        }
-        LazyVerticalGrid(GridCells.Fixed(6), Modifier.height(212.dp), userScrollEnabled = false,
-            verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".toList()) { ch ->
-                FocusSurface({ q += ch.lowercaseChar() }, Modifier.height(44.dp), idle = C.Control, shape = RoundedCornerShape(9.dp),
-                    focusRequester = if (ch == 'A') firstKey else null) { f -> T(ch.toString(), 16, Bold, fg(f), Modifier.align(Alignment.Center)) }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Space" to { q += " " }, "Delete" to { q = q.dropLast(1) }, "Clear" to { q = "" }).forEach { (label, act) ->
-                FocusSurface(act, Modifier.weight(1f).height(44.dp), idle = C.Control, shape = RoundedCornerShape(9.dp)) { f -> T(label, 14, Bold, fg(f), Modifier.align(Alignment.Center)) }
-            }
-        }
+        // opens straight into typing; Done moves down to the results
+        FilterField(q, { q = it }, "Channels, movies, series", focusRequester = box)
+        T("Type with your TV's keyboard, from the Fire TV or Google TV app on your phone, or by voice with the remote's mic button.", 13, color = C.Muted, maxLines = 4, lineHeight = 19)
+        if (q.isNotEmpty()) Btn("Clear", { q = "" }, height = 40.dp)
     }
 
     LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (phone) 16.dp else 32.dp), contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
         item { Box(Modifier.height(6.dp)) }
         // phones type with their own keyboard
-        if (phone) item { Field("Search channels, movies and series", q, { q = it }) }
+        if (phone) item { FilterField(q, { q = it }, "Search channels, movies and series") }
         val (chans, ser, mov) = results
         if (cats.isNotEmpty()) item {
             ResultRow("Categories", cats.size) {
