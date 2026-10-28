@@ -49,7 +49,7 @@ fun ConfirmDialog(
     message: String? = null, cancel: String = "Cancel", destructive: Boolean = true,
 ) = Dialog(onDismiss) {
     val cancelFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+    LaunchedEffect(Unit) { cancelFocus.settle() }
     Panel(400) {
         T(title, 20, Heavy, maxLines = 3)
         if (message != null) T(message, 14, color = C.Soft, maxLines = 4, lineHeight = 21)

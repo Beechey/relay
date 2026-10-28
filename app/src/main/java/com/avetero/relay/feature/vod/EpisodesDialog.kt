@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,7 +46,7 @@ fun EpisodesDialog(episodes: List<PlayItem>, current: PlayItem, onPick: (PlayIte
     val at = episodes.indexOf(current).coerceAtLeast(0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (at - 2).coerceAtLeast(0))
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { focus.settle() }
     Panel(520, Modifier.heightIn(max = 560.dp), padding = 20.dp, spacing = 6.dp) {
         DialogTitle("Episodes")
         // several seasons: one button each that jumps to the season's first episode

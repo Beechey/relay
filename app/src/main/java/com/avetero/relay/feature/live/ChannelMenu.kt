@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,7 +34,7 @@ fun ChannelMenu(app: AppState, c: Channel, onDismiss: () -> Unit, inPlayer: Bool
     var tracks by remember { mutableStateOf(false) }
     if (tracks) TracksDialog(app) { tracks = false; onDismiss() }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
     Panel(340) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Logo(c.icon, c.name, false, Modifier.size(44.dp, 32.dp))

@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.onboarding
 
+import com.avetero.relay.ui.components.settle
 import com.avetero.relay.ui.theme.LiveGradient
 import com.avetero.relay.ui.components.FocusSurface
 import com.avetero.relay.data.store.ALL_PARTS
@@ -67,7 +68,7 @@ fun LoginScreen(app: AppState) {
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     // start on the button: a focused text field on TV pops the on-screen keyboard over the form
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.settle() }
 
     fun submit() {
         if (server.isBlank() || user.isBlank() || pass.isBlank()) { error = "Fill in the server, username and password"; return }
