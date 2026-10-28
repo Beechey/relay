@@ -85,14 +85,42 @@ internal fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arra
             Btn("Switch to", { app.info = null; app.switchTo(other) }, height = 40.dp)
         }
     }
+    T("What Relay downloads", 19, Heavy, modifier = Modifier.padding(top = 8.dp))
     SettingsGroup {
-        ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
+        val hiddenLive = app.liveCats.count { "live:${it.id}" in app.hidden }
+        listOf(
+            Triple("live", "Live TV and guide", "%,d channels".format(app.channels.size) + if (hiddenLive > 0) " · %,d categories hidden".format(hiddenLive) else ""),
+            Triple("vod", "Movies", "%,d movies".format(app.movies.size)),
+            Triple("series", "Series", "%,d series".format(app.series.size)),
+        ).forEach { (type, label, counts) ->
+            val on = type in app.parts
+            val size = app.store.cacheFile(a, type).length() / 1_048_576.0
+            val loading = app.partLoading == type
+            val pp = app.partProgress
+            val unit = when (type) { "live" -> "channels"; "vod" -> "movies"; else -> "series" }
+            SettingRow(label, when {
+                loading && pp.reading -> "Reading… %,d %s".format(pp.count, unit)
+                loading -> if (pp.bytes > 0) "Downloading… %.1f MB".format(pp.bytes / 1_048_576f) else "Downloading…"
+                on -> counts
+                type == "live" -> "Off: Live and the Guide go away, and nothing is downloaded"
+                else -> "Off: the $label tab and its rows go away, and nothing is downloaded"
+            }, toggle = on, progress = if (loading) pp.fraction else null, extra = if (!loading && on && size > 0) (if (size < 1) "%.1f MB" else "%.0f MB").format(size) else null) { app.setPart(type, !on) }
+        }
+    }
+    SettingsGroup {
         var skip by remember { mutableStateOf(!app.store.downloadHidden) }
         SettingRow("Skip hidden categories",
             if (skip) "Hidden categories aren't downloaded. Show one again and it downloads then."
             else "Turn on to stop downloading what you've hidden: refreshing gets faster and uses less space. Applies at the next refresh.", toggle = skip) {
             skip = !skip; app.store.downloadHidden = !skip
         }
+    }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(C.Accent.copy(alpha = .08f)).padding(horizontal = 18.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        T("i", 14, Heavy, C.Accent)
+        T("Turning one off removes it now. Turning it back on downloads it straight away. At least one stays on.", 13, color = C.Soft, maxLines = 3, lineHeight = 20)
+    }
+    SettingsGroup {
+        ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
         SettingRow("Clear saved data", "Deletes the saved catalogue and guide, then downloads them again") { app.clearCacheAndReload() }
     }
 }

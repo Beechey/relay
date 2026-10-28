@@ -20,7 +20,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
-        setContent { DesignScale { App(app, onExit = ::finish) } }
+        setContent { DesignScale { androidx.compose.runtime.CompositionLocalProvider(com.avetero.relay.ui.components.LocalParts provides app.shownParts) { App(app, onExit = ::finish) } } }
     }
 
     /** Phones and tablets only: TVs keep fullscreen playback. */

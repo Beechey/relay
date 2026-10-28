@@ -67,6 +67,16 @@ class AppState(val ctx: Context) {
     var guideStatus by mutableStateOf("")
     var favourites by mutableStateOf(store.favourites(account))
     var hidden by mutableStateOf(store.hidden(account))
+    // which parts of the playlist are downloaded at all (board 11); the dock, For you and Search follow it
+    var parts by mutableStateOf(store.parts(account))
+    var partLoading by mutableStateOf<String?>(null)
+    val partProgress = StepProgress()
+    // tabs to show: parts that are on, minus any the provider has nothing in (kept while it's still loading)
+    val shownParts by derivedStateOf {
+        parts.filterTo(HashSet()) {
+            when (it) { "live" -> libraryLoading || liveCats.isNotEmpty(); "vod" -> vodLoading || vodCats.isNotEmpty(); else -> vodLoading || seriesCats.isNotEmpty() }
+        }.ifEmpty { parts }
+    }
     // what the user browses: everything except hidden categories
     val liveCatsVisible by derivedStateOf { ordered("live").filter { "live:${it.id}" !in hidden } }
     val vodCatsVisible by derivedStateOf { ordered("vod").filter { "vod:${it.id}" !in hidden } }
@@ -168,6 +178,66 @@ class AppState(val ctx: Context) {
 
     private val bg = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    private fun catsJson(c: List<Category>) = org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString()
+
+    /** The download for one part: the whole list, or with hidden categories skipped, only the kept ones. */
+    private fun kept(x: Xtream, type: String): (List<Category>, File, (Long, Long) -> Unit) -> Unit = { c, f, p ->
+        val (action, all) = when (type) {
+            "live" -> "get_live_streams" to x::downloadChannels
+            "vod" -> "get_vod_streams" to x::downloadVods
+            else -> "get_series" to x::downloadSeries
+        }
+        if (store.downloadHidden || hidden.none { it.startsWith("$type:") }) all(f, p)
+        else x.downloadCategories(action, c.map { it.id }.filter { "$type:$it" !in hidden }, f, p)
+    }
+
+    /** Board 11: off removes a part now, from memory and from disk; on downloads it in the background. One always stays on. */
+    fun setPart(type: String, on: Boolean) {
+        val a = account ?: return
+        val next = if (on) parts + type else parts - type
+        if (next.isEmpty()) { message = "Keep at least one of Live TV, Movies or Series"; return }
+        if (next == parts) return
+        parts = next; store.setParts(a, next)
+        if (on) { fetchPart(a, type); return }
+        val dir = store.cacheFile(a, type).parentFile
+        val files = when (type) { "live" -> listOf("live", "live_cats", "guide"); "vod" -> listOf("vod", "vod_cats"); else -> listOf("series", "series_cats") }
+        files.forEach { File(dir, "$it.json").delete(); File(dir, "$it.bin").delete() }
+        when (type) {
+            "live" -> { channels = emptyList(); liveCats = emptyList(); guide = emptyMap(); epg.clear() }
+            "vod" -> { movies = emptyList(); vodCats = emptyList() }
+            else -> { series = emptyList(); seriesCats = emptyList() }
+        }
+    }
+
+    private fun fetchPart(a: Account, type: String) {
+        val x = api
+        val name = when (type) { "live" -> "Live TV"; "vod" -> "Movies"; else -> "Series" }
+        partLoading = type
+        val p = partProgress.apply { fraction = -1f; bytes = 0; count = 0; reading = false }
+        bg.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val c = when (type) { "live" -> x.liveCategories(); "vod" -> x.vodCategories(); else -> x.seriesCategories() }
+                    val file = store.cacheFile(a, type)
+                    kept(x, type)(c, file, p::onBytes)
+                    store.writeCache(a, type + "_cats", catsJson(c))
+                    val bin = File(file.parentFile, "$type.bin")
+                    p.reading = true; p.fraction = 0f
+                    val n = { k: Int -> p.count = k }
+                    Counting(file.inputStream(), file.length(), p::onBytes).bufferedReader().use { r ->
+                        when (type) {
+                            "live" -> { channels = parseChannels(r, n); liveCats = c; CatalogueCache.writeChannels(bin, channels) }
+                            "vod" -> { movies = parseVods(r, n); vodCats = c; CatalogueCache.writeVods(bin, movies) }
+                            else -> { series = parseSeries(r, n); seriesCats = c; CatalogueCache.writeSeries(bin, series) }
+                        }
+                    }
+                }
+            }.onSuccess { message = "$name downloaded" }.onFailure { message = "Couldn't download $name: ${it.message}" }
+            partLoading = null
+            if (type == "live" && account == a) refreshGuide(force = true)
+        }
+    }
+
     /** With hidden categories not downloaded, a category that comes back has nothing in it yet: fetch just that one. */
     private fun fetchShown(keys: Collection<String>) {
         val a = account ?: return
@@ -226,7 +296,7 @@ class AppState(val ctx: Context) {
     }
     fun removeResume(key: String) { store.removeResume(account, key); resumes = store.resumes(account); message = "Removed from Continue watching" }
 
-    private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
+    private fun hasCache(a: Account) = store.parts(a).any { store.cacheFile(a, it).exists() }
 
     /** Live TV first so it's usable at once; movies and series follow in parallel while you watch. */
     suspend fun loadLibrary() {
@@ -234,7 +304,7 @@ class AppState(val ctx: Context) {
         if (!libraryLoading) return
         val t0 = System.currentTimeMillis()
         withContext(Dispatchers.IO) {
-            runCatching {
+            if ("live" in parts) runCatching {
                 liveCats = parseCategories(store.readCache(a, "live_cats") ?: "[]")
                 channels = cached(a, "live", CatalogueCache::readChannels, CatalogueCache::writeChannels, ::parseChannels)
             }
@@ -244,11 +314,11 @@ class AppState(val ctx: Context) {
         vodLoading = true
         withContext(Dispatchers.IO) {
             coroutineScope {
-                launch { runCatching {
+                if ("vod" in parts) launch { runCatching {
                     vodCats = parseCategories(store.readCache(a, "vod_cats") ?: "[]")
                     movies = cached(a, "vod", CatalogueCache::readVods, CatalogueCache::writeVods, ::parseVods)
                 } }
-                launch { runCatching {
+                if ("series" in parts) launch { runCatching {
                     seriesCats = parseCategories(store.readCache(a, "series_cats") ?: "[]")
                     series = cached(a, "series", CatalogueCache::readSeries, CatalogueCache::writeSeries, ::parseSeries)
                 } }
@@ -273,19 +343,17 @@ class AppState(val ctx: Context) {
         val a = account ?: return@coroutineScope
         val x = api
         syncSteps.clear()
-        syncSteps += listOf(SyncStep("Signing in"), SyncStep("Live channels", unit = "channels"), SyncStep("Movies", unit = "movies"),
-            SyncStep("Series", unit = "series"), SyncStep("TV guide", unit = "programmes"))
+        // parts that are off get no step at all; the guide lists channels, so it goes with Live TV
+        syncSteps += listOfNotNull(SyncStep("Signing in"), SyncStep("Live channels", unit = "channels").takeIf { "live" in parts },
+            SyncStep("Movies", unit = "movies").takeIf { "vod" in parts }, SyncStep("Series", unit = "series").takeIf { "series" in parts },
+            SyncStep("TV guide", unit = "programmes").takeIf { "live" in parts })
+        fun at(label: String) = syncSteps.indexOfFirst { it.label == label }
         fun set(i: Int, s: StepState, d: String = "") { syncSteps[i] = syncSteps[i].copy(state = s, detail = d) }
 
         set(0, StepState.Busy)
         info = withContext(Dispatchers.IO) { x.login() }
         set(0, StepState.Done, info?.expires?.let { "Active · expires " + fmtDate(it) } ?: "Active")
 
-        // with hidden categories skipped, ask the provider for the kept ones only
-        fun kept(type: String, action: String, all: (File, (Long, Long) -> Unit) -> Unit): (List<Category>, File, (Long, Long) -> Unit) -> Unit = { c, f, p ->
-            if (store.downloadHidden || hidden.none { it.startsWith("$type:") }) all(f, p)
-            else x.downloadCategories(action, c.map { it.id }.filter { "$type:$it" !in hidden }, f, p)
-        }
         suspend fun step(i: Int, name: String, cats: () -> List<Category>, download: (List<Category>, File, (Long, Long) -> Unit) -> Unit,
                          apply: (List<Category>, Reader, (Int) -> Unit) -> Int) {
             set(i, StepState.Busy, "Downloading…")
@@ -295,7 +363,7 @@ class AppState(val ctx: Context) {
                 val c = withContext(Dispatchers.IO) {
                     val c = cats()
                     download(c, file, p::onBytes)
-                    store.writeCache(a, name + "_cats", org.json.JSONArray(c.map { org.json.JSONObject().put("category_id", it.id).put("category_name", it.name) }).toString())
+                    store.writeCache(a, name + "_cats", catsJson(c))
                     c
                 }
                 set(i, StepState.Busy, "Reading…")
@@ -312,10 +380,10 @@ class AppState(val ctx: Context) {
                 set(i, StepState.Failed, e.message ?: "Failed")
             }
         }
-        listOf(
-            async { step(1, "live", x::liveCategories, kept("live", "get_live_streams", x::downloadChannels)) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } },
-            async { step(2, "vod", x::vodCategories, kept("vod", "get_vod_streams", x::downloadVods)) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } },
-            async { step(3, "series", x::seriesCategories, kept("series", "get_series", x::downloadSeries)) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } },
+        listOfNotNull(
+            if ("live" in parts) async { step(at("Live channels"), "live", x::liveCategories, kept(x, "live")) { c, r, n -> liveCats = c; channels = parseChannels(r, n); channels.size } } else null,
+            if ("vod" in parts) async { step(at("Movies"), "vod", x::vodCategories, kept(x, "vod")) { c, r, n -> vodCats = c; movies = parseVods(r, n); movies.size } } else null,
+            if ("series" in parts) async { step(at("Series"), "series", x::seriesCategories, kept(x, "series")) { c, r, n -> seriesCats = c; series = parseSeries(r, n); series.size } } else null,
         ).forEach { it.await() }
         // fresh compact copies, so the next start reads these instead of the JSON
         withContext(Dispatchers.IO) {
@@ -325,10 +393,13 @@ class AppState(val ctx: Context) {
             runCatching { CatalogueCache.writeSeries(File(dir, "series.bin"), series) }
         }
         // the guide maps onto channels, so it comes last
-        set(4, StepState.Busy, "Downloading…")
-        val n = refreshGuide(force = true, syncSteps[4].progress)
-        syncSteps[4].progress.fraction = 1f
-        set(4, if (n > 0) StepState.Done else StepState.Failed, if (n > 0) "%,d channels".format(n) else guideStatus)
+        val g = at("TV guide")
+        if (g >= 0) {
+            set(g, StepState.Busy, "Downloading…")
+            val n = refreshGuide(force = true, syncSteps[g].progress)
+            syncSteps[g].progress.fraction = 1f
+            set(g, if (n > 0) StepState.Done else StepState.Failed, if (n > 0) "%,d channels".format(n) else guideStatus)
+        }
     }
 
     fun programmesFor(c: Channel): List<Programme>? =
@@ -388,6 +459,7 @@ class AppState(val ctx: Context) {
         epg.clear(); epgFetched.clear(); guide = emptyMap(); guideStatus = ""
         favourites = store.favourites(a)
         hidden = store.hidden(a)
+        parts = store.parts(a)
         orders = loadOrders(a)
         reminders = store.reminders(a)
         resumes = store.resumes(a)

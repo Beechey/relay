@@ -70,7 +70,7 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun CategoriesScreen(app: AppState, initialType: String, modifier: Modifier) {
-    var type by rememberSaveable(initialType) { mutableStateOf(initialType) }
+    var type by rememberSaveable(initialType) { mutableStateOf(initialType.takeIf { it in app.parts } ?: listOf("live", "vod", "series").first { it in app.parts }) }
     var q by rememberSaveable { mutableStateOf("") }
     var exclude by rememberSaveable { mutableStateOf(false) }
     var picked by remember(type) { mutableStateOf(emptySet<String>()) }
