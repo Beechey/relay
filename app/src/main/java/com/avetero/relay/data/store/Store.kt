@@ -68,6 +68,10 @@ class Store(private val ctx: Context) {
     fun setOrder(a: Account?, type: String, ids: List<String>) = prefs.edit().putString(key(a, "order_$type"), JSONArray(ids).toString()).apply()
 
     /** Recently played ids, newest first. kind is "recent" (channels), "rmovie" or "rseries". */
+    /** Programmes to be reminded about, as "channelId|startSec|title". */
+    fun reminders(a: Account?): Set<String> = prefs.getStringSet(key(a, "reminders"), emptySet())!!.toSet()
+    fun setReminders(a: Account?, set: Set<String>) = prefs.edit().putStringSet(key(a, "reminders"), set).apply()
+
     fun recents(a: Account?, kind: String): List<Int> =
         prefs.getString(key(a, kind), "")!!.split(',').mapNotNull { it.toIntOrNull() }
 

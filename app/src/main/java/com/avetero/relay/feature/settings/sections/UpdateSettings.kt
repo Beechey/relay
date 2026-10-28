@@ -68,13 +68,13 @@ internal fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrang
                 T("Version ${r.version}", 22, Heavy)
                 ReleaseNotes(r.notes)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Btn("Download & install", { showDialog = true }, style = BtnStyle.Light, height = 46.dp)
+                    Btn("Download & install", { showDialog = true }, style = BtnStyle.Primary, height = 46.dp)
                     T("You're on ${BuildConfig.VERSION_NAME}", 13, color = C.Muted)
                 }
             }
             else -> {
                 T(status ?: "Version ${BuildConfig.VERSION_NAME}", 18, Heavy)
-                Btn("Check for updates", ::check, style = BtnStyle.Light, height = 46.dp)
+                Btn("Check for updates", ::check, style = BtnStyle.Primary, height = 46.dp)
             }
         }
     }

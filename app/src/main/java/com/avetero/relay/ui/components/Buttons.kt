@@ -30,14 +30,14 @@ import com.avetero.relay.ui.theme.T
 internal fun PanelBtn(text: String, icon: ImageVector?, onClick: () -> Unit, key: String? = null, style: BtnStyle = BtnStyle.Secondary,
                      quiet: Boolean = false, danger: Boolean = false, enabled: Boolean = true, focusRequester: FocusRequester? = null) =
     FocusSurface({ if (enabled) onClick() }, Modifier.fillMaxWidth().height(if (quiet) 38.dp else 44.dp),
-        idle = when { quiet -> Color.Transparent; !enabled -> C.Panel; style == BtnStyle.Primary -> C.Accent; style == BtnStyle.Light -> C.Text; else -> C.Control },
+        idle = when { quiet -> Color.Transparent; !enabled -> C.Panel; style == BtnStyle.Primary -> C.Accent; else -> C.Control },
         shape = RoundedCornerShape(10.dp), focusRequester = focusRequester) { f ->
         val color = when {
             f -> C.OnLight
             !enabled -> C.Dim
             danger -> C.Error
             quiet -> C.Muted
-            style == BtnStyle.Primary || style == BtnStyle.Light -> C.OnLight
+            style == BtnStyle.Primary -> C.OnLight
             else -> C.Text
         }
         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -47,7 +47,8 @@ internal fun PanelBtn(text: String, icon: ImageVector?, onClick: () -> Unit, key
         }
     }
 
-enum class BtnStyle { Primary, Secondary, Destructive, Light }
+/** Primary (amber) is the main action; white is reserved for focus. */
+enum class BtnStyle { Primary, Secondary, Destructive }
 
 @Composable
 fun Btn(
@@ -55,12 +56,12 @@ fun Btn(
     icon: ImageVector? = null, height: Dp = 48.dp, focusRequester: FocusRequester? = null, enabled: Boolean = true,
 ) = FocusSurface(
     onClick = { if (enabled) onClick() }, modifier = modifier.height(height), focusRequester = focusRequester, shape = RoundedCornerShape(percent = 50), lift = 1.05f,
-    idle = when { !enabled -> C.Surface; style == BtnStyle.Primary -> C.Accent; style == BtnStyle.Light -> C.Text; else -> C.Control },
+    idle = when { !enabled -> C.Surface; style == BtnStyle.Primary -> C.Accent; else -> C.Control },
 ) { f ->
     val color = when {
         f -> C.OnLight
         !enabled -> C.Dim
-        style == BtnStyle.Primary || style == BtnStyle.Light -> C.OnLight
+        style == BtnStyle.Primary -> C.OnLight
         style == BtnStyle.Destructive -> C.Error
         else -> C.Text
     }

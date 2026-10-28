@@ -85,4 +85,11 @@ class XtreamTest {
         Counting(bytes.inputStream(), bytes.size.toLong()) { read, total -> last = read; assertEquals(bytes.size.toLong(), total) }.readBytes()
         assertTrue(last >= 512 * 1024)
     }
+
+    @Test fun catchupUrlUsesProviderTimeZone() {
+        val x = Xtream(Account("p", "http://host:8080", "u", "p w"))
+        val start = 1793215800L // 2026-10-28 19:30 UTC
+        assertEquals("http://host:8080/timeshift/u/p%20w/30/2026-10-28:19-30/7.ts", x.catchupUrl(Channel(7, 1, "C", "1"), start, 30, "UTC"))
+        assertTrue(x.catchupUrl(Channel(7, 1, "C", "1"), start, 30, "Europe/Berlin").contains("/2026-10-28:20-30/"))
+    }
 }

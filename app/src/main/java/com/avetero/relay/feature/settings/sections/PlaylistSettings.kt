@@ -67,7 +67,7 @@ internal fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arra
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { row.forEach { (l, v) -> Stat(l, v, Modifier.weight(1f)) } }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Btn("Refresh now", { app.go(Screen.Sync) }, style = BtnStyle.Light, height = 42.dp)
+            Btn("Refresh now", { app.go(Screen.Sync) }, style = BtnStyle.Primary, height = 42.dp)
             Btn("Delete", { app.remove(a) }, style = BtnStyle.Destructive, height = 42.dp)
         }
     }

@@ -69,6 +69,6 @@ fun EpisodesDialog(episodes: List<PlayItem>, current: PlayItem, onPick: (PlayIte
                 OptionRow(e.title, i == at, { if (i == at) onDismiss() else onPick(e) }, trailing = if (i == at) "Playing" else null, focusRequester = if (i == at) focus else null)
             }
         }
-        Btn("Close", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
+        Btn("Close", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Primary, height = 44.dp)
     }
 }

@@ -37,7 +37,7 @@ fun PlayerError(err: String, onRetry: () -> Unit, onSwitch: (() -> Unit)?, hls: 
             T("This isn't playing", 20, Heavy)
             T(err, 14, color = C.Soft, maxLines = 4, lineHeight = 21)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Btn("Retry", onRetry, style = BtnStyle.Light, height = 44.dp, focusRequester = first)
+                Btn("Retry", onRetry, style = BtnStyle.Primary, height = 44.dp, focusRequester = first)
                 if (onSwitch != null) Btn(if (hls) "Try MPEG-TS" else "Try HLS", onSwitch, height = 44.dp)
             }
         }
