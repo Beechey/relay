@@ -23,6 +23,7 @@ import com.avetero.relay.BuildConfig
 import com.avetero.relay.app.AppState
 import com.avetero.relay.data.update.Updater
 import com.avetero.relay.feature.settings.SettingRow
+import com.avetero.relay.feature.settings.SettingsGroup
 import com.avetero.relay.feature.settings.Title
 import com.avetero.relay.feature.update.ReleaseNotes
 import com.avetero.relay.feature.update.UpdateDialog
@@ -53,8 +54,8 @@ internal fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrang
             } catch (e: Exception) { "Couldn't reach GitHub: ${e.message}" }
         }
     }
-    Title("Updates & about")
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Title("About and updates")
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(C.Glass).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         val r = app.update
         when {
             !Updater.enabled -> {
@@ -78,8 +79,10 @@ internal fun UpdateSettings(app: AppState) = Column(verticalArrangement = Arrang
             }
         }
     }
-    SettingRow("Check for updates automatically", "Checks GitHub releases when the app starts", toggle = s.checkUpdates) { s.checkUpdates = !s.checkUpdates; tick++ }
-    SettingRow("Include beta releases", "Get pre-release builds before everyone else", toggle = s.betaUpdates) { s.betaUpdates = !s.betaUpdates; tick++ }
-    SettingRow("Update source", value = if (Updater.enabled) "github.com/${Updater.repo}" else "Not configured") {}
+    SettingsGroup {
+        SettingRow("Check for updates automatically", "Checks GitHub releases when the app starts", toggle = s.checkUpdates) { s.checkUpdates = !s.checkUpdates; tick++ }
+        SettingRow("Include beta releases", "Get pre-release builds before everyone else", toggle = s.betaUpdates) { s.betaUpdates = !s.betaUpdates; tick++ }
+        SettingRow("Update source", value = if (Updater.enabled) "github.com/${Updater.repo}" else "Not configured") {}
+    }
     app.update?.let { if (showDialog) UpdateDialog(app, it) { showDialog = false } }
 }
