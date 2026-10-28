@@ -25,6 +25,7 @@ import com.avetero.relay.feature.guide.GuideScreen
 import com.avetero.relay.feature.home.HomeScreen
 import com.avetero.relay.feature.live.LivePlayerScreen
 import com.avetero.relay.feature.live.LiveScreen
+import com.avetero.relay.feature.live.LiveTvScreen
 import com.avetero.relay.feature.onboarding.LoginScreen
 import com.avetero.relay.feature.onboarding.SyncScreen
 import com.avetero.relay.feature.search.SearchScreen
@@ -99,7 +100,7 @@ fun App(app: AppState, onExit: () -> Unit) {
             Screen.Login -> LoginScreen(app)
             Screen.Sync -> SyncScreen(app)
             Screen.Home -> HomeScreen(app, nav)
-            is Screen.Live -> LiveScreen(app, nav, s.group)
+            is Screen.Live -> if (compact) LiveScreen(app, nav, s.group) else LiveTvScreen(app, s.group)
             Screen.Guide -> GuideScreen(app, nav)
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
             is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
