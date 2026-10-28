@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -139,7 +140,7 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
                 }
             }
             item(key = "pills") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = side, vertical = 4.dp)) {
+                LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = side, vertical = 4.dp)) {
                     item { PillBtn("For you", true, {}) }
                     items(pills, key = { it.id }) { c -> PillBtn(c.name, false, { onCategory(c.id) }) }
                     item { PillBtn("All ${"%,d".format(cats.size)} categories", false, { drawer = true }) }
@@ -152,7 +153,7 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
                 item(key = "shelf:${shelf.title}:$si") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         T(shelf.title, 19, Heavy, modifier = Modifier.padding(start = side))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
+                        LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = side, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
                             items(shelf.tiles, key = { it.id }) { t ->
                                 val w = if (phone) 108.dp else 134.dp
                                 FocusSurface({ open(t) }, Modifier.size(w, w * 1.5f), shape = RoundedCornerShape(16.dp), lift = 1.08f,

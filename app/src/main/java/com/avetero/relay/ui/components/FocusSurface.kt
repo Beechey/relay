@@ -1,5 +1,7 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
@@ -84,3 +86,9 @@ fun FocusSurface(
  * request is silently dropped. Keep asking for half a second.
  */
 suspend fun FocusRequester.settle() = repeat(10) { runCatching { requestFocus() }; kotlinx.coroutines.delay(50) }
+
+/** For sideways rows: Right on the last item stays put, instead of jumping to whatever is nearest (often the top bar). */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+fun Modifier.stopAtEnd() = focusProperties {
+    exit = { if (it == androidx.compose.ui.focus.FocusDirection.Right) FocusRequester.Cancel else FocusRequester.Default }
+}.focusGroup()

@@ -53,8 +53,16 @@ class MainActivity : FragmentActivity() {
     // Home, swipe-home or recent apps while a video is playing: shrink it to a floating window.
     // Also on Android 12+, where auto-enter can be skipped (e.g. fullscreen with the bars hidden).
     // a screen can take the remote over wholesale (Category order's move mode), whatever has focus
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        (::app.isInitialized && app.keyOverride?.invoke(event) == true) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!::app.isInitialized) return super.dispatchKeyEvent(event)
+        // the remote's Guide button opens the guide from anywhere once a playlist is loaded
+        if (event.keyCode == KeyEvent.KEYCODE_GUIDE && app.account != null && "live" in app.parts &&
+            app.screen != com.avetero.relay.app.Screen.Login && app.screen != com.avetero.relay.app.Screen.Sync) {
+            if (event.action == KeyEvent.ACTION_UP && app.screen != com.avetero.relay.app.Screen.Guide) app.go(com.avetero.relay.app.Screen.Guide)
+            return true
+        }
+        return app.keyOverride?.invoke(event) == true || super.dispatchKeyEvent(event)
+    }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()

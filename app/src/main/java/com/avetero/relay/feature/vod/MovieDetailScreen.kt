@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.components.stopAtEnd
 import com.avetero.relay.ui.components.settle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -125,7 +126,7 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
         }
         if (more.isNotEmpty()) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             T("More like this", 19, Heavy, modifier = Modifier.padding(start = 64.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = 64.dp, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
+            LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = 64.dp, end = 40.dp, top = 8.dp, bottom = 8.dp)) {
                 items(more, key = { it.id }) { m ->
                     FocusSurface({ app.stack[app.stack.lastIndex] = Screen.MovieDetail(m) }, Modifier.size(120.dp, 180.dp), shape = RoundedCornerShape(16.dp), lift = 1.08f) { _ ->
                         Art(m.icon, m.name, m.id, Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)))

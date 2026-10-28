@@ -1,5 +1,10 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.ExperimentalComposeUiApi
 import com.avetero.relay.data.store.ALL_PARTS
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.focus.onFocusChanged
@@ -85,24 +90,29 @@ fun BottomBar(active: Tab, onSelect: (Tab) -> Unit) {
 }
 
 /** TV: the floating glass bar along the top. The current place gets a raised pill; focus takes the light fill. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun Dock(active: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) =
-    Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusRestorer(),
+fun Dock(active: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier, page: FocusRequester? = null) {
+    // Up into the bar lands on the place you're in; Down from any tab goes back into the page
+    val here = remember { FocusRequester() }
+    val down = Modifier.focusProperties { if (page != null) this.down = page }
+    Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusProperties { enter = { here } }.focusGroup(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         LogoMark(30.dp, Modifier.padding(horizontal = 8.dp))
         val parts = LocalParts.current
         dockTabs.filter { it.shownWith(parts) }.forEach { t ->
-            FocusSurface({ onSelect(t) }, Modifier.height(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.06f) { f ->
+            FocusSurface({ onSelect(t) }, down.height(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.06f, focusRequester = if (t == active) here else null) { f ->
                 T(t.label, 15, Bold, when { f -> C.OnLight; t == active -> C.Text; else -> C.Soft }, Modifier.align(Alignment.Center).padding(horizontal = 18.dp))
             }
         }
         Spacer(Modifier.width(6.dp))
         dockTools.forEach { t ->
-            FocusSurface({ onSelect(t) }, Modifier.size(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.08f) { f ->
+            FocusSurface({ onSelect(t) }, down.size(44.dp), selected = t == active, shape = RoundedCornerShape(22.dp), label = t.label, lift = 1.08f, focusRequester = if (t == active) here else null) { f ->
                 Ico(t.icon, when { f -> C.OnLight; t == active -> C.Accent; else -> C.Soft }, 20.dp, Modifier.align(Alignment.Center))
             }
         }
     }
+}
 
 /** Height the TV top bar takes, for screens that don't put artwork behind it. */
 val DockSpace = 96.dp
@@ -112,7 +122,7 @@ val DockSpace = 96.dp
  * screen run artwork up behind the bar). Phones: content above the floating bottom bar.
  */
 @Composable
-fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, dockHidden: Boolean = false, content: @Composable RowScope.() -> Unit) =
+fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, dockHidden: Boolean = false, pageEntry: FocusRequester? = null, content: @Composable RowScope.() -> Unit) =
     if (compact()) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding()) {
         Row(Modifier.weight(1f).fillMaxWidth(), content = content)
         BottomBar(active, onSelect)
@@ -121,5 +131,5 @@ fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, 
         // a screen scrolled past its hero fades the bar out; moving focus up into it brings it straight back
         var dockFocused by remember { mutableStateOf(false) }
         val alpha by animateFloatAsState(if (dockHidden && !dockFocused) 0f else 1f, tween(220), label = "dock")
-        Dock(active, onSelect, Modifier.align(Alignment.TopCenter).padding(top = 22.dp).graphicsLayer { this.alpha = alpha }.onFocusChanged { dockFocused = it.hasFocus })
+        Dock(active, onSelect, Modifier.align(Alignment.TopCenter).padding(top = 22.dp).graphicsLayer { this.alpha = alpha }.onFocusChanged { dockFocused = it.hasFocus }, page = pageEntry)
     }

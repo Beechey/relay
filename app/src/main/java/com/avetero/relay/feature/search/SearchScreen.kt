@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.search
 
+import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -133,7 +134,7 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
             }
         }
         if (n.length >= 2 && (chans.size + ser.size + mov.size) > 0) item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+            LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 listOf("all" to "All · ${chans.size + ser.size + mov.size}", "live" to "Live · ${chans.size}", "movies" to "Movies · ${mov.size}", "series" to "Series · ${ser.size}")
                     .filter { (k, label) -> k == "all" || !label.endsWith(" 0") }
                     .forEach { (k, label) -> item(key = k) { PillBtn(label, filter == k, { filter = k }) } }
@@ -212,5 +213,5 @@ private fun TopResult(app: AppState, top: Any, chans: List<Channel>, open: (() -
 private fun ResultRow(title: String, count: Int, content: LazyListScope.() -> Unit) =
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { T(title, 19, Heavy); T("  $count", 15, Semi, C.Dim) }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp), content = content)
+        LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp), content = content)
     }
