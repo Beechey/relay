@@ -46,6 +46,7 @@ import com.avetero.relay.ui.components.EmptyState
 import com.avetero.relay.ui.components.FocusSurface
 import com.avetero.relay.ui.components.Group
 import com.avetero.relay.ui.components.Pill
+import com.avetero.relay.ui.components.PillBtn
 import com.avetero.relay.ui.components.SegmentedTabs
 import com.avetero.relay.ui.theme.Bold
 import com.avetero.relay.ui.theme.C
@@ -139,9 +140,9 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
             }
             item(key = "pills") {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = side, vertical = 4.dp)) {
-                    item { BrowsePill("For you", true) {} }
-                    items(pills, key = { it.id }) { c -> BrowsePill(c.name, false) { onCategory(c.id) } }
-                    item { BrowsePill("All ${"%,d".format(cats.size)} categories", false) { drawer = true } }
+                    item { PillBtn("For you", true, {}) }
+                    items(pills, key = { it.id }) { c -> PillBtn(c.name, false, { onCategory(c.id) }) }
+                    item { PillBtn("All ${"%,d".format(cats.size)} categories", false, { drawer = true }) }
                 }
             }
             if (shelves.isEmpty()) item(key = "empty") {
@@ -168,9 +169,3 @@ internal fun RowScope.BrowseRows(app: AppState, series: Boolean, state: LazyList
     }
     if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, "", { onCategory(it) }) { drawer = false }
 }
-
-@Composable
-private fun BrowsePill(text: String, on: Boolean, onClick: () -> Unit) =
-    FocusSurface(onClick, Modifier.height(36.dp), selected = on, idle = C.Glass2, shape = RoundedCornerShape(18.dp), lift = 1.06f) { f ->
-        T(text, 13, Bold, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
-    }

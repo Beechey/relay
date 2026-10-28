@@ -99,3 +99,10 @@ fun <K> SegmentedTabs(options: List<Pair<K, String>>, selected: K, onSelect: (K)
             }
         }
     }
+
+/** A focusable pill (category jumps, search filters, recent searches). */
+@Composable
+fun PillBtn(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) =
+    FocusSurface(onClick, modifier.height(36.dp), selected = on, idle = C.Glass2, shape = RoundedCornerShape(18.dp), lift = 1.06f, focusRequester = focusRequester) { f ->
+        T(text, 13, Bold, if (f) C.OnLight else if (on) C.Text else C.Soft, Modifier.align(Alignment.Center).padding(horizontal = 16.dp))
+    }
