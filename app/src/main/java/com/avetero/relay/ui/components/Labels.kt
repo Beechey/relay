@@ -1,5 +1,6 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,3 +83,19 @@ fun Clock(size: Int = 13, color: Color = C.Text) {
     LaunchedEffect(Unit) { while (true) { delay(15_000); now = System.currentTimeMillis() / 1000 } }
     T(fmtTime(now), size, color = color, mono = true)
 }
+
+/** A small rounded label on artwork or glass: facts (year, rating), filters, "Continue watching". */
+@Composable
+fun Pill(text: String, modifier: Modifier = Modifier, bg: Color = C.Glass2, color: Color = C.Soft) =
+    Box(modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).background(bg).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        T(text, 12, Bold, color)
+    }
+
+/** Red LIVE marker for anything playing now. */
+@Composable
+fun LivePill(modifier: Modifier = Modifier) =
+    Row(modifier.height(22.dp).clip(RoundedCornerShape(11.dp)).background(C.Live).padding(horizontal = 9.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+        T("LIVE", 11, Heavy, Color.White)
+    }
