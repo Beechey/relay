@@ -1,5 +1,13 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
@@ -90,11 +98,14 @@ val DockSpace = 96.dp
  * screen run artwork up behind the bar). Phones: content above the floating bottom bar.
  */
 @Composable
-fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, content: @Composable RowScope.() -> Unit) =
+fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, dockHidden: Boolean = false, content: @Composable RowScope.() -> Unit) =
     if (compact()) Column(Modifier.fillMaxSize().background(C.Ground).statusBarsPadding()) {
         Row(Modifier.weight(1f).fillMaxWidth(), content = content)
         BottomBar(active, onSelect)
     } else Box(Modifier.fillMaxSize().background(C.Ground)) {
         Row(Modifier.fillMaxSize().padding(top = if (behindDock) 0.dp else DockSpace), content = content)
-        Dock(active, onSelect, Modifier.align(Alignment.TopCenter).padding(top = 22.dp))
+        // a screen scrolled past its hero fades the bar out; moving focus up into it brings it straight back
+        var dockFocused by remember { mutableStateOf(false) }
+        val alpha by animateFloatAsState(if (dockHidden && !dockFocused) 0f else 1f, tween(220), label = "dock")
+        Dock(active, onSelect, Modifier.align(Alignment.TopCenter).padding(top = 22.dp).graphicsLayer { this.alpha = alpha }.onFocusChanged { dockFocused = it.hasFocus })
     }

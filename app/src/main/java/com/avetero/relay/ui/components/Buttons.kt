@@ -54,7 +54,7 @@ fun Btn(
     text: String, onClick: () -> Unit, modifier: Modifier = Modifier, style: BtnStyle = BtnStyle.Secondary,
     icon: ImageVector? = null, height: Dp = 48.dp, focusRequester: FocusRequester? = null, enabled: Boolean = true,
 ) = FocusSurface(
-    onClick = { if (enabled) onClick() }, modifier = modifier.height(height), focusRequester = focusRequester,
+    onClick = { if (enabled) onClick() }, modifier = modifier.height(height), focusRequester = focusRequester, shape = RoundedCornerShape(percent = 50), lift = 1.05f,
     idle = when { !enabled -> C.Surface; style == BtnStyle.Primary -> C.Accent; style == BtnStyle.Light -> C.Text; else -> C.Control },
 ) { f ->
     val color = when {
