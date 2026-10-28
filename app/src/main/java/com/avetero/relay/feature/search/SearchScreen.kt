@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.search
 
+import androidx.compose.ui.focus.focusProperties
 import com.avetero.relay.ui.components.stopAtEnd
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +75,9 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) {
-    var q by rememberSaveable { mutableStateOf("") }
+    var q by app::searchQuery
+    // Right from the search box goes into the results, not up to the bar
+    val resultsFocus = remember { FocusRequester() }
     var results by remember { mutableStateOf(Triple(emptyList<Channel>(), emptyList<Series>(), emptyList<Vod>())) }
     var cats by remember { mutableStateOf(emptyList<Pair<String, Screen>>()) }
     var filter by rememberSaveable { mutableStateOf("all") }
@@ -109,7 +112,8 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
     val phone = compact()
     if (!phone) Column(Modifier.padding(start = 40.dp, bottom = 32.dp).width(360.dp).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(C.Glass).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // opens straight into typing; Done moves down to the results
-        FilterField(q, { q = it }, "Channels, movies, series", focusRequester = box)
+        val hasResults = results.first.size + results.second.size + results.third.size > 0
+        FilterField(q, { q = it }, "Channels, movies, series", Modifier.focusProperties { if (hasResults) right = resultsFocus }, focusRequester = box)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .05f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T("Type the way you like", 15, Heavy)
             T("Press OK for your TV's own keyboard, type from the Fire TV or Google TV app on your phone, or hold the remote's mic button and say it.", 13, Semi, C.Muted, maxLines = 5, lineHeight = 20)
@@ -137,7 +141,7 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
             LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 listOf("all" to "All · ${chans.size + ser.size + mov.size}", "live" to "Live · ${chans.size}", "movies" to "Movies · ${mov.size}", "series" to "Series · ${ser.size}")
                     .filter { (k, label) -> k == "all" || !label.endsWith(" 0") }
-                    .forEach { (k, label) -> item(key = k) { PillBtn(label, filter == k, { filter = k }) } }
+                    .forEach { (k, label) -> item(key = k) { PillBtn(label, filter == k, { filter = k }, focusRequester = if (k == "all") resultsFocus else null) } }
             }
         }
         if (n.length >= 2 && filter == "all" && top != null) item(key = "top") { TopResult(app, top, chans) { open(it) } }

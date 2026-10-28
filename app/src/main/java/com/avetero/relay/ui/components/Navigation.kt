@@ -1,5 +1,6 @@
 package com.avetero.relay.ui.components
 
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -93,10 +94,10 @@ fun BottomBar(active: Tab, onSelect: (Tab) -> Unit) {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun Dock(active: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier, page: FocusRequester? = null) {
-    // Up into the bar lands on the place you're in; Down from any tab goes back into the page
+    // Up into the bar lands on the place you're in, and only Up gets you there (Right at the end of a row never jumps up to it)
     val here = remember { FocusRequester() }
     val down = Modifier.focusProperties { if (page != null) this.down = page }
-    Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusProperties { enter = { here } }.focusGroup(),
+    Row(modifier.height(56.dp).clip(RoundedCornerShape(28.dp)).background(C.Glass).padding(6.dp).focusProperties { enter = { if (it == FocusDirection.Up) here else FocusRequester.Cancel } }.focusGroup(),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         LogoMark(30.dp, Modifier.padding(horizontal = 8.dp))
         val parts = LocalParts.current

@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.ui.components.BtnStyle
+import com.avetero.relay.util.nowSec
 import com.avetero.relay.ui.theme.Semi
 import androidx.compose.ui.graphics.Brush
 import com.avetero.relay.ui.components.Pill
@@ -96,14 +98,21 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     var group by remember { mutableStateOf(startGroup) }
     var digits by remember { mutableStateOf("") }
     var previous by remember { mutableStateOf<Channel?>(null) }
+    // live pause: when it was paused, and how far behind live the picture is (catch-up channels can be watched behind)
+    var pausedAt by remember { mutableStateOf<Long?>(null) }
+    var behind by remember { mutableStateOf(0L) }
+    var clock by remember { mutableStateOf(nowSec()) }
+    LaunchedEffect(pausedAt) { while (pausedAt != null) { clock = nowSec(); delay(1_000) } }
 
     LaunchedEffect(c.id) {
         delay(400) // debounce fast zapping
+        pausedAt = null; behind = 0
         app.player.play(app.liveUrl(c), title = c.name)
         app.addRecentChannel(c.id)
         app.loadEpg(c)
     }
-    LaunchedEffect(poke) { showInfo = true; delay(5_000); showInfo = false }
+    // the info bar stays up while paused
+    LaunchedEffect(poke, pausedAt) { showInfo = true; if (pausedAt == null) { delay(5_000); showInfo = false } }
     LaunchedEffect(Unit) { focus.settle() }
 
     fun go(to: Channel, inList: List<Channel> = list) {
@@ -111,6 +120,20 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         list = inList; index = inList.indexOfFirst { it.id == to.id }.coerceAtLeast(0); poke++
     }
     fun zap(d: Int) { if (list.isNotEmpty()) { previous = c; index = Math.floorMod(index + d, list.size); poke++ } }
+    fun pause() { if (pausedAt == null) { app.player.current.pause(); pausedAt = nowSec(); poke++ } }
+    fun resume() {
+        val at = pausedAt ?: return
+        val gone = nowSec() - at
+        pausedAt = null; poke++
+        when {
+            // a short pause plays on from what's buffered
+            gone < 30 -> { app.player.current.play(); behind += gone }
+            // longer: catch-up channels pick up from the archive at the moment you paused
+            c.archive -> { behind += gone; app.player.play(app.catchupFrom(c, nowSec() - behind), title = c.name) }
+            else -> { behind = 0; app.player.play(app.liveUrl(c), title = c.name); app.message = "This channel can't rewind, so you're back at live" }
+        }
+    }
+    fun goLive() { pausedAt = null; behind = 0; app.player.play(app.liveUrl(c), title = c.name); poke++ }
     fun closeList() { listOpen = false; runCatching { focus.requestFocus() } }
     // Back closes the channel list, then the info bar; the next Back leaves the player
     // Back closes the channel list; otherwise it leaves Live (the info bar hides by itself, it doesn't need a press)
@@ -151,6 +174,10 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                         true
                     }
                     e.key == Key.Menu -> { menu = true; true }
+                    e.key == Key.MediaPlayPause -> { if (pausedAt != null) resume() else pause(); true }
+                    e.key == Key.MediaPause -> { pause(); true }
+                    e.key == Key.MediaPlay -> { resume(); true }
+                    (e.key == Key.MediaFastForward || e.key == Key.DirectionRight) && behind > 0 && pausedAt == null -> { goLive(); true }
                     else -> false
                 }
             }
@@ -172,6 +199,8 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         AnimatedVisibility(!tv && showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
+                IconBtn(if (pausedAt != null) Icons.Play else Icons.Pause, if (pausedAt != null) "Play" else "Pause", { if (pausedAt != null) resume() else pause() }, size = 48.dp)
+                if (behind > 0 && pausedAt == null) Btn("Go live", { goLive() }, style = BtnStyle.Primary, height = 48.dp)
                 IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute(); poke++ }, size = 48.dp)
                 // phones: keep watching in a small floating window
                 if (compact()) {
@@ -193,7 +222,12 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
             // board 02: LIVE and the channel, the programme large, its times either side of the progress, then the keys
             if (tv) Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(horizontal = 22.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LivePill()
+                    val away = pausedAt?.let { clock - it }
+                    when {
+                        away != null -> Pill("Paused · %d:%02d".format(away / 60, away % 60), bg = C.Accent, color = C.OnLight)
+                        behind > 0 -> Pill("${(behind / 60).coerceAtLeast(1)} min behind", bg = C.Accent, color = C.OnLight)
+                        else -> LivePill()
+                    }
                     T(listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name).joinToString(" · "), 13, Semi, C.Muted, Modifier.weight(1f))
                     if (app.isFav("c${c.id}")) Pill("★ Favourite")
                     if (c.archive) Pill("Catch-up")
@@ -205,7 +239,9 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                     T(fmtTime(now.end), 12, Semi, C.Muted, mono = true)
                 } else T("No guide for this channel", 13, Semi, C.Muted)
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    KeyHint("◀", "Channels"); KeyHint("▲▼", "Zap"); KeyHint("0–9", "Go to number"); KeyHint("Hold OK", "Favourite, audio, previous")
+                    KeyHint("◀", "Channels"); KeyHint("▲▼", "Zap")
+                    if (behind > 0 && pausedAt == null) KeyHint("▶ / ⏩", "Go live") else KeyHint("⏯", if (pausedAt != null) "Play" else "Pause")
+                    KeyHint("0–9", "Go to number"); KeyHint("Hold OK", "Favourite, audio, previous")
                 }
             } else
             Column(Modifier.fillMaxWidth().then(if (tv) Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass) else Modifier.background(C.Ground)).navigationBarsPadding().padding(start = pad, end = pad, top = if (compact()) 16.dp else 28.dp, bottom = if (compact()) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (compact()) 12.dp else 18.dp)) {

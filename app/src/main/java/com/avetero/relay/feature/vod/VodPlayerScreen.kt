@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.vod
 
+import androidx.compose.ui.unit.coerceIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -145,7 +148,17 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         showUi = true
         if (app.player.playing) { delay(5_000); showUi = false; runCatching { root.requestFocus() } }
     }
-    LaunchedEffect(showUi) { if (showUi) runCatching { playBtn.requestFocus() } }
+    // scrubbing: Left/Right (or dragging the bar) move a preview point; the video seeks once, when it settles
+    var preview by remember { mutableStateOf<Long?>(null) }
+    val scrubFocus = remember { FocusRequester() }
+    LaunchedEffect(preview) { val to = preview ?: return@LaunchedEffect; delay(900); p.seekTo(to); preview = null }
+    fun nudge(forward: Boolean, repeat: Int) {
+        // the longer a key is held, the bigger each step, up to 5 minutes
+        val step = ((if (forward) fwd else back) * (1 + repeat / 4)).coerceAtMost(300_000L)
+        preview = ((preview ?: p.currentPosition) + if (forward) step else -step).coerceIn(0, dur.coerceAtLeast(0))
+        poke++
+    }
+    LaunchedEffect(showUi) { if (showUi) runCatching { (if (preview != null) scrubFocus else playBtn).requestFocus() } }
     // Back first hides the controls; the next Back leaves the player
     BackHandler(showUi && !app.inPip && !tracksOpen && !episodesOpen) { if (app.player.error != null) app.back() else { showUi = false; runCatching { root.requestFocus() } } }
 
@@ -156,8 +169,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || showUi) return@onKeyEvent false
                 when (e.key) {
-                    Key.DirectionLeft, Key.MediaRewind -> { p.seekTo((p.currentPosition - back).coerceAtLeast(0)); poke++; true }
-                    Key.DirectionRight, Key.MediaFastForward -> { p.seekTo(p.currentPosition + fwd); poke++; true }
+                    Key.DirectionLeft, Key.MediaRewind -> { nudge(false, e.nativeKeyEvent.repeatCount); true }
+                    Key.DirectionRight, Key.MediaFastForward -> { nudge(true, e.nativeKeyEvent.repeatCount); true }
                     Key.MediaPlayPause -> { if (p.isPlaying) p.pause() else p.play(); poke++; true }
                     Key.DirectionCenter, Key.Enter, Key.DirectionUp, Key.DirectionDown -> { poke++; true }
                     else -> false
@@ -222,15 +235,9 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 .padding(start = pad, end = pad, top = 90.dp, bottom = if (compact()) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     T(fmtDur(pos), 14, Bold, mono = true)
-                    val played = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
-                    BoxWithConstraints(Modifier.weight(1f).height(18.dp), contentAlignment = Alignment.CenterStart) {
-                        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color.White.copy(alpha = .2f))) {
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (p.bufferedPosition.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color.White.copy(alpha = .18f)))
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(played).background(LiveGradient))
-                        }
-                        Box(Modifier.offset(x = maxWidth * played - 9.dp).size(18.dp).clip(CircleShape).background(C.Text))
-                    }
-                    T("−" + fmtDur((dur - pos).coerceAtLeast(0)), 14, Bold, mono = true)
+                    ScrubBar(pos, dur, p.bufferedPosition, preview, { preview = it; poke++ }, { p.seekTo(it); preview = null }, nudge = ::nudge, focus = scrubFocus,
+                        modifier = Modifier.weight(1f).focusProperties { down = playBtn })
+                    T("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), 14, Bold, mono = true)
                 }
                 val phone = compact()
                 val transport: @Composable () -> Unit = {
@@ -282,3 +289,46 @@ private fun SkipBtn(text: String, label: String, onClick: () -> Unit, modifier: 
     FocusSurface(onClick, modifier.size(52.dp), idle = C.Glass3, shape = CircleShape, label = label) { f ->
         T(text, 14, Heavy, if (f) C.OnLight else C.Text, Modifier.align(Alignment.Center))
     }
+
+/**
+ * Board 06 scrub bar. Remote: focus it, then Left/Right move a preview point (faster the longer you hold), OK jumps
+ * there now, Back cancels. Touch: drag along it or tap a point. The target time shows above the knob.
+ */
+@Composable
+private fun ScrubBar(pos: Long, dur: Long, buffered: Long, preview: Long?, setPreview: (Long?) -> Unit, seek: (Long) -> Unit,
+                     nudge: (Boolean, Int) -> Unit, focus: FocusRequester, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
+    val shown = preview ?: pos
+    val frac = if (dur > 0) (shown.toFloat() / dur).coerceIn(0f, 1f) else 0f
+    BoxWithConstraints(
+        modifier.height(40.dp).focusRequester(focus).onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { e ->
+                when {
+                    e.key == Key.DirectionLeft || e.key == Key.DirectionRight -> { if (e.type == KeyEventType.KeyDown) nudge(e.key == Key.DirectionRight, e.nativeKeyEvent.repeatCount); true }
+                    (e.key == Key.DirectionCenter || e.key == Key.Enter) && preview != null -> { if (e.type == KeyEventType.KeyUp) seek(preview); true }
+                    e.key == Key.Back && preview != null -> { if (e.type == KeyEventType.KeyUp) setPreview(null); true }
+                    else -> false
+                }
+            }
+            .focusable()
+            .pointerInput(dur) { detectTapGestures { o -> if (dur > 0) seek((o.x / size.width * dur).toLong().coerceIn(0, dur)) } }
+            .pointerInput(dur) {
+                detectHorizontalDragGestures(onDragEnd = { preview?.let(seek) }, onDragCancel = { setPreview(null) }) { ch, _ ->
+                    if (dur > 0) setPreview((ch.position.x / size.width * dur).toLong().coerceIn(0, dur))
+                }
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val active = focused || preview != null
+        Box(Modifier.fillMaxWidth().height(if (active) 8.dp else 6.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = .2f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (buffered.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color.White.copy(alpha = .18f)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(LiveGradient))
+        }
+        val knob = if (active) 24.dp else 18.dp
+        Box(Modifier.offset(x = maxWidth * frac - knob / 2).size(knob).clip(CircleShape).background(C.Text))
+        if (preview != null) Box(Modifier.offset(x = (maxWidth * frac - 36.dp).coerceIn(0.dp, maxWidth - 72.dp), y = (-34).dp).width(72.dp)
+            .clip(RoundedCornerShape(10.dp)).background(C.Text).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+            T(fmtDur(preview), 13, Bold, C.OnLight, mono = true)
+        }
+    }
+}
