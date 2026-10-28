@@ -120,6 +120,8 @@ class AppState(val ctx: Context) {
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
+    // kept here so coming back from a result still shows your search
+    var searchQuery by mutableStateOf("")
     // Movies (false) / Series (true): the shelf and poster last focused, so Back from details lands on it again
     val browseFocus = mutableMapOf<Boolean, Pair<Int, Int>>()
     var hls by mutableStateOf(store.hls)
@@ -280,6 +282,9 @@ class AppState(val ctx: Context) {
     /** Watch a past or running programme from its start, on channels with catch-up. */
     fun catchupUrl(c: Channel, p: Programme) =
         api.catchupUrl(c, p.start, ((p.end - p.start) / 60).toInt().coerceAtLeast(1), info?.timezone ?: "UTC")
+
+    /** Live TV from [startSec] onwards, from the provider's archive (live pause on catch-up channels). */
+    fun catchupFrom(c: Channel, startSec: Long) = api.catchupUrl(c, startSec, 240, info?.timezone ?: "UTC")
 
     var reminders by mutableStateOf(store.reminders(account))
     private fun reminderKey(c: Channel, p: Programme) = "${c.id}|${p.start}|${p.title}"
