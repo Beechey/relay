@@ -80,7 +80,7 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
     }
 
     val phone = compact()
-    if (!phone) Column(Modifier.width(360.dp).fillMaxHeight().background(C.Panel).padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    if (!phone) Column(Modifier.padding(start = 24.dp, bottom = 24.dp).width(360.dp).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Label("Search everything")
         // opens straight into typing; Done moves down to the results
         FilterField(q, { q = it }, "Channels, movies, series", focusRequester = box)

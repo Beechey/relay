@@ -16,6 +16,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import com.avetero.relay.ui.components.ConfirmDialog
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +29,7 @@ import com.avetero.relay.app.Screen
 import com.avetero.relay.data.xtream.Xtream
 import com.avetero.relay.feature.settings.ChoiceRow
 import com.avetero.relay.feature.settings.SettingRow
+import com.avetero.relay.feature.settings.SettingsGroup
 import com.avetero.relay.feature.settings.Stat
 import com.avetero.relay.ui.components.Badge
 import com.avetero.relay.ui.components.Btn
@@ -45,15 +48,19 @@ internal fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arra
     val a = app.account ?: return@Column
     LaunchedEffect(a) { if (app.info == null) app.info = runCatching { withContext(Dispatchers.IO) { Xtream(a).login() } }.getOrNull() }
     var refresh by remember { mutableIntStateOf(0) }
+    var deleteAsk by remember { mutableStateOf(false) }
+    // one stray OK used to delete the playlist outright
+    if (deleteAsk) ConfirmDialog("Delete “${a.name}”?", "Delete", { deleteAsk = false; app.remove(a) }, { deleteAsk = false },
+        message = "Relay forgets this playlist's login and saved catalogue. You'll need the login details to add it again.")
     Row(verticalAlignment = Alignment.CenterVertically) {
-        T("Playlists", if (compact()) 20 else 24, Heavy, modifier = Modifier.weight(1f))
+        T("Playlists", if (compact()) 22 else 30, Heavy, modifier = Modifier.weight(1f))
         Btn("+ Add playlist", { app.push(Screen.Login) }, style = BtnStyle.Primary, height = 44.dp)
     }
-    Column(Modifier.clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.clip(RoundedCornerShape(22.dp)).background(C.Glass).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(if (app.info != null) Color(0xFF3DD68C) else C.Dim))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { T(a.name, 17, Heavy); Spacer(Modifier.width(8.dp)); Badge("In use", C.Text, C.OnLight) }
+                Row(verticalAlignment = Alignment.CenterVertically) { T(a.name, 17, Heavy); Spacer(Modifier.width(8.dp)); Badge("In use", C.Glass3, C.Text) }
                 T("${a.server} · Xtream Codes", 13, color = C.Muted, mono = true)
             }
         }
@@ -68,16 +75,18 @@ internal fun PlaylistSettings(app: AppState) = Column(verticalArrangement = Arra
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Btn("Refresh now", { app.go(Screen.Sync) }, style = BtnStyle.Primary, height = 42.dp)
-            Btn("Delete", { app.remove(a) }, style = BtnStyle.Destructive, height = 42.dp)
+            Btn("Delete", { deleteAsk = true }, style = BtnStyle.Destructive, height = 42.dp)
         }
     }
     app.store.playlists().filter { it != a }.forEach { other ->
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.Surface).padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(C.Glass).padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFF4A5368)))
             Column(Modifier.weight(1f)) { T(other.name, 16, Bold); T(other.server, 13, color = C.Muted, mono = true) }
             Btn("Switch to", { app.info = null; app.switchTo(other) }, height = 40.dp)
         }
     }
-    ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
-    SettingRow("Clear saved data", "Deletes the saved catalogue and guide, then downloads them again") { app.clearCacheAndReload() }
+    SettingsGroup {
+        ChoiceRow("Refresh the playlist", "Re-download channels, movies and series when the saved copy is older than this", listOf("Every start", "Daily", "Weekly", "Monthly", "Manually"), app.store.refreshEvery) { app.store.refreshEvery = it }
+        SettingRow("Clear saved data", "Deletes the saved catalogue and guide, then downloads them again") { app.clearCacheAndReload() }
+    }
 }
