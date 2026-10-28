@@ -1,5 +1,6 @@
 package com.avetero.relay.app
 
+import com.avetero.relay.feature.guide.ReminderCard
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -116,10 +117,11 @@ fun App(app: AppState, onExit: () -> Unit) {
         if (app.inPip && !app.onPlayerScreen) Box(Modifier.fillMaxSize().background(Color.Black)) {
             PlayerSurface(app.player.player, Modifier.fillMaxSize())
         }
+        ReminderCard(app, Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 32.dp))
         app.message?.let { msg ->
             LaunchedEffect(msg) { delay(2_500); app.message = null }
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).clip(RoundedCornerShape(12.dp)).background(C.Text).padding(horizontal = 20.dp, vertical = 12.dp)) {
-                T(msg, 15, Bold, C.OnLight)
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp).clip(RoundedCornerShape(12.dp)).background(C.Glass).padding(horizontal = 20.dp, vertical = 12.dp)) {
+                T(msg, 15, Bold, C.Text)
             }
         }
     }

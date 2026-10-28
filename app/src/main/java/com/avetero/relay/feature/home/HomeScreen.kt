@@ -145,7 +145,7 @@ private fun androidx.compose.foundation.layout.RowScope.ForYou(app: AppState, sc
                             Row { T(r.title.substringBefore(" · ").takeIf { r.seriesId != 0 } ?: "", 13, Semi, C.Muted, Modifier.weight(1f)); T(if (r.pos > 0) "${fmtDur(r.dur - r.pos)} left" else "Not started", 13, Semi, C.Muted) }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Btn(if (r.pos > 0) "Resume" else "Play", { resume(app, r) }, style = BtnStyle.Light, icon = Icons.Play, height = 50.dp, focusRequester = resumeBtn)
+                            Btn(if (r.pos > 0) "Resume" else "Play", { resume(app, r) }, style = BtnStyle.Primary, icon = Icons.Play, height = 50.dp, focusRequester = resumeBtn)
                             Btn(if (r.seriesId != 0) "All episodes" else "Details", { details(app, r) }, height = 50.dp)
                         }
                         if (heroItems.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

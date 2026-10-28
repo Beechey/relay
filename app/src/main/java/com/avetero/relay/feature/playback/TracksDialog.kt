@@ -45,6 +45,6 @@ fun TracksDialog(app: AppState, onDismiss: () -> Unit) = Dialog(onDismiss) {
                 OptionRow(o.label, o.selected, { o.pick(); tick++ }, focusRequester = if (si == 0 && oi == 0) first else null)
             }
         }
-        Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Light, height = 44.dp)
+        Btn("Done", onDismiss, Modifier.fillMaxWidth().padding(top = 8.dp), style = BtnStyle.Primary, height = 44.dp)
     }
 }

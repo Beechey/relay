@@ -173,7 +173,25 @@ class AppState(val ctx: Context) {
 
     fun liveUrl(c: Channel) = api.streamUrl(c, hls)
 
-    fun saveResume(r: Resume, upNext: Boolean = false) { store.saveResume(account, r, upNext); resumes = store.resumes(account) }
+    /** Watch a past or running programme from its start, on channels with catch-up. */
+    fun catchupUrl(c: Channel, p: Programme) =
+        api.catchupUrl(c, p.start, ((p.end - p.start) / 60).toInt().coerceAtLeast(1), info?.timezone ?: "UTC")
+
+    var reminders by mutableStateOf(store.reminders(account))
+    private fun reminderKey(c: Channel, p: Programme) = "${c.id}|${p.start}|${p.title}"
+    fun hasReminder(c: Channel, p: Programme) = reminderKey(c, p) in reminders
+    fun toggleReminder(c: Channel, p: Programme) {
+        val k = reminderKey(c, p)
+        reminders = if (k in reminders) reminders - k else reminders + k
+        store.setReminders(account, reminders)
+        message = if (k in reminders) "We'll remind you when ${p.title} starts" else "Reminder removed"
+    }
+    fun dropReminder(k: String) { reminders = reminders - k; store.setReminders(account, reminders) }
+
+    fun saveResume(r: Resume, upNext: Boolean = false) {
+        if (r.key.startsWith("cu")) return // catch-up programmes don't belong in Continue watching
+        store.saveResume(account, r, upNext); resumes = store.resumes(account)
+    }
     fun removeResume(key: String) { store.removeResume(account, key); resumes = store.resumes(account); message = "Removed from Continue watching" }
 
     private fun hasCache(a: Account) = store.cacheFile(a, "live").exists()
@@ -334,6 +352,7 @@ class AppState(val ctx: Context) {
         favourites = store.favourites(a)
         hidden = store.hidden(a)
         orders = loadOrders(a)
+        reminders = store.reminders(a)
         resumes = store.resumes(a)
         recentChannels = store.recents(a, "recent"); recentMovies = store.recents(a, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() }
         recentSeries = store.recents(a, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() }

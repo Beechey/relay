@@ -22,12 +22,20 @@ class Xtream(private val account: Account) {
             (action?.let { "&action=$it" } ?: "") + extra
 
     fun streamUrl(c: Channel, hls: Boolean = false) = "$base/live/$creds/${c.id}.${if (hls) "m3u8" else "ts"}"
+    /**
+     * Catch-up (timeshift) for a past or running programme on a channel with an archive: the provider wants the
+     * start in its own time zone as yyyy-MM-dd:HH-mm and the length in minutes.
+     */
+    fun catchupUrl(c: Channel, startSec: Long, minutes: Int, timezone: String): String {
+        val f = java.text.SimpleDateFormat("yyyy-MM-dd:HH-mm", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone(timezone) }
+        return "$base/timeshift/$creds/$minutes/${f.format(java.util.Date(startSec * 1000))}/${c.id}.ts"
+    }
     fun vodUrl(v: Vod) = "$base/movie/$creds/${v.id}.${v.ext}"
     fun episodeUrl(e: Episode) = "$base/series/$creds/${e.id}.${e.ext}"
 
     fun login(): AccountInfo {
-        val info = runCatching { JSONObject(fetchText(apiUrl())).optJSONObject("user_info") }.getOrNull()
-            ?: throw IOException("That doesn't look like an Xtream server")
+        val root = runCatching { JSONObject(fetchText(apiUrl())) }.getOrNull()
+        val info = root?.optJSONObject("user_info") ?: throw IOException("That doesn't look like an Xtream server")
         if (info.optInt("auth") != 1) throw IOException("Wrong username or password")
         val status = info.optString("status", "Active")
         if (!status.equals("Active", ignoreCase = true)) throw IOException("Account is $status")
@@ -36,6 +44,7 @@ class Xtream(private val account: Account) {
             expires = info.optString("exp_date").toLongOrNull(),
             maxConnections = info.optInt("max_connections"),
             activeConnections = info.optInt("active_cons"),
+            timezone = root.optJSONObject("server_info")?.optString("timezone")?.ifBlank { null } ?: "UTC",
         )
     }
 

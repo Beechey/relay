@@ -73,7 +73,7 @@ fun EmptyState(title: String, body: String, action: String? = null, onAction: ()
         Column(Modifier.padding(16.dp).widthIn(max = 420.dp).clip(RoundedCornerShape(18.dp)).background(C.Surface).padding(26.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             T(title, 20, Heavy)
             T(body, 14, color = Color(0xFFC9CED8), maxLines = 4, lineHeight = 21)
-            if (action != null) Btn(action, onAction, style = BtnStyle.Light, height = 44.dp)
+            if (action != null) Btn(action, onAction, style = BtnStyle.Primary, height = 44.dp)
         }
     }
 

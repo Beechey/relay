@@ -264,7 +264,7 @@ private fun ActionPanel(
     else T("Tick categories with OK, or filter and tick everything listed.", 13, color = C.Muted, maxLines = 3, lineHeight = 19)
     if (moving) {
         Spacer(Modifier.height(2.dp).fillMaxWidth().background(C.Control))
-        PanelBtn("Drop here", Icons.Check, onDrop, key = "OK", style = BtnStyle.Light, focusRequester = dropFocus)
+        PanelBtn("Drop here", Icons.Check, onDrop, key = "OK", style = BtnStyle.Primary, focusRequester = dropFocus)
         PanelBtn("Send to top", Icons.Top, onTop)
         PanelBtn("Cancel move", null, onCancel, quiet = true)
     } else {

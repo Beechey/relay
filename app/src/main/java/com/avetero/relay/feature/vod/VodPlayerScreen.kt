@@ -191,7 +191,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 Column(Modifier.weight(1f)) {
                     T("Next episode in ${(dur - pos) / 1000} s", 13, Bold, C.Accent); T(next.first().title, 15, Heavy, maxLines = 2, lineHeight = 20)
                 }
-                Btn("Play", ::playNext, style = BtnStyle.Light, height = 40.dp)
+                Btn("Play", ::playNext, style = BtnStyle.Primary, height = 40.dp)
             }
         }
 

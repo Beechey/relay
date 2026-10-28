@@ -81,7 +81,7 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
                         T(listOfNotNull(info?.year, info?.duration, info?.genre).filter { it.isNotEmpty() }.joinToString(" · "), 13, Semi, C.Soft, maxLines = 3)
                     }
                 }
-                Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, Modifier.fillMaxWidth(), style = BtnStyle.Light, icon = Icons.Play, height = 52.dp)
+                Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, Modifier.fillMaxWidth(), style = BtnStyle.Primary, icon = Icons.Play, height = 52.dp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (resumeAt > 0) Btn("From start", { app.saveResume(Resume(key, vod.name, "", vod.icon, 0, 1, vod.id)); app.push(Screen.VodPlayer(item)) }, Modifier.weight(1f), height = 48.dp)
                     val fav = app.isFav(key)
@@ -121,7 +121,7 @@ fun MovieDetailScreen(app: AppState, vod: Vod) {
                     if (!info?.director.isNullOrEmpty()) T("Director  ${info!!.director}", 13, color = C.Muted)
                     if (!info?.cast.isNullOrEmpty()) T("Cast  ${info!!.cast}", 13, color = C.Muted, maxLines = 2)
                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, style = BtnStyle.Light, icon = Icons.Play, height = 52.dp, focusRequester = first)
+                        Btn(if (resumeAt > 0) "Resume ${fmtDur(resumeAt)}" else "Play", { app.push(Screen.VodPlayer(item)) }, style = BtnStyle.Primary, icon = Icons.Play, height = 52.dp, focusRequester = first)
                         if (resumeAt > 0) Btn("From start", { app.saveResume(Resume(key, vod.name, "", vod.icon, 0, 1, vod.id)); app.push(Screen.VodPlayer(item)) }, height = 52.dp)
                         val fav = app.isFav(key)
                         IconBtn(if (fav) Icons.StarFilled else Icons.Star, if (fav) "Remove from favourites" else "Add to favourites", { app.toggleFav(key) }, size = 52.dp, tint = if (fav) C.Accent else C.Text)

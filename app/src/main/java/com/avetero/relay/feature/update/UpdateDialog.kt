@@ -86,7 +86,7 @@ fun UpdateDialog(app: AppState, r: Release, onDismiss: () -> Unit) = Dialog(onDi
                         error = e.message ?: "Download failed"; progress = null
                     }
                 }
-            }, Modifier.weight(1f), style = BtnStyle.Light, focusRequester = first)
+            }, Modifier.weight(1f), style = BtnStyle.Primary, focusRequester = first)
             Btn("Later", onDismiss, Modifier.weight(1f))
         }
         Btn("Skip this version", { app.store.skippedVersion = r.version; onDismiss() }, Modifier.fillMaxWidth(), height = 40.dp)

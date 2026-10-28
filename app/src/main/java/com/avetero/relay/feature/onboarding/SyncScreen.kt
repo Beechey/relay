@@ -77,7 +77,7 @@ fun SyncScreen(app: AppState) {
             if (error != null) {
                 T(error!!, 15, Bold, C.Error, maxLines = 3)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Btn("Try again", { attempt++ }, style = BtnStyle.Light)
+                    Btn("Try again", { attempt++ }, style = BtnStyle.Primary)
                     Btn("Edit details", { app.push(Screen.Login) })
                 }
             } else {

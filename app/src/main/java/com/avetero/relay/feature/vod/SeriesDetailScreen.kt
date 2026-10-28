@@ -98,7 +98,7 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
                     }
                     val target = resumeEp ?: eps.firstOrNull()
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Light, icon = Icons.Play, height = 50.dp, enabled = target != null)
+                        Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Primary, icon = Icons.Play, height = 50.dp, enabled = target != null)
                         val fav = app.isFav("s${s.id}")
                         IconBtn(if (fav) Icons.StarFilled else Icons.Star, "Favourite", { app.toggleFav("s${s.id}") }, size = 50.dp, tint = if (fav) C.Accent else C.Text)
                     }
@@ -153,7 +153,7 @@ fun SeriesDetailScreen(app: AppState, s: Series) {
             Spacer(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val target = resumeEp ?: eps.firstOrNull()
-                Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Light, icon = Icons.Play, height = 52.dp, enabled = target != null)
+                Btn(if (resumeEp != null) "Resume S${resumeEp.season} · E${resumeEp.num}" else "Play", { target?.let(::play) }, Modifier.weight(1f), style = BtnStyle.Primary, icon = Icons.Play, height = 52.dp, enabled = target != null)
                 val fav = app.isFav("s${s.id}")
                 IconBtn(if (fav) Icons.StarFilled else Icons.Star, "Favourite", { app.toggleFav("s${s.id}") }, size = 52.dp, tint = if (fav) C.Accent else C.Text)
             }
