@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.live
 
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -108,10 +110,13 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             else if (list.isEmpty()) EmptyState(if (groupId == FAVS) "No favourites yet" else "No channels here", "Hold OK (or press and hold) on any channel to add it to Favourites.")
             LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
+                    val keyboard = LocalSoftwareKeyboardController.current
+                    val focusManager = LocalFocusManager.current
                     LaunchedEffect(c.id) { app.loadEpg(c) }
                     val now = app.programmesFor(c).current()
                     FocusSurface(
                         onClick = {
+                            keyboard?.hide(); focusManager.clearFocus()
                             if (playing?.id == c.id) app.push(Screen.LivePlayer(c, list))
                             else { app.player.play(app.liveUrl(c)); app.addRecentChannel(c.id) }
                         },
@@ -147,7 +152,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                 key(app.inPip) { PlayerSurface(app.player.player, Modifier.fillMaxSize()) }
                 app.player.castDevice?.let { CastingOverlay(it, playing.name, app.player.castStatus) }
                 Badge("LIVE", C.Live, Color.White, Modifier.align(Alignment.TopStart).padding(10.dp))
-                Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
+                if (app.player.error == null) Badge("Tap for fullscreen", C.Ground, C.Soft, Modifier.align(Alignment.BottomEnd).padding(10.dp))
                 app.player.error?.let { T(it, 13, Bold, C.Error, maxLines = 3, modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) }
             }
             val now = app.programmesFor(playing).current()
