@@ -111,8 +111,9 @@ fun App(app: AppState, onExit: () -> Unit) {
             is Screen.LivePlayer -> LivePlayerScreen(app, s.channel, s.list)
             is Screen.VodGrid -> VodGridScreen(app, s.series, nav, s.group)
             // details keep the rail / bottom tabs so navigation is always in the same place
-            is Screen.MovieDetail -> WithRail(Tab.Movies, nav, behindDock = true) { MovieDetailScreen(app, s.vod) }
-            is Screen.SeriesDetail -> WithRail(Tab.Series, nav, behindDock = true) { SeriesDetailScreen(app, s.series) }
+            // a title opened from Search (or For you, Guide…) keeps that tab highlighted
+            is Screen.MovieDetail -> WithRail(rootTab(app, Tab.Movies), nav, behindDock = true) { MovieDetailScreen(app, s.vod) }
+            is Screen.SeriesDetail -> WithRail(rootTab(app, Tab.Series), nav, behindDock = true) { SeriesDetailScreen(app, s.series) }
             is Screen.VodPlayer -> VodPlayerScreen(app, s.item, s.next, s.episodes)
             Screen.Search -> SearchScreen(app, nav)
             Screen.Favourites -> FavouritesScreen(app, nav)
@@ -132,4 +133,14 @@ fun App(app: AppState, onExit: () -> Unit) {
     }
     if (exitAsk) ConfirmDialog("Exit Relay IPTV?", "Exit", onExit, { exitAsk = false }, cancel = "Stay", destructive = false)
     app.update?.let { if (updatePrompt) UpdateDialog(app, it) { updatePrompt = false } }
+}
+
+/** The tab the current stack started from (titles open on top of it). */
+private fun rootTab(app: AppState, default: Tab): Tab = when (app.stack.firstOrNull()) {
+    Screen.Search -> Tab.Search
+    Screen.Home -> Tab.Home
+    Screen.Guide -> Tab.Guide
+    Screen.Favourites -> Tab.Favourites
+    is Screen.Live -> Tab.Live
+    else -> default
 }

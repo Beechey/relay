@@ -86,12 +86,12 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
     val recent = remember(recentTick) { app.store.recentSearches() }
     val box = remember { FocusRequester() }
     // names prepared for matching once per library load (hundreds of thousands of titles), not on every keystroke
-    val names by produceState<Triple<List<String>, List<String>, List<String>>?>(null, app.channelsVisible, app.seriesVisible, app.moviesVisible) {
-        value = withContext(Dispatchers.Default) { Triple(app.searchKeys(app.channelsVisible) { it.name }, app.searchKeys(app.seriesVisible) { it.name }, app.searchKeys(app.moviesVisible) { it.name }) }
+    val names by produceState<Triple<List<String>, List<String>, List<String>>?>(null, app.channels, app.series, app.movies) {
+        value = withContext(Dispatchers.Default) { app.allSearchKeys() }
     }
     var searching by remember { mutableStateOf(false) }
     // re-runs when the library finishes loading, not only when the text changes
-    LaunchedEffect(q, names) {
+    LaunchedEffect(q, names, app.hidden) {
         searching = true
         delay(250)
         val n = norm(q.trim())
@@ -103,9 +103,11 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
         results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
             // names that start with the query come first
             val (cn, sn, mn) = names ?: return@withContext Triple(emptyList(), emptyList(), emptyList())
-            fun <T> List<T>.ranked(keys: List<String>) = indices.filter { keys.getOrNull(it)?.contains(n) == true }
+            val hidden = app.hidden
+            fun <T> List<T>.ranked(keys: List<String>, type: String, cat: (T) -> String) = indices
+                .filter { keys.getOrNull(it)?.contains(n) == true && "$type:${cat(this[it])}" !in hidden }
                 .sortedBy { if (keys[it].startsWith(n)) 0 else 1 }.take(30).map { this[it] }
-            Triple(app.channelsVisible.ranked(cn), app.seriesVisible.ranked(sn), app.moviesVisible.ranked(mn))
+            Triple(app.channels.ranked(cn, "live") { it.categoryId }, app.series.ranked(sn, "series") { it.categoryId }, app.movies.ranked(mn, "vod") { it.categoryId })
         }
         searching = names == null && n.length >= 2
     }

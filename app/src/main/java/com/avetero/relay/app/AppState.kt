@@ -122,8 +122,11 @@ class AppState(val ctx: Context) {
     var message by mutableStateOf<String?>(null)
     // kept here so coming back from a result still shows your search
     var searchQuery by mutableStateOf("")
+    // where the Guide's channel list was scrolled to, so coming back from a channel lands there
+    var guideScroll = 0 to 0
     // search keys (lower-case, accents removed) per list, built once per library load
     private val searchKeys = java.util.IdentityHashMap<List<*>, List<String>>()
+    fun allSearchKeys() = Triple(searchKeys(channels) { it.name }, searchKeys(series) { it.name }, searchKeys(movies) { it.name })
     fun <T> searchKeys(list: List<T>, name: (T) -> String): List<String> =
         synchronized(searchKeys) { searchKeys[list] } ?: list.map { com.avetero.relay.ui.components.norm(name(it)) }
             .also { synchronized(searchKeys) { if (searchKeys.size > 6) searchKeys.clear(); searchKeys[list] = it } }
@@ -337,6 +340,8 @@ class AppState(val ctx: Context) {
             }
         }
         vodLoading = false
+        // get search ready in the background, so the first search doesn't wait
+        bg.launch(Dispatchers.Default) { runCatching { allSearchKeys() } }
         android.util.Log.i("Relay", "library ready: live ${tLive} ms, everything ${System.currentTimeMillis() - t0} ms")
     }
 

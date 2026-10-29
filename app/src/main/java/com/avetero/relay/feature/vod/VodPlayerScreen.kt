@@ -234,7 +234,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))).navigationBarsPadding()
                 .padding(start = pad, end = pad, top = 90.dp, bottom = if (compact()) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    T(fmtDur(pos), 14, Bold, mono = true)
+                    T(fmtDur(preview ?: pos), 14, Bold, mono = true)
                     ScrubBar(pos, dur, p.bufferedPosition, preview, { preview = it; poke++ }, { p.seekTo(it); preview = null }, nudge = ::nudge, focus = scrubFocus,
                         modifier = Modifier.weight(1f).focusProperties { down = playBtn })
                     T("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), 14, Bold, mono = true)
