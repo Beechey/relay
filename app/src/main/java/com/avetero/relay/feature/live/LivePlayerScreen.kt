@@ -1,5 +1,6 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.app.Screen
 import com.avetero.relay.ui.components.BtnStyle
 import com.avetero.relay.util.nowSec
 import com.avetero.relay.ui.theme.Semi
@@ -133,6 +134,8 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
             else -> { behind = 0; app.player.play(app.liveUrl(c), title = c.name); app.message = "This channel can't rewind, so you're back at live" }
         }
     }
+    // the Live tab is the bottom of the stack: Back from it goes to For you
+    fun leave() { if (app.stack.size > 1) app.back() else app.go(Screen.Home) }
     fun goLive() { pausedAt = null; behind = 0; app.player.play(app.liveUrl(c), title = c.name); poke++ }
     fun closeList() { listOpen = false; runCatching { focus.requestFocus() } }
     // Back closes the channel list, then the info bar; the next Back leaves the player
@@ -191,14 +194,14 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
         app.player.castDevice?.let { CastingOverlay(it, c.name, app.player.castStatus) }
         app.player.error?.let { err ->
-            PlayerError(err, onRetry = { app.player.retry() }, onSwitch = {
+            PlayerError(err, onRetry = { app.player.retry() }, onBack = ::leave, onSwitch = {
                 app.hls = !app.hls; app.store.hls = app.hls; app.player.play(app.liveUrl(c))
             }, hls = app.hls)
         }
         // phones have no Back key on screen: show one with the info bar
         AnimatedVisibility(!tv && showInfo && !app.inPip, Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                IconBtn(Icons.Back, "Back to channels", { app.back() }, size = 48.dp)
+                IconBtn(Icons.Back, "Back to channels", ::leave, size = 48.dp)
                 IconBtn(if (pausedAt != null) Icons.Play else Icons.Pause, if (pausedAt != null) "Play" else "Pause", { if (pausedAt != null) resume() else pause() }, size = 48.dp)
                 if (behind > 0 && pausedAt == null) Btn("Go live", { goLive() }, style = BtnStyle.Primary, height = 48.dp)
                 IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute(); poke++ }, size = 48.dp)
@@ -215,7 +218,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
         AnimatedVisibility(showInfo && !app.inPip, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 40.dp), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass).padding(horizontal = 16.dp, vertical = 8.dp)) { Clock(20) }
         }
-        AnimatedVisibility((showInfo || listOpen) && !app.inPip, Modifier.align(Alignment.BottomCenter).then(if (tv) Modifier.padding(start = if (listOpen) 584.dp else 24.dp, end = 24.dp, bottom = 24.dp) else Modifier), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility((showInfo || listOpen) && !app.inPip && app.player.error == null, Modifier.align(Alignment.BottomCenter).then(if (tv) Modifier.padding(start = if (listOpen) 584.dp else 24.dp, end = 24.dp, bottom = 24.dp) else Modifier), enter = fadeIn(), exit = fadeOut()) {
             val epg = app.programmesFor(c)
             // paused or behind live: show the programme (and how far into it) at the point you're watching
             val watching = (if (pausedAt != null) pausedAt!! else clock.coerceAtLeast(nowSec())) - behind
@@ -252,6 +255,12 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                     if (!compact()) T(if (c.num > 0) c.num.toString() else "", 22, color = C.Muted, mono = true)
                     Logo(c.icon, c.name, false, Modifier.size(if (compact()) 48.dp else 64.dp, if (compact()) 34.dp else 44.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val away = pausedAt?.let { clock - it }
+                        when {
+                            away != null -> Pill("Paused · %d:%02d".format(away / 60, away % 60), bg = C.Accent, color = C.OnLight)
+                            behind > 0 -> Pill("${(behind / 60).coerceAtLeast(1)} min behind", bg = C.Accent, color = C.OnLight)
+                            else -> LivePill()
+                        }
                         T(c.name, 14, Bold, C.Soft)
                         T(now?.title ?: "No programme info", if (compact()) 18 else 26, Heavy, maxLines = 2)
                     }

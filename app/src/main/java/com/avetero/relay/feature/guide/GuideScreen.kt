@@ -1,5 +1,10 @@
 package com.avetero.relay.feature.guide
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
@@ -124,7 +129,9 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
             GuidePill("Now", true, selected = shift == 0) { shift = 0 }
             GuidePill("▶", shift < 22) { shift = (shift + 2).coerceAtMost(22) }
             GuidePill("Tomorrow", tomorrowShift > 2, selected = shift >= tomorrowShift - 1) { shift = tomorrowShift }
-            GuidePill(if (guideOnly) "Guide only ✓" else "Guide only", withGuide.isNotEmpty(), selected = guideOnly) { guideOnly = !guideOnly }
+            // the tick only when it's really filtering (a provider without a full guide has nothing to filter by)
+            val filtering = guideOnly && withGuide.isNotEmpty()
+            GuidePill(if (filtering) "Guide only ✓" else "Guide only", withGuide.isNotEmpty(), selected = filtering) { guideOnly = !guideOnly }
         }
     }
 
@@ -173,7 +180,15 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
                     }
                     (0 until 4).forEach { T(fmtTime(windowStart + it * 1800L) + if (it == 0 && shift != 0) "  " + SimpleDateFormat("EEE d", Locale.getDefault()).format(Date(windowStart * 1000)) else "", if (phone) 11 else 13, Semi, C.Muted, mono = true, modifier = Modifier.width(gridW / 4)) }
                 }
-                LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
+                val rows = rememberLazyListState(app.guideScroll.first, app.guideScroll.second)
+                DisposableEffect(Unit) { onDispose { app.guideScroll = rows.firstVisibleItemIndex to rows.firstVisibleItemScrollOffset } }
+                // phones: a sideways swipe moves through time (an hour per swipe) instead of opening the row under the finger
+                var swipe by remember { mutableFloatStateOf(0f) }
+                LazyColumn(Modifier.then(if (phone) Modifier.pointerInput(Unit) {
+                    detectHorizontalDragGestures(onDragStart = { swipe = 0f }, onDragEnd = {
+                        if (swipe < -120f && shift < 22) shift += 1 else if (swipe > 120f && shift > -2) shift -= 1
+                    }) { ch, d -> ch.consume(); swipe += d }
+                } else Modifier), rows, contentPadding = PaddingValues(bottom = 32.dp)) {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                         LaunchedEffect(c.id) { app.loadEpg(c) }
                         val progs = app.programmesFor(c).orEmpty().filter { it.end > windowStart && it.start < windowEnd }.withoutOverlaps()
