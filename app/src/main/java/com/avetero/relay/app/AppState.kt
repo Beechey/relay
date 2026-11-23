@@ -49,22 +49,21 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
-enum class NavKind { Push, Pop, Tab }
-
 class AppState(val ctx: Context) {
     val store = Store(ctx)
     val player = PlayerHost(ctx, store)
-    /** One history per tab, kept while you're on another tab; "start" holds Login/Sync before there's a library. */
-    val stacks = mutableStateMapOf<String, SnapshotStateList<Screen>>()
-    var tab by mutableStateOf("start"); private set
-    val stack: SnapshotStateList<Screen> get() = stacks.getValue(tab)
-    val screen get() = stack.last()
-    /** How the last navigation happened, so the transition can match it (fade through for tabs, slide for push/pop). */
-    var navKind by mutableStateOf(NavKind.Tab); private set
-    /** Bumped when the current tab is picked again at its root: screens scroll back to the top. */
-    var reselect by mutableIntStateOf(0); private set
-    /** Phone Library remembers whether it was on Movies or Series. */
-    var librarySeries by mutableStateOf(false)
+    /** Per-tab histories (Navigator.kt); the members below keep the screens' existing calls working. */
+    val nav = Navigator()
+    val stacks get() = nav.stacks
+    val tab get() = nav.tab
+    val stack get() = nav.stack
+    val screen get() = nav.screen
+    val navKind get() = nav.navKind
+    val reselect get() = nav.reselect
+    var librarySeries by nav::librarySeries
+    fun push(s: Screen) = nav.push(s)
+    fun back() = nav.back()
+    fun go(s: Screen) = nav.go(s)
     /** The live channel playing, so leaving Live keeps it going in the phone's mini player. */
     var liveChannel by mutableStateOf<Channel?>(null)
 
@@ -176,42 +175,11 @@ class AppState(val ctx: Context) {
     init {
         clock24 = store.clock24
         val a = account
-        stacks["start"] = mutableStateListOf(Screen.Login)
         go(when {
             a == null -> Screen.Login
             hasCache(a) -> { libraryLoading = true; Screen.Home }
             else -> Screen.Sync
         })
-    }
-
-    fun push(s: Screen) { navKind = NavKind.Push; stack += s }
-
-    /** Up the tab's history, then from another tab's root to For you. False when there's nowhere left to go. */
-    fun back(): Boolean {
-        val st = stack
-        if (st.size > 1) { navKind = NavKind.Pop; st.removeAt(st.lastIndex); return true }
-        if (tab != "home" && tab != "start" && "home" in stacks) { navKind = NavKind.Pop; tab = "home"; return true }
-        return false
-    }
-
-    /**
-     * Tab navigation. Another tab comes back as you left it (unless [s] asks for something specific, e.g. a channel
-     * group); the current tab again goes back to its root, or at the root scrolls to the top ([reselect]).
-     */
-    fun go(s: Screen) {
-        val k = tabOf(s) ?: return push(s)
-        if (k == "start") { stacks.clear(); stacks["start"] = mutableStateListOf(s); navKind = NavKind.Tab; tab = k; return }
-        stacks.remove("start")
-        val st = stacks[k]
-        navKind = NavKind.Tab
-        when {
-            st == null -> stacks[k] = mutableStateListOf(s)
-            k == tab && st.size > 1 -> { navKind = NavKind.Pop; st.removeRange(1, st.size); if (s != rootScreen(k)) st[0] = s }
-            k == tab -> if (st[0] == s || s == rootScreen(k)) reselect++ else st[0] = s
-            s != st[0] && s != rootScreen(k) -> { st.clear(); st += s }
-        }
-        if (s is Screen.VodGrid) librarySeries = s.series
-        tab = k
     }
 
     fun channelsIn(groupId: String): List<Channel> = when (groupId) {
@@ -531,7 +499,7 @@ class AppState(val ctx: Context) {
         recentChannels = store.recents(a, "recent"); recentMovies = store.recents(a, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() }
         recentSeries = store.recents(a, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() }
         liveCats = emptyList(); channels = emptyList(); vodCats = emptyList(); movies = emptyList(); seriesCats = emptyList(); series = emptyList()
-        stacks.clear(); stacks["start"] = mutableStateListOf(Screen.Login); tab = "start"; liveChannel = null
+        nav.reset(); liveChannel = null
         if (hasCache(a)) { libraryLoading = true; go(Screen.Home) } else go(Screen.Sync)
     }
 
@@ -542,22 +510,8 @@ class AppState(val ctx: Context) {
     }
 
     companion object {
-        /** The tab a screen is the root of; null for screens that open on top of a tab. */
-        fun tabOf(s: Screen): String? = when (s) {
-            Screen.Login, Screen.Sync -> "start"
-            Screen.Home -> "home"
-            is Screen.Live -> "live"
-            Screen.Guide -> "guide"
-            is Screen.VodGrid -> if (s.series) "series" else "movies"
-            Screen.Favourites -> "saved"
-            Screen.Search -> "search"
-            is Screen.Settings -> "settings"
-            else -> null
-        }
-        fun rootScreen(tab: String): Screen = when (tab) {
-            "live" -> Screen.Live(); "guide" -> Screen.Guide; "movies" -> Screen.VodGrid(false); "series" -> Screen.VodGrid(true)
-            "saved" -> Screen.Favourites; "search" -> Screen.Search; "settings" -> Screen.Settings(); else -> Screen.Home
-        }
+        fun tabOf(s: Screen) = Navigator.tabOf(s)
+        fun rootScreen(tab: String) = Navigator.rootScreen(tab)
         const val FAVS = "__favs"
         const val ALL = "__all"
         const val RECENT = "__recent"
