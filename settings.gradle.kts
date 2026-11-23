@@ -5,4 +5,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "relay"
-include(":app")
+include(":app", ":baselineprofile")
