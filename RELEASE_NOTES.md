@@ -21,4 +21,4 @@ A redesign of the whole app: Material 3 Expressive on phones and tablets, Materi
 - Focus always comes back to where you were; options and audio/subtitles open in a side panel
 - Live player: the info strip shows neighbouring channels; hold Left for the full channel list
 
-Found something odd? Switch Beta updates off to go back to stable releases when the next one comes out.
+Found something odd? You can switch Beta updates off at any time; you'll then get the next stable release.
