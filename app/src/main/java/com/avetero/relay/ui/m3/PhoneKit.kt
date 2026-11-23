@@ -72,6 +72,21 @@ fun RelayTopBar(title: String, onBack: (() -> Unit)?, actions: @Composable RowSc
         else TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
     )
 
+/**
+ * Settings-style pages: back arrow on top, the title large underneath, collapsing into the bar as you scroll (the
+ * Android Settings look). Give the page's list `Modifier.nestedScroll(scroll.nestedScrollConnection)`.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RelayLargeTopBar(title: String, onBack: () -> Unit, scroll: TopAppBarScrollBehavior, actions: @Composable RowScope.() -> Unit = {}) =
+    androidx.compose.material3.LargeFlexibleTopAppBar(
+        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
+        actions = actions,
+        scrollBehavior = scroll,
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
+    )
+
 /** Root screens: a large title (headlineMedium) under the status bar, with optional trailing actions. */
 @Composable
 fun LargeTitle(text: String, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) =

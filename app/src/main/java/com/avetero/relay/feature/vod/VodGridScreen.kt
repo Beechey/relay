@@ -48,6 +48,11 @@ import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ToggleButton
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -171,19 +176,18 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
 
 @Composable
 private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: String?) {
-    // Movies | Series are tabs over a pager in place (no navigation): swipe or tap; each keeps its own chips, sort and scroll
-    val both = "vod" in app.parts && "series" in app.parts
+    // Movies | Series: tap to switch (in place, no navigation); swiping moves between the categories underneath
+    var series by rememberSaveable(startSeries) { mutableStateOf(startSeries) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         LargeTitle("Library") { IconButton({ app.go(Screen.Search) }) { Icon(Icons.Rounded.Search, "Search the library") } }
-        if (!both) LibraryPage(app, startSeries, initialGroup)
-        else {
-            val pager = rememberPagerState(if (startSeries) 1 else 0) { 2 }
-            LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { app.librarySeries = it == 1 } }
-            PagerTabs(pager, listOf("Movies", "Series"), Modifier.padding(top = 8.dp, bottom = 16.dp))
-            HorizontalPager(pager, Modifier.fillMaxSize().padding(top = 12.dp)) { page ->
-                LibraryPage(app, page == 1, initialGroup.takeIf { (page == 1) == startSeries })
-            }
+        if ("vod" in app.parts && "series" in app.parts) Row(
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        ) {
+            ToggleButton(!series, { series = false; app.librarySeries = false }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedLeadingButtonShapes()) { Text("Movies") }
+            ToggleButton(series, { series = true; app.librarySeries = true }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text("Series") }
         }
+        key(series) { LibraryPage(app, series, initialGroup.takeIf { series == startSeries }) }
     }
 }
 
@@ -197,14 +201,18 @@ private fun LibraryPage(app: AppState, series: Boolean, initialGroup: String?) {
     val groups = remember(lib, cats, app.favourites) { lib.groups(cats, app.favourites, tv = false) }
     // a group that emptied (last saved title removed, category hidden) falls back to All
     val current = groups.firstOrNull { it.id == groupId }?.id ?: ALL
-    val tiles = remember(lib, current, sort, app.favourites) { lib.tiles(current, sort, "", app.favourites) }
-    val enter = rememberEntrance(ready = tiles.isNotEmpty())
-    val grid = rememberLazyGridState()
     val chips = rememberLazyListState()
-    // scroll to the top on a new group or sort and when Library is tapped again; not when coming back from a title
-    LaunchedEffect(grid) { snapshotFlow { current to sort }.drop(1).collect { grid.scrollToItem(0) } }
-    LaunchedEffect(grid) { snapshotFlow { app.reselect }.drop(1).collect { grid.animateScrollToItem(0) } }
-    LaunchedEffect(current) { groups.indexOfFirst { it.id == current }.takeIf { it > 0 }?.let { chips.animateScrollToItem(it) } }
+    // swipe the grid to move between categories; tapping a chip slides to it
+    val pager = rememberPagerState(groups.indexOfFirst { it.id == current }.coerceAtLeast(0)) { groups.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pager, groups) { snapshotFlow { pager.currentPage }.collect { groups.getOrNull(it)?.let { g -> groupId = g.id } } }
+    LaunchedEffect(current) {
+        val i = groups.indexOfFirst { it.id == current }.coerceAtLeast(0)
+        if (pager.currentPage != i) pager.animateScrollToPage(i)
+        // keep the selected chip in view, only scrolling when it's off screen
+        if (chips.layoutInfo.visibleItemsInfo.none { it.index == i && it.offset >= 0 && it.offset + it.size <= chips.layoutInfo.viewportEndOffset }) chips.animateScrollToItem(i)
+    }
+    val anyTiles = lib.all.isNotEmpty()
     var menuFor by remember { mutableStateOf<Group?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     val what = if (series) "series" else "movies"
@@ -214,22 +222,28 @@ private fun LibraryPage(app: AppState, series: Boolean, initialGroup: String?) {
             LazyRow(state = chips, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(groups, key = { it.id }) { g ->
                     val on = g.id == current
-                    FilterChip(on, { groupId = g.id }, { Text(g.name) },
+                    FilterChip(on, { groupId = g.id; scope.launch { pager.animateScrollToPage(groups.indexOf(g)) } }, { Text(g.name) },
                         Modifier.animateItem().then(if (g.id.startsWith("__")) Modifier else Modifier.onLongPress { menuFor = g }),
                         leadingIcon = if (on) ({ Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null)
                 }
             }
-            when {
+            if (!anyTiles && app.vodLoading) Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // poster-shaped placeholders, shimmering, while the catalogue loads
-                tiles.isEmpty() && app.vodLoading -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Live TV is ready to watch while your $what load.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    repeat(3) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { repeat(3) { Skeleton(Modifier.weight(1f).aspectRatio(2f / 3f)) } }
-                    }
+                Text("Live TV is ready to watch while your $what load.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                repeat(3) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { repeat(3) { Skeleton(Modifier.weight(1f).aspectRatio(2f / 3f)) } }
                 }
-                tiles.isEmpty() -> Text(if (lib.all.isEmpty()) "Your provider hasn't listed any $what." else "Nothing here yet.",
-                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-                else -> LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
+            } else HorizontalPager(pager, Modifier.fillMaxSize(), key = { groups.getOrNull(it)?.id ?: it }) { page ->
+                val g = groups.getOrNull(page) ?: return@HorizontalPager
+                val tiles = remember(lib, g.id, sort, app.favourites) { lib.tiles(g.id, sort, "", app.favourites) }
+                val enter = rememberEntrance(ready = tiles.isNotEmpty())
+                val grid = rememberLazyGridState()
+                // back to the top on a new sort, and when Library is tapped again (not when coming back from a title)
+                LaunchedEffect(grid) { snapshotFlow { sort }.drop(1).collect { grid.scrollToItem(0) } }
+                LaunchedEffect(grid) { snapshotFlow { app.reselect }.drop(1).collect { grid.animateScrollToItem(0) } }
+                if (tiles.isEmpty()) Text(if (!anyTiles) "Your provider hasn't listed any $what." else "Nothing here yet.",
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxSize().padding(20.dp))
+                else LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
                         PosterCard(t.image, t.name, t.id, { openTitle(app, series, t.id) }, Modifier.animateItem().entrance(enter, i), sharedKey = posterKey(series, t.id),
@@ -238,7 +252,7 @@ private fun LibraryPage(app: AppState, series: Boolean, initialGroup: String?) {
                 }
             }
         }
-        if (tiles.isNotEmpty()) SortButton(sort, { sort = it }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+        if (anyTiles) SortButton(sort, { sort = it }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
     }
 
     menuFor?.let { g ->

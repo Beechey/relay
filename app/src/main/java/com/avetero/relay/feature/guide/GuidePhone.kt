@@ -47,6 +47,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.avetero.relay.ui.motion.Springs
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -143,8 +150,6 @@ private fun Chip(label: String, selected: Boolean, modifier: Modifier = Modifier
 private fun GuideRow(app: AppState, c: Channel, point: Long, live: Boolean, i: Int, count: Int, modifier: Modifier, onClick: () -> Unit) {
     LaunchedEffect(c.id) { app.loadEpg(c) }
     val progs = rememberProgrammes(app, c)
-    val at = remember(progs, point) { progs.at(point) }
-    val next = remember(progs, point) { progs.firstOrNull { it.start >= (at?.end ?: point) } }
     Row(modifier.fillMaxWidth().heightIn(min = 88.dp).clip(segmentShape(i, count)).background(MaterialTheme.colorScheme.surfaceContainer)
         .clickable(onClickLabel = "Schedule for ${c.name}", onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -152,6 +157,15 @@ private fun GuideRow(app: AppState, c: Channel, point: Long, live: Boolean, i: I
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name).joinToString(" · ") + if (c.archive) " · Catch-up" else "",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // moving through time slides the programmes along with your swipe (later → in from the right)
+            AnimatedContent(point, transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(Springs.spatial()) { it / 4 * dir } + fadeIn(Springs.effects())) togetherWith
+                    (slideOutHorizontally(Springs.spatial()) { -it / 4 * dir } + fadeOut(Springs.effectsFast()))
+            }, label = "guide-time") { pt ->
+            val at = remember(progs, pt) { progs.at(pt) }
+            val next = remember(progs, pt) { progs.firstOrNull { it.start >= (at?.end ?: pt) } }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(at?.title ?: if (progs.isEmpty()) "No guide for this channel" else "Nothing listed", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (at != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (live) {
@@ -162,6 +176,8 @@ private fun GuideRow(app: AppState, c: Channel, point: Long, live: Boolean, i: I
             }
             if (next != null) Text("Next ${fmtTime(next.start)} · ${next.title}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            }
         }
     }
 }

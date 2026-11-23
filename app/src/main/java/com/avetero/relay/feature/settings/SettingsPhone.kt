@@ -67,6 +67,9 @@ import com.avetero.relay.data.xtream.Xtream
 import com.avetero.relay.feature.categories.CategoriesPhone
 import com.avetero.relay.feature.update.UpdateDialog
 import com.avetero.relay.ui.m3.RelayTopBar
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.TopAppBarDefaults
+import com.avetero.relay.ui.m3.RelayLargeTopBar
 import com.avetero.relay.ui.m3.segmentShape
 import com.avetero.relay.util.fmtDate
 import kotlinx.coroutines.Dispatchers
@@ -78,12 +81,13 @@ internal fun SettingsPhone(app: AppState, section: String) {
     when (val key = sectionKey(section)) {
         "categories" -> CategoriesPhone(app, section.substringAfter(':', "live"))
         else -> Column(Modifier.fillMaxSize()) {
-            RelayTopBar(sectionNames.first { it.first == key }.second, { app.back() }, actions = {
+            val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            RelayLargeTopBar(sectionNames.first { it.first == key }.second, { app.back() }, scroll, actions = {
                 if (key == "playlists") FilledTonalButton({ app.push(Screen.Login) }, Modifier.padding(end = 8.dp), contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                     Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Text("Add", Modifier.padding(start = 8.dp))
                 }
             })
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            LazyColumn(Modifier.weight(1f).nestedScroll(scroll.nestedScrollConnection), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         when (key) {
@@ -119,9 +123,9 @@ private fun SettingsHome(app: AppState) = Column(Modifier.fillMaxSize()) {
     val start = remember { app.reselect }
     LaunchedEffect(app.reselect) { if (app.reselect != start) list.animateScrollToItem(0) }
     val cs = MaterialTheme.colorScheme
-    RelayTopBar("", { app.back() })
-    LazyColumn(Modifier.weight(1f), list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        item { Text("Settings", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(horizontal = 8.dp)) }
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    RelayLargeTopBar("Settings", { app.back() }, scroll)
+    LazyColumn(Modifier.weight(1f).nestedScroll(scroll.nestedScrollConnection), list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
             val a = app.account
             Surface({ app.push(Screen.Settings("playlists")) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = cs.surfaceContainerHigh) {

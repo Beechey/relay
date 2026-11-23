@@ -43,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,8 +73,10 @@ fun CategoriesPhone(app: AppState, initialType: String) {
     val m = remember(initialType) { CategoriesModel(app, initialType) }
     var resetAsk by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        RelayTopBar("Categories", { app.back() }, actions = { TextButton({ resetAsk = true }, enabled = m.custom) { Text("Reset order") } })
-        CategoriesBody(m, Modifier.weight(1f))
+        // the same large, collapsing title as the other settings pages
+        val scroll = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        com.avetero.relay.ui.m3.RelayLargeTopBar("Categories", { app.back() }, scroll, actions = { TextButton({ resetAsk = true }, enabled = m.custom) { Text("Reset order") } })
+        CategoriesBody(m, Modifier.weight(1f).nestedScroll(scroll.nestedScrollConnection))
     }
     if (resetAsk) ResetConfirm(m) { resetAsk = false }
 }
