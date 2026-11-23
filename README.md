@@ -1,100 +1,124 @@
+<div align="center">
+
 # Relay IPTV
 
-Relay is an IPTV player for **Android TV, Google TV and Android phones and tablets**. You sign in with the Xtream Codes details from your IPTV provider, and Relay turns that into a fast, remote-friendly TV app: live channels with a TV guide, a movie and series library, search, favourites and continue watching.
+**A fast, good-looking IPTV player for Android TV, Google TV and Android phones.**
+Sign in with your provider's Xtream Codes login and get live TV with a full guide, a movie and series library, search and continue watching, in an app that feels at home on both a sofa and a phone.
 
-Relay doesn't provide any channels or content. It only plays what your own provider gives you.
+[![Latest release](https://img.shields.io/github/v/release/Beechey/relay?label=release&color=FFB95C)](https://github.com/Beechey/relay/releases/latest)
+[![Beta](https://img.shields.io/github/v/release/Beechey/relay?include_prereleases&label=beta&color=2F3A52)](https://github.com/Beechey/relay/releases)
+[![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-2F3A52)](LICENSE)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 
-## What it does
+[**Download the APK**](https://github.com/Beechey/relay/releases/latest/download/relay-iptv.apk) · [Releases](https://github.com/Beechey/relay/releases) · [Report a bug](https://github.com/Beechey/relay/issues)
 
-- **Live TV** – browse channel groups, preview a channel in a small player, then go fullscreen. Change channel with Up/Down on the remote, or by swiping on a phone.
-- **TV guide** – a timeline of what's on, built from your provider's full guide (XMLTV) and refreshed in the background. Pick a category, and move earlier or later through the day.
-- **Movies and series** – poster grids by category, sort by newest, A–Z or rating, detail pages, season and episode lists.
-- **Continue watching** – movies and episodes remember where you stopped. When you finish an episode, the next one is queued up.
-- **Search** – find channels, movies, series and whole categories from one box.
-- **Favourites and hidden categories** – star what you watch and hide what you never want to see.
-- **Picture-in-picture** on phones and tablets – leave the app and keep watching in a floating window.
-- **Audio, subtitles and quality** – choose the track or video quality per video when the stream offers more than one.
-- **Several playlists** – save more than one provider and switch between them.
-- **Updates itself** – new versions are offered inside the app.
+</div>
 
-## Getting it
+> **Relay doesn't come with any channels or content.** It's a player: it shows what your own IPTV provider gives you, using the login they sent you.
 
-Download `relay-iptv.apk` from the latest release and install it on your device:
+---
 
-**https://github.com/Beechey/relay/releases/latest/download/relay-iptv.apk**
+## Highlights
 
-On Android TV, one easy route is the *Downloader* app: enter the link above and install. Android asks you to allow installs from that app the first time.
+*Relay 0.3, currently in [beta](https://github.com/Beechey/relay/releases), is a complete redesign; this is what it looks like.*
 
-After that, Relay checks for updates itself and installs them when you agree.
+| | On TV | On a phone |
+|---|---|---|
+| **Look** | Material 3 for TV: a menu down the left, big artwork, clear focus | Material 3 Expressive: the Android look, with rounded shapes and spring animations |
+| **Live TV** | Channel groups and a live preview, then fullscreen with a strip of neighbouring channels | Swipe through categories; keep watching in a mini player while you browse |
+| **Guide** | A full grid: channels down, time across, catch-up and reminders | A tidy list with time chips; swipe to move through the evening |
+| **Movies and series** | Poster rows and grids, detail pages, seasons and episodes | Swipe through categories, posters grow into their detail page |
+| **Getting around** | Every remote button does what you'd expect, and focus always comes back to where you were | Every tab keeps its place; predictive back; picture-in-picture |
+
+**Also:** continue watching (and the next episode queued up), search across everything, favourites, hide or reorder categories, audio / subtitle / quality choice, Chromecast for live TV, several playlists, and updates from inside the app.
+
+## Install
+
+1. **Download** [`relay-iptv.apk`](https://github.com/Beechey/relay/releases/latest/download/relay-iptv.apk) on the device, and open it. Android asks once to allow installs from your browser or file manager.
+2. **On Android TV / Google TV**, the easiest route is the free *Downloader* app: enter this link and install.
+   ```
+   https://github.com/Beechey/relay/releases/latest/download/relay-iptv.apk
+   ```
+3. **Sign in** with the server address (including the port, e.g. `http://example.com:8080`), username and password from your provider. Relay downloads your channels, movies, series and guide; a big playlist takes a minute the first time, then opens instantly.
+
+Relay keeps itself up to date: it offers new versions when they're released. Want new features early? Turn on **Beta updates** in *Settings › About and updates*.
 
 ## Using it
 
-1. Open Relay and enter your provider's **server address** (including the port, e.g. `http://example.com:8080`), **username** and **password**.
-2. Relay signs in and downloads your channels, movies, series and TV guide. A large playlist takes a minute the first time; after that the app opens straight away from its saved copy.
-3. Your login stays on the device and Relay signs you in automatically next time.
-
-| | TV remote | Phone / tablet |
+| | TV remote | Phone |
 |---|---|---|
-| Select | OK | Tap |
-| Options, favourite, hide a category | Hold OK | Press and hold |
-| Back | Back | Back gesture or the ← button |
-| Change channel (fullscreen) | Up / Down | Swipe up / down |
-| Skip in a movie | Left / Right | Double-tap left / right side |
+| Open | OK | Tap |
+| Options (save, hide a category…) | Hold OK, or the Menu key | Press and hold, or ⋮ |
+| Back | Back (again to reach the menu, again for For you) | Back gesture |
+| Change channel | Up / Down, or type the number | Swipe up / down in fullscreen |
+| Channel list in fullscreen | Hold Left | Back to Live, or ⋮ |
+| Skip in a film | Left / Right, or the skip buttons | Double-tap a side |
+
+## Privacy
+
+Relay talks straight to your provider. There's no Relay server, no account, no analytics and no tracking. Your login is stored only on the device. The app connects to two places: your provider, and GitHub to check for updates (you can switch that off).
 
 ## How it works
 
-Relay talks directly to your provider's Xtream Codes API (`player_api.php`). There's no Relay server in between, and no account or tracking.
+- **Catalogue:** channel, movie and series lists are streamed to disk and read back in a compact format, so even playlists with tens of thousands of titles open in seconds and don't run out of memory.
+- **TV guide:** the provider's XMLTV guide is parsed as it downloads, keeping two hours back to a day ahead; where a channel isn't covered, Relay asks the provider for its now-and-next.
+- **Playback:** AndroidX Media3 (ExoPlayer) with an FFmpeg audio decoder, so live MPEG-TS and HLS, films and episodes play with their audio wherever possible.
+- **Chromecast:** the phone reads the live stream and serves it to the TV as short HLS segments over your Wi-Fi, so channels the Cast receiver can't play directly still work.
 
-- **Catalogue** – channel, movie and series lists are streamed to disk and read back a piece at a time, so even very large playlists don't run out of memory. They're cached and refreshed on the schedule you pick in Settings.
-- **TV guide** – the provider's XMLTV file is stream-parsed as it downloads. Relay keeps two hours back to 24 hours ahead for every channel, and falls back to the provider's short "now and next" data where a channel isn't covered.
-- **Playback** – AndroidX Media3 (ExoPlayer) plays live MPEG-TS and HLS, and movie and episode files.
-- **Updates** – releases are published to the public [`relay-releases`](https://github.com/Beechey/relay-releases) repository. The app checks it on start and installs the new APK through Android's installer. Every release is signed with the same key, so updates install over the previous version and keep your settings.
+## Build it yourself
 
-## Project layout
+You need **JDK 17** and the **Android SDK** (platform 37.1). Everything else comes with the Gradle wrapper.
 
-The app is one Gradle module, organised by feature. Every feature folder has the same shape: a `…Screen.kt` for the page, and the parts only that page uses beside it. Anything used by more than one feature lives in `ui/components` or `ui/theme`.
+```bash
+git clone https://github.com/Beechey/relay.git
+cd relay
+./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:testDebugUnitTest    # unit tests
+```
+
+Release builds are signed from the `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` environment variables with `app/release.jks`, which is never committed. Pushing a tag such as `v1.2.3` (or `v1.2.3-beta.1` for a pre-release) runs the release workflow, which builds, signs and publishes `relay-iptv.apk` on the [Releases](https://github.com/Beechey/relay/releases) page.
+
+<details>
+<summary><b>Project layout</b></summary>
+
+Kotlin and Jetpack Compose throughout. Phones use Material 3 Expressive, TVs Material 3 for TV; each feature folder holds the shared logic plus a phone and a TV layout where they differ.
 
 ```
 app/src/main/java/com/avetero/relay/
 ├── MainActivity.kt        picture-in-picture, remote key routing, entry point
-├── app/                   AppState (what the app knows), Screen (where you are), RelayApp (screen switch)
+├── app/                   AppState, Navigator (one back stack per tab), the phone and TV shells
 ├── data/
-│   ├── model/             plain data: channels, movies, series, programmes, resume points
-│   ├── xtream/            Xtream Codes API client, HTTP, JSON parsers
-│   ├── epg/               XMLTV guide parser and its cache
-│   ├── store/             saved settings, playlists and catalogue cache
+│   ├── model/             channels, movies, series, programmes, resume points
+│   ├── xtream/            Xtream Codes API client and streaming JSON parsers
+│   ├── epg/               XMLTV guide parser and cache
+│   ├── store/             settings, playlists, catalogue cache
 │   └── update/            in-app updates from GitHub releases
-├── player/                ExoPlayer host, video surface, fullscreen handling
+├── player/                ExoPlayer host, video surface, Chromecast relay
 ├── ui/
-│   ├── theme/             colours, type, icons, TV / phone scaling
-│   └── components/        buttons, focus, navigation rail, text fields, dialogs, artwork
-├── feature/
-│   ├── home/  live/  guide/  vod/  search/  favourites/
-│   ├── playback/          track picker and error card shared by both players
-│   ├── categories/        Manage categories (order and hide)
-│   ├── settings/          Settings and its sections/
-│   ├── onboarding/        sign-in and first sync
-│   └── update/            the update dialog
+│   ├── theme/             colours, Roboto Flex, TV / phone scaling
+│   ├── m3/                phone building blocks (Material 3 Expressive)
+│   ├── tv/                TV building blocks (Material 3 for TV)
+│   ├── motion/            springs, transitions, shared elements
+│   └── components/        small helpers shared by both
+├── feature/               home, live, guide, vod, search, favourites, playback,
+│                          categories, settings, onboarding, update
 └── util/                  date and time formatting
+baselineprofile/           records the start-up profile shipped in release builds
 ```
 
 Unit tests mirror the same packages under `app/src/test`.
 
-## Building from source
+</details>
 
-Requirements: JDK 17 and the Android SDK (platform 35, build-tools 35).
+## Contributing
 
-```bash
-./gradlew :app:assembleDebug        # debug build
-./gradlew :app:testDebugUnitTest    # unit tests
-```
+Bug reports and pull requests are welcome.
 
-Release builds are signed from environment variables (`KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) with the keystore at `app/release.jks`, which is never committed. Tagging `vX.Y.Z` runs the release workflow, which builds, signs and publishes `relay-iptv.apk` to `relay-releases`.
-
-Built with Kotlin and Jetpack Compose, one layout for TV (remote-first, 1280×720 design grid) and one for phones (bottom tabs, portrait and landscape).
+- **Found a bug?** [Open an issue](https://github.com/Beechey/relay/issues) with your device, Android version and what you did. Please never include your provider's address or login.
+- **Sending a change?** Keep it small and focused, run the unit tests, and check it on a phone and on a TV (an emulator is fine for both).
 
 ## Licence
 
-Relay is free software under the [GNU General Public License v3.0](LICENSE): you can use, study, share and change it, and anything you distribute that's built from it must be shared under the same licence. Relay bundles the FFmpeg audio decoder (GPL-3.0) and the Manrope font (SIL Open Font License, see `licenses/`).
+Relay is free software under the [GNU General Public License v3.0](LICENSE). You can use, study, share and change it; anything you distribute that's built from it must be shared under the same licence.
 
-The Material 3 redesign (0.3.0, in beta) is on the [`material-redesign`](https://github.com/Beechey/relay/tree/material-redesign) branch.
+It bundles the FFmpeg audio decoder (GPL-3.0) and the Roboto Flex font ([SIL Open Font License](licenses/RobotoFlex-OFL.txt)). Android, Android TV and Google TV are trademarks of Google LLC; Relay isn't affiliated with Google or any IPTV provider.
