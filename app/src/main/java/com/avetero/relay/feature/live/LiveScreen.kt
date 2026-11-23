@@ -95,7 +95,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     }
     var focusedCh by remember { mutableStateOf<Channel?>(null) }
     var menuFor by remember { mutableStateOf<Channel?>(null) }
-    val playing = list.firstOrNull { app.player.url == app.liveUrl(it) } ?: app.channels.firstOrNull { app.player.url == app.liveUrl(it) }
+    val playing = remember(app.player.url, list) { list.firstOrNull { app.player.url == app.liveUrl(it) } ?: app.channels.firstOrNull { app.player.url == app.liveUrl(it) } }
     val firstRow = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val phone = compact()

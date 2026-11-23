@@ -10,6 +10,7 @@ import android.util.Rational
 import android.view.KeyEvent
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import com.avetero.relay.app.App
 import com.avetero.relay.app.AppState
 import com.avetero.relay.ui.theme.DesignScale
@@ -18,6 +19,7 @@ class MainActivity : FragmentActivity() {
     private lateinit var app: AppState
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
         setContent { DesignScale { androidx.compose.runtime.CompositionLocalProvider(com.avetero.relay.ui.components.LocalParts provides app.shownParts) { App(app, onExit = ::finish) } } }

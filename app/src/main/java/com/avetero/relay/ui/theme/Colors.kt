@@ -2,7 +2,7 @@ package com.avetero.relay.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-private val tones = listOf(0xFF2B3A4A, 0xFF40322A, 0xFF2E2A44, 0xFF1F3B3A, 0xFF44262C, 0xFF2A3A2A, 0xFF3A2E40, 0xFF33332A).map { Color(it) }
+private val tones = listOf(0xFF2B3A4A, 0xFF2A3A4F, 0xFF33405A, 0xFF3D2F4A, 0xFF1F3B3A, 0xFF2B3D3A, 0xFF2A3A2A, 0xFF34384A).map { Color(it) }
 
 fun tone(seed: Int) = tones[Math.floorMod(seed, tones.size)]
 

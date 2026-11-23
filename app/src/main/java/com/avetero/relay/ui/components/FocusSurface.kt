@@ -77,7 +77,8 @@ fun FocusSurface(
             .clip(shape)
             .background(bg)
             .then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier)
-            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = onClick),
+            // touch gets a ripple so a tap is answered at once; the remote's feedback is the focus fill and lift
+            .combinedClickable(remember { MutableInteractionSource() }, if (compact()) androidx.compose.material3.ripple() else null, onLongClick = onLongClick, onClick = onClick),
     ) { content(focused) }
 }
 

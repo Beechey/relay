@@ -191,7 +191,8 @@ fun GuideScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Guide, nav, be
                 } else Modifier), rows, contentPadding = PaddingValues(bottom = 32.dp)) {
                     itemsIndexed(list, key = { _, c -> c.id }) { i, c ->
                         LaunchedEffect(c.id) { app.loadEpg(c) }
-                        val progs = app.programmesFor(c).orEmpty().filter { it.end > windowStart && it.start < windowEnd }.withoutOverlaps()
+                        val chProgs = app.programmesFor(c)
+                        val progs = remember(chProgs, windowStart, windowEnd) { chProgs.orEmpty().filter { it.end > windowStart && it.start < windowEnd }.withoutOverlaps() }
                         Row(Modifier.height(if (phone) 64.dp else 68.dp)) {
                             Row(Modifier.width(nameW).fillMaxHeight().padding(start = if (phone) 8.dp else 40.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 12.dp)) {
                                 Logo(c.icon, c.name, false, Modifier.size(if (phone) 32.dp else 48.dp, if (phone) 24.dp else 34.dp))

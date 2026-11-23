@@ -89,7 +89,8 @@ private fun androidx.compose.foundation.layout.RowScope.VodGrid(app: AppState, s
         if (series) app.seriesVisible.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
         else app.moviesVisible.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
     }
-    val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
+    val resumeIds = remember(series, app.resumes) { app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct() }
+    val byId = remember(all) { all.associate { it.first.id to it.first } }
     var drawer by remember { mutableStateOf(false) }
     var sort by rememberSaveable { mutableIntStateOf(0) }
     val recentIds = if (series) app.recentSeries else app.recentMovies
@@ -103,10 +104,10 @@ private fun androidx.compose.foundation.layout.RowScope.VodGrid(app: AppState, s
         ) + cats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
     }
     var query by rememberSaveable(series) { mutableStateOf("") }
-    val tiles = remember(groupId, sort, all, resumeIds, recentIds, query) {
+    val tiles = remember(groupId, sort, all, byId, resumeIds, recentIds, query) {
         val base = when (groupId) {
-            RESUME -> resumeIds.mapNotNull { id -> all.firstOrNull { it.first.id == id }?.first }
-            RECENT -> recentIds.mapNotNull { id -> all.firstOrNull { it.first.id == id }?.first }
+            RESUME -> resumeIds.mapNotNull(byId::get)
+            RECENT -> recentIds.mapNotNull(byId::get)
             ALL -> all.map { it.first }
             else -> all.filter { it.second == groupId }.map { it.first }
         }

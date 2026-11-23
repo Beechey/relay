@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,9 +51,9 @@ import com.avetero.relay.ui.theme.sub
 @Composable
 fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Favourites, nav) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val chans = app.channelsIn(FAVS)
-    val movies = app.favourites.filter { it.startsWith("m") }.mapNotNull { k -> app.movies.firstOrNull { "m${it.id}" == k } }
-    val series = app.favourites.filter { it.startsWith("s") }.mapNotNull { k -> app.series.firstOrNull { "s${it.id}" == k } }
+    val chans = remember(app.favourites, app.channels) { app.channelsIn(FAVS) }
+    val movies = remember(app.favourites, app.movies) { app.favourites.filter { it.startsWith("m") }.mapNotNull { k -> k.drop(1).toIntOrNull()?.let(app.movieById::get) } }
+    val series = remember(app.favourites, app.series) { app.favourites.filter { it.startsWith("s") }.mapNotNull { k -> k.drop(1).toIntOrNull()?.let(app.seriesById::get) } }
 
     val phone = compact()
     Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = if (phone) 16.dp else 40.dp, vertical = if (phone) 16.dp else 28.dp), verticalArrangement = Arrangement.spacedBy(if (phone) 16.dp else 22.dp)) {
