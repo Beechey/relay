@@ -41,18 +41,11 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.avetero.relay.ui.theme.Bold
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Ico
-import com.avetero.relay.ui.theme.Icons
-import com.avetero.relay.ui.theme.LogoMark
-import com.avetero.relay.ui.theme.T
 import com.avetero.relay.ui.theme.compact
 
 /** The places you navigate between; the app shell draws them (phone navigation bar / rail, TV drawer). */
-enum class Tab(val icon: ImageVector, val label: String) {
-    Home(Icons.Home, "For you"), Live(Icons.Live, "Live"), Guide(Icons.Guide, "Guide"), Movies(Icons.Movies, "Movies"),
-    Series(Icons.Series, "Series"), Favourites(Icons.Star, "Saved"), Search(Icons.Search, "Search"), Settings(Icons.Settings, "Settings"),
+enum class Tab(val label: String) {
+    Home("For you"), Live("Live"), Guide("Guide"), Movies("Movies"), Series("Series"), Favourites("Saved"), Search("Search"), Settings("Settings"),
 }
 
 /** Which parts of the playlist are downloaded (board 11); a part that's off loses its tab. */
@@ -63,12 +56,3 @@ fun Tab.shownWith(parts: Set<String>) = when (this) {
     Tab.Series -> "series" in parts
     else -> true
 }
-
-/**
- * The frame of a browsing screen. Navigation itself now lives in the app shell (app/PhoneShell.kt, app/TvShell.kt),
- * so this only lays the content out; the extra parameters are kept until every screen is rebuilt.
- */
-@Suppress("UNUSED_PARAMETER")
-@Composable
-fun WithRail(active: Tab, onSelect: (Tab) -> Unit, behindDock: Boolean = false, dockHidden: Boolean = false, pageEntry: FocusRequester? = null, content: @Composable RowScope.() -> Unit) =
-    Row(Modifier.fillMaxSize(), content = content)

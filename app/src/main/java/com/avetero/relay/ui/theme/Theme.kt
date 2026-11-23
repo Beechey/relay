@@ -115,3 +115,8 @@ fun RelayTheme(tv: Boolean, content: @Composable () -> Unit) =
         if (tv) androidx.tv.material3.MaterialTheme(colorScheme = TvColors, typography = TvTypography, content = content)
         else content()
     }
+
+private val tones = listOf(0xFF2B3A4A, 0xFF2A3A4F, 0xFF33405A, 0xFF3D2F4A, 0xFF1F3B3A, 0xFF2B3D3A, 0xFF2A3A2A, 0xFF34384A).map { Color(it) }
+
+/** Placeholder tint for artwork that hasn't loaded (or has none), stable per item. */
+fun tone(seed: Int) = tones[Math.floorMod(seed, tones.size)]

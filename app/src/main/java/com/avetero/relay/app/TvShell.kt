@@ -46,7 +46,9 @@ import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.NavigationDrawerItemDefaults
 import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
-import com.avetero.relay.ui.components.ConfirmDialog
+import com.avetero.relay.ui.components.settle
+import com.avetero.relay.ui.tv.TvButton
+import com.avetero.relay.ui.tv.TvDialog
 import com.avetero.relay.ui.components.LocalParts
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.components.shownWith
@@ -126,5 +128,13 @@ fun TvShell(app: AppState, nav: (Tab) -> Unit, onExit: () -> Unit) {
             }
         }
     }
-    if (exitAsk) ConfirmDialog("Exit Relay?", "Exit", onExit, { exitAsk = false }, cancel = "Stay", destructive = false)
+    if (exitAsk) TvDialog({ exitAsk = false }) {
+        val stay = remember { FocusRequester() }
+        Text("Exit Relay?", style = MaterialTheme.typography.headlineSmall)
+        androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvButton("Stay", { exitAsk = false }, primary = true, focusRequester = stay)
+            TvButton("Exit", onExit)
+        }
+        LaunchedEffect(Unit) { stay.settle() }
+    }
 }

@@ -57,7 +57,7 @@ import com.avetero.relay.data.model.Resume
 import com.avetero.relay.data.model.current
 import com.avetero.relay.data.model.progress
 import com.avetero.relay.ui.m3.Artwork
-import com.avetero.relay.ui.theme.Icons
+import androidx.compose.material.icons.rounded.PlayArrow
 import com.avetero.relay.ui.theme.Tok
 import com.avetero.relay.ui.tv.TvButton
 import com.avetero.relay.ui.tv.TvHints
@@ -165,7 +165,7 @@ private fun Hero(app: AppState, items: List<Resume>, info: MutableMap<String, He
                 Text(resumeLine(r), style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp), color = Tok.OnSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 info[r.key]?.plot?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tok.OnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    TvButton(if (r.pos > 0) "Resume" else "Play", { resume(app, r) }, resumeModifier, primary = true, leading = { Icon(Icons.Play, null, Modifier.size(18.dp)) })
+                    TvButton(if (r.pos > 0) "Resume" else "Play", { resume(app, r) }, resumeModifier, primary = true, leading = { Icon(androidx.compose.material.icons.Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)) })
                     TvButton(if (r.seriesId != 0) "Episodes" else "Details", { details(app, r) })
                 }
             }

@@ -32,6 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -153,7 +155,9 @@ fun TvSidePanel(visible: Boolean, onDismiss: () -> Unit, first: FocusRequester? 
             enter = slideInHorizontally { 40 } + fadeIn(), exit = slideOutHorizontally { 40 } + fadeOut()) {
             Column(
                 Modifier.width(420.dp).fillMaxHeight().shadow(24.dp, RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
-                    .clip(RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)).background(com.avetero.relay.ui.theme.Tok.Container).padding(horizontal = 28.dp, vertical = 32.dp),
+                    .clip(RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)).background(com.avetero.relay.ui.theme.Tok.Container).padding(horizontal = 28.dp, vertical = 32.dp)
+                    // the D-pad stays inside the panel until it's closed
+                    .focusProperties { onExit = { cancelFocusChange() } }.focusGroup(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (title != null) Text(title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 12.dp))

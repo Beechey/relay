@@ -107,7 +107,7 @@ internal fun GuidePhone(app: AppState, g: GuideState) {
     }
 
     sheetFor?.let { c -> ChannelSheet(app, c, list, point) { sheetFor = null } }
-    if (categories) CategorySheet(g) { categories = false }
+    if (categories) CategorySheet(g.groups, g.groupId, { g.groupId = it }, g::moveCategory, g::hide) { categories = false }
 }
 
 
@@ -224,22 +224,22 @@ private fun ScheduleRow(app: AppState, c: Channel, p: Programme, list: List<Chan
     }
 }
 
-/** Categories: tap to show one; press and hold one of the provider's to move or hide it. */
+/** Categories (Guide and Live): tap to show one; press and hold one of the provider's to move or hide it. */
 @Composable
-private fun CategorySheet(g: GuideState, onDismiss: () -> Unit) = RelaySheet(onDismiss) {
+fun CategorySheet(groups: List<Group>, current: String, onPick: (String) -> Unit, onMove: (Group, Move?) -> Unit, onHide: (Group) -> Unit, onDismiss: () -> Unit) = RelaySheet(onDismiss) {
     var q by remember { mutableStateOf("") }
     var hiding by remember { mutableStateOf<Group?>(null) }
-    val shown = remember(g.groups, q) { g.groups.matching(q) }
+    val shown = remember(groups, q) { groups.matching(q) }
     Text("Categories", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-    if (g.groups.size > 8) OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), placeholder = { Text("Find a category") }, singleLine = true)
+    if (groups.size > 8) OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), placeholder = { Text("Find a category") }, singleLine = true)
     LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         itemsIndexed(shown, key = { _, it -> it.id }) { i, grp ->
             var menu by remember { mutableStateOf(false) }
-            val on = grp.id == g.groupId
+            val on = grp.id == current
             val cs = MaterialTheme.colorScheme
             Box(Modifier.animateItem()) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(segmentShape(i, shown.size)).background(if (on) cs.secondaryContainer else cs.surfaceContainer)
-                    .combinedClickable(onLongClick = if (grp.id.startsWith("__")) null else ({ menu = true }), onLongClickLabel = "Move or hide") { g.groupId = grp.id; onDismiss() }
+                    .combinedClickable(onLongClick = if (grp.id.startsWith("__")) null else ({ menu = true }), onLongClickLabel = "Move or hide") { onPick(grp.id); onDismiss() }
                     .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (on) Icon(Icons.Rounded.Check, null, tint = cs.onSecondaryContainer)
                     Text(grp.name, style = MaterialTheme.typography.bodyLarge, color = if (on) cs.onSecondaryContainer else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -247,7 +247,7 @@ private fun CategorySheet(g: GuideState, onDismiss: () -> Unit) = RelaySheet(onD
                 }
                 DropdownMenu(menu, { menu = false }) {
                     listOf("Move to top" to Move.Top, "Move up one" to Move.Up, "Move down one" to Move.Down, "Move to bottom" to Move.Bottom, "Reorder several…" to null).forEach { (label, m) ->
-                        DropdownMenuItem({ Text(label) }, { menu = false; if (m == null) onDismiss(); g.moveCategory(grp, m) })
+                        DropdownMenuItem({ Text(label) }, { menu = false; if (m == null) onDismiss(); onMove(grp, m) })
                     }
                     DropdownMenuItem({ Text("Hide category") }, { menu = false; hiding = grp })
                 }
@@ -255,7 +255,7 @@ private fun CategorySheet(g: GuideState, onDismiss: () -> Unit) = RelaySheet(onD
         }
     }
     hiding?.let { grp ->
-        AlertDialog({ hiding = null }, confirmButton = { TextButton({ g.hide(grp); hiding = null }) { Text("Hide") } },
+        AlertDialog({ hiding = null }, confirmButton = { TextButton({ onHide(grp); hiding = null }) { Text("Hide") } },
             dismissButton = { TextButton({ hiding = null }) { Text("Cancel") } },
             title = { Text("Hide “${grp.name}”?") }, text = { Text("It won't appear in lists, All, the guide or search. Bring it back in Settings → Manage categories.") })
     }

@@ -83,7 +83,7 @@ import com.avetero.relay.feature.playback.CastingOverlay
 import com.avetero.relay.feature.playback.PlayerError
 import com.avetero.relay.feature.playback.TracksDialog
 import com.avetero.relay.player.PlayerSurface
-import com.avetero.relay.ui.components.CategoryDrawer
+import com.avetero.relay.feature.guide.CategorySheet
 import com.avetero.relay.ui.components.Group
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.m3.ChannelLogo
@@ -199,7 +199,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
         }
     }
 
-    if (drawer) CategoryDrawer("Live TV", groups, groupId, ::pickGroup, onHide = { hideLive(app, it, groupId) { g -> pickGroup(g) } }, onMove = categoryMover(app, "live")) { drawer = false }
+    if (drawer) CategorySheet(groups, groupId, ::pickGroup, categoryMover(app, "live"), { hideLive(app, it, groupId) { g -> pickGroup(g) } }) { drawer = false }
     menuFor?.let { c ->
         ChannelMenu(app, c, { menuFor = null }, onPrevious = previous?.takeIf { playing?.id == c.id }?.let { p -> { menuFor = null; play(p) } },
             onHide = { hideLive(app, Group(c.categoryId, app.liveCats.firstOrNull { it.id == c.categoryId }?.name ?: "", 0), groupId) { g -> pickGroup(g) } })
