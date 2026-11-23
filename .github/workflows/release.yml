@@ -1,15 +1,17 @@
-# Tag v1.2.3 (or v1.2.3-beta.1) on this private repo -> signed APK published as a release on the public
-# Beechey/relay-releases repo, which the app checks for updates.
-# Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, RELEASES_TOKEN (contents:write on relay-releases).
+# Tag v1.2.3 (or v1.2.3-beta.1 for a pre-release) -> signed APK published as a release on this repo, which the app
+# checks for updates. Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+# Optional RELEASES_TOKEN (contents:write on Beechey/relay-releases): also publishes there, for installs from before
+# updates moved to this repo.
 name: release
 on:
   push:
     tags: ["v*"]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # without the cross-repo token the APK is still built and kept as a run artifact, to publish by hand
       HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +31,13 @@ jobs:
       - run: cp app/build/outputs/apk/release/app-release.apk relay-iptv.apk  # same name every release: stable /releases/latest/download/relay-iptv.apk link
       - uses: actions/upload-artifact@v4
         with: { name: relay-iptv, path: relay-iptv.apk }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Relay IPTV ${{ github.ref_name }}
+          files: relay-iptv.apk
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: RELEASE_NOTES.md
       - if: env.HAS_RELEASES_TOKEN == 'true'
         uses: softprops/action-gh-release@v2
         with:
