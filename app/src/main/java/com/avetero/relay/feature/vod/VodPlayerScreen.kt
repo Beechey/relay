@@ -1,32 +1,58 @@
 package com.avetero.relay.feature.vod
 
-import androidx.compose.ui.unit.coerceIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SliderState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +69,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -52,13 +80,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
-import com.avetero.relay.ui.theme.LiveGradient
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
+import androidx.mediarouter.app.MediaRouteButton
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.PlayItem
@@ -68,37 +98,31 @@ import com.avetero.relay.feature.playback.PlayerError
 import com.avetero.relay.feature.playback.TracksDialog
 import com.avetero.relay.player.FullscreenVideo
 import com.avetero.relay.player.PlayerSurface
-import com.avetero.relay.ui.components.Art
-import com.avetero.relay.ui.components.Badge
-import com.avetero.relay.ui.components.Btn
-import com.avetero.relay.ui.components.BtnStyle
-import com.avetero.relay.ui.components.CastButton
-import com.avetero.relay.ui.components.Clock
-import com.avetero.relay.ui.components.FocusSurface
-import com.avetero.relay.ui.components.IconBtn
-import com.avetero.relay.ui.theme.Bold
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Heavy
-import com.avetero.relay.ui.theme.Ico
-import com.avetero.relay.ui.theme.Icons
-import com.avetero.relay.ui.theme.Semi
-import com.avetero.relay.ui.theme.T
-import com.avetero.relay.ui.theme.compact
+import com.avetero.relay.ui.m3.Artwork
+import com.avetero.relay.ui.motion.Springs
+import com.avetero.relay.ui.theme.LocalWide
+import com.avetero.relay.ui.theme.isTv
+import com.avetero.relay.ui.tv.TvButton
+import com.avetero.relay.ui.tv.TvHints
+import com.avetero.relay.ui.tv.TvSafe
+import com.avetero.relay.ui.tv.TvSurface
 import com.avetero.relay.util.fmtDur
+import com.google.android.gms.cast.framework.CastButtonFactory
 import kotlinx.coroutines.delay
+import androidx.tv.material3.MaterialTheme as TvTheme
+import androidx.tv.material3.Text as TvText
 
-/** Board 06: movie / episode player with seek, tracks, speed and next-episode card. */
+/** Movie / episode player: seek, skip, tracks, speed, fit, episodes and the up-next card (PhoneVodPlayer / TvVodPlayer boards). */
 @Composable
 fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episodes: List<PlayItem> = emptyList()) {
     FullscreenVideo(app.inPip)
+    val tv = isTv()
     // the Chromecast while casting, otherwise this device; the effect below restarts when it changes
     val p = app.player.current
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
     var showUi by remember { mutableStateOf(true) }
     var poke by remember { mutableIntStateOf(0) }
-    var audio by remember { mutableStateOf("Default") }
-    var subs by remember { mutableStateOf(if (app.store.subtitlesOn) "On" else "Off") }
     var speed by remember { mutableFloatStateOf(1f) }
     var zoom by remember { mutableStateOf(app.store.zoomDefault) }
     val back = app.store.skipBackSec * 1000L
@@ -106,11 +130,11 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
     var ended by remember { mutableStateOf(false) }
     var seekHint by remember { mutableStateOf<String?>(null) }
     var tracksOpen by remember { mutableStateOf(false) }
+    var episodesOpen by remember { mutableStateOf(false) }
     LaunchedEffect(seekHint) { if (seekHint != null) { delay(1_200); seekHint = null } }
     val root = remember { FocusRequester() }
     val playBtn = remember { FocusRequester() }
-    val speedBtn = remember { FocusRequester() }
-    val sideBtn = remember { FocusRequester() }
+    val firstAction = remember { FocusRequester() }
 
     fun save() {
         if (dur <= 0) return
@@ -126,7 +150,9 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         val i = episodes.indexOf(e)
         app.stack[app.stack.lastIndex] = Screen.VodPlayer(e, episodes.drop(i + 1).take(20), episodes)
     }
-    var episodesOpen by remember { mutableStateOf(false) }
+    fun toggle() { if (p.isPlaying) p.pause() else p.play() }
+    fun cycleSpeed() { speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed) }
+    val speedLabel = if (speed % 1f == 0f) "${speed.toInt()}x" else "${speed}x"
 
     LaunchedEffect(item.url, p) {
         ended = false
@@ -158,9 +184,12 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         preview = ((preview ?: p.currentPosition) + if (forward) step else -step).coerceIn(0, dur.coerceAtLeast(0))
         poke++
     }
-    LaunchedEffect(showUi) { if (showUi) runCatching { (if (preview != null) scrubFocus else playBtn).requestFocus() } }
+    LaunchedEffect(showUi) { if (showUi) runCatching { (if (preview != null && tv) scrubFocus else playBtn).requestFocus() } }
     // Back first hides the controls; the next Back leaves the player
     BackHandler(showUi && !app.inPip && !tracksOpen && !episodesOpen) { if (app.player.error != null) app.back() else { showUi = false; runCatching { root.requestFocus() } } }
+
+    val shown = showUi && !app.inPip && app.player.error == null
+    val upNext = next.firstOrNull()?.takeIf { !app.inPip && dur > 0 && dur - pos in 1..30_000 }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -171,7 +200,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 when (e.key) {
                     Key.DirectionLeft, Key.MediaRewind -> { nudge(false, e.nativeKeyEvent.repeatCount); true }
                     Key.DirectionRight, Key.MediaFastForward -> { nudge(true, e.nativeKeyEvent.repeatCount); true }
-                    Key.MediaPlayPause -> { if (p.isPlaying) p.pause() else p.play(); poke++; true }
+                    Key.MediaPlayPause -> { toggle(); poke++; true }
                     Key.DirectionCenter, Key.Enter, Key.DirectionUp, Key.DirectionDown -> { poke++; true }
                     else -> false
                 }
@@ -198,110 +227,186 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom)
         app.player.castDevice?.let { CastingOverlay(it, item.title, app.player.castStatus) }
         app.player.error?.let { PlayerError(it, { app.player.retry() }, null, onBack = { app.back() }) }
-        seekHint?.let { Badge(it, C.Ground, C.Text, Modifier.align(Alignment.Center)) }
+
+        val cs = MaterialTheme.colorScheme
+        val glass = cs.surface.copy(alpha = 0.6f)
+        val fade = fadeIn(Springs.effects()) to fadeOut(Springs.effects())
+
+        if (!tv) {
+            AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize().background(cs.scrim.copy(alpha = 0.45f))) }
+            // top: back, title, mute, cast, picture in picture
+            AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter), enter = fade.first + slideInVertically(Springs.spatial()) { -it / 3 },
+                exit = fade.second + slideOutVertically(Springs.spatial()) { -it / 3 }) {
+                Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", glass) { app.back() }
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (item.meta.isNotBlank()) Text(item.meta, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    RoundIcon(if (app.player.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, if (app.player.muted) "Unmute" else "Mute", glass) { app.player.toggleMute() }
+                    if (app.player.canCast) Box(Modifier.size(48.dp).clip(CircleShape).background(glass), contentAlignment = Alignment.Center) {
+                        // the activity theme (Theme.Relay) supplies the colorPrimary MediaRouteButton requires
+                        AndroidView({ ctx -> MediaRouteButton(ctx).also { CastButtonFactory.setUpMediaRouteButton(ctx, it) } }, Modifier.size(48.dp))
+                    }
+                    val activity = LocalContext.current as? com.avetero.relay.MainActivity
+                    RoundIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", glass) { activity?.enterPip() }
+                }
+            }
+            // centre: skip back, play/pause, skip forward
+            AnimatedVisibility(shown, Modifier.align(Alignment.Center), enter = fade.first + scaleIn(Springs.spatialFast(), 0.9f), exit = fade.second + scaleOut(Springs.effects(), 0.9f)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PhoneSkip("−${back / 1000}", "Back ${back / 1000} seconds", glass) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                    FilledIconButton(::toggle, shapes = IconButtonDefaults.shapes(RoundedCornerShape(24.dp), RoundedCornerShape(16.dp)), modifier = Modifier.size(96.dp, 72.dp).focusRequester(playBtn)) {
+                        Icon(if (app.player.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (app.player.playing) "Pause" else "Play", Modifier.size(30.dp))
+                    }
+                    PhoneSkip("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", glass) { p.seekTo(p.currentPosition + fwd) }
+                }
+            }
+            // bottom: seek bar with times, then the actions
+            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatial()) { it / 3 },
+                exit = fade.second + slideOutVertically(Springs.spatial()) { it / 3 }) {
+                Column(Modifier.fillMaxWidth().safeDrawingPadding().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val time = MaterialTheme.typography.labelMedium
+                        Text(fmtDur(preview ?: pos), style = time, color = cs.onSurfaceVariant)
+                        val slider = remember { SliderState() }
+                        slider.value = if (dur > 0) ((preview ?: pos).toFloat() / dur).coerceIn(0f, 1f) else 0f
+                        val colors = SliderDefaults.colors(thumbColor = cs.primary, activeTrackColor = cs.primary, inactiveTrackColor = cs.onSurface.copy(alpha = 0.3f))
+                        val drag = remember { MutableInteractionSource() }
+                        Slider(state = slider, modifier = Modifier.weight(1f), enabled = dur > 0,
+                            onValueChange = { preview = (it * dur).toLong(); poke++ },
+                            onValueChangeFinished = { preview?.let { p.seekTo(it) }; preview = null },
+                            colors = colors, interactionSource = drag,
+                            thumb = { SliderDefaults.Thumb(interactionSource = drag, colors = colors, thumbSize = DpSize(4.dp, 16.dp)) },
+                            track = { SliderDefaults.Track(it, Modifier.height(4.dp), colors = colors, drawStopIndicator = null, thumbTrackGapSize = 0.dp) })
+                        Text("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = time, color = cs.onSurfaceVariant)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (next.isNotEmpty()) PhoneAction("Next episode", null, ::playNext)
+                            if (episodes.size > 1) PhoneAction("Episodes", glass) { episodesOpen = true }
+                            PhoneAction("Audio, subtitles & quality", glass) { tracksOpen = true }
+                            PhoneAction(speedLabel, glass, ::cycleSpeed)
+                            PhoneAction(if (zoom) "Zoom" else "Fit", glass) { zoom = !zoom }
+                        }
+                        if (LocalWide.current) Text("Double-tap a side to skip", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
+            seekHint?.let {
+                Box(Modifier.align(Alignment.Center).offset(y = (-88).dp).clip(CircleShape).background(cs.inverseSurface).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(it, style = MaterialTheme.typography.titleMedium, color = cs.inverseOnSurface)
+                }
+            }
+            AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 84.dp, end = 24.dp),
+                enter = fade.first + slideInHorizontally(Springs.spatial()) { it / 2 }, exit = fade.second + slideOutHorizontally(Springs.spatial()) { it / 2 }) {
+                val n = next.firstOrNull() ?: return@AnimatedVisibility
+                Row(Modifier.width(220.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh).clickable(onClickLabel = "Play now", onClick = ::playNext).padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(n.image, n.title, 1, Modifier.size(72.dp, 44.dp).clip(RoundedCornerShape(8.dp)), showTitle = false)
+                    Column {
+                        Text("Up next in ${(dur - pos) / 1000} s", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text(n.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        } else {
+            val tcs = TvTheme.colorScheme
+            val type = TvTheme.typography
+            AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { -it / 6 },
+                exit = fade.second + slideOutVertically(Springs.effects()) { -it / 6 }) {
+                Column(Modifier.fillMaxWidth().height(150.dp).background(glass).padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, top = 40.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (item.meta.isNotBlank()) TvText(item.meta, style = type.bodyLarge, color = tcs.onSurfaceVariant, maxLines = 1)
+                    TvText(item.title, style = type.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).padding(top = 296.dp, end = TvSafe.Horizontal),
+                enter = fade.first + slideInHorizontally(Springs.spatialFast()) { 40 }, exit = fade.second + slideOutHorizontally(Springs.effects()) { 40 }) {
+                val n = next.firstOrNull() ?: return@AnimatedVisibility
+                Column(Modifier.width(304.dp).clip(RoundedCornerShape(28.dp)).background(cs.surfaceContainer.copy(alpha = 0.94f)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvText("Up next in ${(dur - pos) / 1000} s", style = type.labelLarge, color = tcs.onSurfaceVariant)
+                    TvText(n.title, style = type.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    TvButton("Play now", ::playNext, Modifier.fillMaxWidth(), primary = true)
+                }
+            }
+            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { it / 10 },
+                exit = fade.second + slideOutVertically(Springs.effects()) { it / 10 }) {
+                Column(Modifier.fillMaxWidth().background(cs.surface.copy(alpha = 0.82f)).padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, top = 32.dp, bottom = TvSafe.Vertical),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        TvText(fmtDur(preview ?: pos), style = type.titleMedium)
+                        ScrubBar(pos, dur, p.bufferedPosition, preview, { preview = it; poke++ }, { p.seekTo(it); preview = null }, nudge = ::nudge, focus = scrubFocus,
+                            modifier = Modifier.weight(1f).focusProperties { down = playBtn })
+                        TvText("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = type.titleMedium)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            TvSkip("−${back / 1000}", "Back ${back / 1000} seconds", RoundedCornerShape(28.dp, 10.dp, 10.dp, 28.dp)) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                            val playing = app.player.playing
+                            val src = remember { MutableInteractionSource() }
+                            val focused by src.collectIsFocusedAsState()
+                            TvSurface(::toggle, Modifier.size(80.dp, 64.dp), shape = RoundedCornerShape(20.dp), idle = tcs.primary, focusRequester = playBtn, interactionSource = src) {
+                                Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", Modifier.align(Alignment.Center).size(28.dp),
+                                    tint = if (focused) tcs.inverseOnSurface else tcs.onPrimary)
+                            }
+                            // the gap to the actions is wide; point the remote at them explicitly
+                            TvSkip("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", RoundedCornerShape(10.dp, 28.dp, 28.dp, 10.dp), Modifier.focusProperties { right = firstAction }) {
+                                p.seekTo(p.currentPosition + fwd)
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TvButton("Audio, subtitles & quality", { tracksOpen = true }, focusRequester = firstAction)
+                        TvButton(speedLabel, ::cycleSpeed)
+                        TvButton(if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() })
+                        if (episodes.size > 1) TvButton("Episodes", { episodesOpen = true })
+                        if (next.isNotEmpty()) TvButton("Next ▶", ::playNext)
+                        TvButton(if (zoom) "Zoom" else "Fit", { zoom = !zoom })
+                    }
+                    TvHints("◀ ▶" to "Seek, hold to scrub", "OK" to "Play / pause", "▼" to "More", "Back" to "Hide, then exit", modifier = Modifier.align(Alignment.End))
+                }
+            }
+        }
+
         if (tracksOpen) TracksDialog(app) { tracksOpen = false; poke++ }
         if (episodesOpen) EpisodesDialog(episodes, item, { episodesOpen = false; playEpisode(it) }) { episodesOpen = false; poke++ }
-
-        if (!app.inPip && next.isNotEmpty() && dur > 0 && dur - pos in 1..30_000) {
-            Row(Modifier.align(Alignment.BottomEnd).padding(start = 16.dp, end = if (compact()) 16.dp else 40.dp, bottom = if (showUi) 196.dp else 40.dp).widthIn(max = 400.dp)
-                .clip(RoundedCornerShape(20.dp)).background(C.Glass).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Art(next.first().image, "", 1, Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(12.dp)), showTitle = false)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    T("Up next in ${(dur - pos) / 1000} s", 13, Semi, C.Muted); T(next.first().title, 14, Heavy, maxLines = 2, lineHeight = 18)
-                    Btn("Play now", ::playNext, style = BtnStyle.Primary, height = 34.dp)
-                }
-            }
-        }
-
-        AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
-            // board 06: a soft fade, not a bar, so the picture stays visible
-            Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))).statusBarsPadding().height(if (compact()) 72.dp else 120.dp)
-                .padding(horizontal = if (compact()) 16.dp else 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (compact()) IconBtn(Icons.Back, "Back", { app.back() }, size = 44.dp)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { T(item.meta, 13, Semi, C.Soft); T(item.title, if (compact()) 18 else 24, Heavy) }
-                if (compact()) {
-                    val activity = LocalContext.current as? com.avetero.relay.MainActivity
-                    IconBtn(Icons.Pip, "Picture in picture", { activity?.enterPip() }, size = 44.dp)
-                }
-                if (app.player.canCast) {
-                    CastButton(size = 44.dp)
-                }
-                Box(Modifier.clip(RoundedCornerShape(24.dp)).background(C.Glass3).padding(horizontal = 16.dp, vertical = 8.dp)) { Clock(18) }
-            }
-        }
-        AnimatedVisibility(showUi && !app.inPip, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
-            val pad = if (compact()) 16.dp else 40.dp
-            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))).navigationBarsPadding()
-                .padding(start = pad, end = pad, top = 90.dp, bottom = if (compact()) 20.dp else 36.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    T(fmtDur(preview ?: pos), 14, Bold, mono = true)
-                    ScrubBar(pos, dur, p.bufferedPosition, preview, { preview = it; poke++ }, { p.seekTo(it); preview = null }, nudge = ::nudge, focus = scrubFocus,
-                        modifier = Modifier.weight(1f).focusProperties { down = playBtn })
-                    T("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), 14, Bold, mono = true)
-                }
-                val phone = compact()
-                val transport: @Composable () -> Unit = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        SkipBtn("−${back / 1000}", "Back ${back / 1000} seconds", { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) },
-                            if (phone) Modifier else Modifier.focusProperties { left = speedBtn })
-                        FocusSurface({ if (p.isPlaying) p.pause() else p.play() }, Modifier.size(68.dp), idle = C.Accent, shape = RoundedCornerShape(34.dp), focusRequester = playBtn,
-                            label = if (app.player.playing) "Pause" else "Play") { _ ->
-                            Ico(if (app.player.playing) Icons.Pause else Icons.Play, C.OnLight, 24.dp, Modifier.align(Alignment.Center))
-                        }
-                        // the gap to the side buttons is wide; point the remote at them explicitly
-                        SkipBtn("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", { p.seekTo(p.currentPosition + fwd) },
-                            if (phone) Modifier else Modifier.focusProperties { right = sideBtn })
-                    }
-                }
-                if (phone) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { transport() }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 40.dp)
-                        Btn(if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, height = 40.dp)
-                        Btn("%.2gx".format(speed), { speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed) }, height = 40.dp)
-                        if (episodes.size > 1) Btn("Episodes", { episodesOpen = true }, height = 40.dp)
-                        if (next.isNotEmpty()) Btn("Next episode", ::playNext, height = 40.dp)
-                        Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 40.dp)
-                    }
-                } else Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Btn("Audio, subtitles & quality", { tracksOpen = true }, height = 44.dp)
-                        IconBtn(if (app.player.muted) Icons.Muted else Icons.Volume, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() }, size = 44.dp, round = true)
-                        Btn("%.2gx".format(speed), {
-                            speed = listOf(1f, 1.25f, 1.5f, 2f, 0.75f).let { it[(it.indexOf(speed) + 1) % it.size] }; p.setPlaybackSpeed(speed)
-                        }, height = 44.dp, focusRequester = speedBtn)
-                    }
-                    transport()
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                        if (episodes.size > 1) Btn("Episodes", { episodesOpen = true }, height = 44.dp, focusRequester = sideBtn)
-                        if (next.isNotEmpty()) Btn("Next ▶", ::playNext, height = 44.dp, focusRequester = if (episodes.size > 1) null else sideBtn)
-                        Btn(if (zoom) "Zoom" else "Fit", { zoom = !zoom }, height = 44.dp, focusRequester = if (episodes.size > 1 || next.isNotEmpty()) null else sideBtn)
-                    }
-                }
-            }
-        }
     }
 }
 
-/** Board 06: skip buttons are round glass pills labelled with the seconds they jump. */
 @Composable
-private fun SkipBtn(text: String, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
-    FocusSurface(onClick, modifier.size(52.dp), idle = C.Glass3, shape = CircleShape, label = label) { f ->
-        T(text, 14, Heavy, if (f) C.OnLight else C.Text, Modifier.align(Alignment.Center))
+private fun RoundIcon(icon: ImageVector, label: String, container: Color, onClick: () -> Unit) =
+    FilledIconButton(onClick, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(48.dp),
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(icon, label) }
+
+@Composable
+private fun PhoneSkip(text: String, label: String, container: Color, onClick: () -> Unit) =
+    FilledIconButton(onClick, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(64.dp).semantics { contentDescription = label },
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(text, style = MaterialTheme.typography.labelLarge) }
+
+/** Pill action: translucent [container], or the primary colour when null. */
+@Composable
+private fun PhoneAction(text: String, container: Color?, onClick: () -> Unit) =
+    Button(onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp),
+        colors = if (container == null) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(text) }
+
+@Composable
+private fun TvSkip(text: String, label: String, shape: RoundedCornerShape, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    TvSurface(onClick, modifier.size(64.dp, 56.dp).semantics { contentDescription = label }, shape = shape, idle = com.avetero.relay.ui.theme.Tok.ContainerHigh) {
+        TvText(text, style = TvTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center))
     }
 
 /**
- * Board 06 scrub bar. Remote: focus it, then Left/Right move a preview point (faster the longer you hold), OK jumps
- * there now, Back cancels. Touch: drag along it or tap a point. The target time shows above the knob.
+ * TV scrub bar. Focus it, then Left/Right move a preview point (faster the longer you hold), OK jumps there now,
+ * Back cancels. The target time shows above the knob.
  */
 @Composable
 private fun ScrubBar(pos: Long, dur: Long, buffered: Long, preview: Long?, setPreview: (Long?) -> Unit, seek: (Long) -> Unit,
                      nudge: (Boolean, Int) -> Unit, focus: FocusRequester, modifier: Modifier = Modifier) {
     var focused by remember { mutableStateOf(false) }
+    val cs = TvTheme.colorScheme
     val shown = preview ?: pos
     val frac = if (dur > 0) (shown.toFloat() / dur).coerceIn(0f, 1f) else 0f
     BoxWithConstraints(
-        modifier.height(40.dp).focusRequester(focus).onFocusChanged { focused = it.isFocused }
+        modifier.height(32.dp).focusRequester(focus).onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { e ->
                 when {
                     e.key == Key.DirectionLeft || e.key == Key.DirectionRight -> { if (e.type == KeyEventType.KeyDown) nudge(e.key == Key.DirectionRight, e.nativeKeyEvent.repeatCount); true }
@@ -310,25 +415,20 @@ private fun ScrubBar(pos: Long, dur: Long, buffered: Long, preview: Long?, setPr
                     else -> false
                 }
             }
-            .focusable()
-            .pointerInput(dur) { detectTapGestures { o -> if (dur > 0) seek((o.x / size.width * dur).toLong().coerceIn(0, dur)) } }
-            .pointerInput(dur) {
-                detectHorizontalDragGestures(onDragEnd = { preview?.let(seek) }, onDragCancel = { setPreview(null) }) { ch, _ ->
-                    if (dur > 0) setPreview((ch.position.x / size.width * dur).toLong().coerceIn(0, dur))
-                }
-            },
+            .focusable(),
         contentAlignment = Alignment.CenterStart,
     ) {
         val active = focused || preview != null
-        Box(Modifier.fillMaxWidth().height(if (active) 8.dp else 6.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = .2f))) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (buffered.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(Color.White.copy(alpha = .18f)))
-            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(LiveGradient))
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(cs.surfaceVariant)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(if (dur > 0) (buffered.toFloat() / dur).coerceIn(0f, 1f) else 0f).background(cs.onSurface.copy(alpha = .18f)))
+            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(cs.primary))
         }
-        val knob = if (active) 24.dp else 18.dp
-        Box(Modifier.offset(x = maxWidth * frac - knob / 2).size(knob).clip(CircleShape).background(C.Text))
-        if (preview != null) Box(Modifier.offset(x = (maxWidth * frac - 36.dp).coerceIn(0.dp, maxWidth - 72.dp), y = (-34).dp).width(72.dp)
-            .clip(RoundedCornerShape(10.dp)).background(C.Text).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-            T(fmtDur(preview), 13, Bold, C.OnLight, mono = true)
+        // the one focus look: the knob turns inverse and grows while the bar has focus
+        val knob = if (active) DpSize(10.dp, 32.dp) else DpSize(6.dp, 24.dp)
+        Box(Modifier.offset(x = maxWidth * frac - knob.width / 2).size(knob).clip(RoundedCornerShape(5.dp)).background(if (active) cs.inverseSurface else cs.primary))
+        if (preview != null) Box(Modifier.offset(x = (maxWidth * frac - 40.dp).coerceIn(0.dp, maxWidth - 80.dp), y = (-40).dp).width(80.dp)
+            .clip(RoundedCornerShape(8.dp)).background(cs.inverseSurface).padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+            TvText(fmtDur(preview), style = TvTheme.typography.titleSmall, color = cs.inverseOnSurface)
         }
     }
 }
