@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import com.avetero.relay.ui.tv.TvSafe
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -76,12 +78,11 @@ fun ChannelOverlay(
     val cs = MaterialTheme.colorScheme
     val ty = MaterialTheme.typography
     Box(Modifier.fillMaxSize()) {
-        Column(modifier.padding(start = 48.dp, top = 27.dp, bottom = 27.dp).width(540.dp).fillMaxHeight().clip(RoundedCornerShape(28.dp))
-            .background(Tok.Container.copy(alpha = 0.94f)).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Channels", style = ty.headlineSmall, modifier = Modifier.weight(1f))
-                TvHints("Hold OK" to "Options")
-            }
+        // the side-panel look (TvSidePanel), docked left so the picture stays in view
+        val panel = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+        Column(modifier.width(560.dp).fillMaxHeight().shadow(24.dp, panel).clip(panel).background(Tok.Container)
+            .padding(start = TvSafe.Horizontal, end = 24.dp, top = 32.dp, bottom = TvSafe.Vertical), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Channels", style = ty.headlineSmall)
             val pills = rememberLazyListState(initialFirstVisibleItemIndex = (gi - 1).coerceAtLeast(0))
             LazyRow(Modifier.stopAtEnd(), pills, horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 itemsIndexed(groups, key = { _, g -> g.id }) { _, g ->
@@ -127,9 +128,8 @@ fun ChannelOverlay(
                 }
             }
         }
-        TvHints("▲▼" to "Channel", "◀▶" to "Group", "OK" to "Watch", "Back" to "Close",
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 27.dp).clip(RoundedCornerShape(12.dp))
-                .background(Tok.Surface.copy(alpha = 0.7f)).padding(horizontal = 16.dp, vertical = 8.dp))
+        TvHints("◀▶" to "Group", "Hold OK" to "Options", "Back" to "Close",
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = TvSafe.Horizontal, bottom = TvSafe.Vertical))
     }
 }
 

@@ -1,6 +1,17 @@
 package com.avetero.relay.feature.vod
 
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.Replay
+import com.avetero.relay.feature.playback.BottomScrim
+import com.avetero.relay.feature.playback.PlayPause
+import com.avetero.relay.feature.playback.PlayerIcon
+import com.avetero.relay.feature.playback.PlayerToolbar
+import com.avetero.relay.feature.playback.PlayerTopBar
+import com.avetero.relay.feature.playback.ToolbarAction
+import com.avetero.relay.feature.playback.TopScrim
+import com.avetero.relay.feature.playback.TvControl
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.VideoLibrary
@@ -252,33 +263,26 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         val fade = fadeIn(Springs.effects()) to fadeOut(Springs.effects())
 
         if (!tv) {
-            AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize().background(cs.scrim.copy(alpha = 0.45f))) }
-            // top: back, title, mute, cast, picture in picture
+            AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { TopScrim(0.35f); BottomScrim(0.5f) } }
+            // top app bar: back, title, mute, cast, picture in picture
             AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter), enter = fade.first + slideInVertically(Springs.spatial()) { -it / 3 },
                 exit = fade.second + slideOutVertically(Springs.spatial()) { -it / 3 }) {
-                Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RoundIcon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", glass) { app.back() }
-                    Column(Modifier.weight(1f)) {
-                        Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (item.meta.isNotBlank()) Text(item.meta, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    RoundIcon(if (app.player.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, if (app.player.muted) "Unmute" else "Mute", glass) { app.player.toggleMute() }
-                    if (app.player.canCast) Box(Modifier.size(48.dp).clip(CircleShape).background(glass), contentAlignment = Alignment.Center) {
+                PlayerTopBar({ app.back() }, item.title, item.meta, Modifier.safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    if (app.player.canCast) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                         // the activity theme (Theme.Relay) supplies the colorPrimary MediaRouteButton requires
                         AndroidView({ ctx -> MediaRouteButton(ctx).also { CastButtonFactory.setUpMediaRouteButton(ctx, it) } }, Modifier.size(48.dp))
                     }
                     val activity = LocalContext.current as? com.avetero.relay.MainActivity
-                    RoundIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", glass) { activity?.enterPip() }
+                    PlayerIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", { activity?.enterPip() })
+                    PlayerIcon(if (app.player.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() })
                 }
             }
             // centre: skip back, play/pause, skip forward
             AnimatedVisibility(shown, Modifier.align(Alignment.Center), enter = fade.first + scaleIn(Springs.spatialFast(), 0.9f), exit = fade.second + scaleOut(Springs.effects(), 0.9f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PhoneSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds", glass) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
-                    FilledIconButton(::toggle, shapes = IconButtonDefaults.shapes(RoundedCornerShape(24.dp), RoundedCornerShape(16.dp)), modifier = Modifier.size(96.dp, 72.dp).focusRequester(playBtn)) {
-                        Icon(if (app.player.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (app.player.playing) "Pause" else "Play", Modifier.size(30.dp))
-                    }
-                    PhoneSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds", glass) { p.seekTo(p.currentPosition + fwd) }
+                    PhoneSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds") { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                    PlayPause(!app.player.playing, ::toggle, Modifier.focusRequester(playBtn))
+                    PhoneSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds") { p.seekTo(p.currentPosition + fwd) }
                 }
             }
             // bottom: seek bar with times, then the actions
@@ -286,29 +290,25 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                 exit = fade.second + slideOutVertically(Springs.spatial()) { it / 3 }) {
                 Column(Modifier.fillMaxWidth().safeDrawingPadding().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val time = MaterialTheme.typography.labelMedium
-                        Text(fmtDur(preview ?: pos), style = time, color = cs.onSurfaceVariant)
+                        val time = MaterialTheme.typography.labelLarge
+                        Text(fmtDur(preview ?: pos), style = time)
                         val slider = remember { SliderState() }
                         slider.value = if (dur > 0) ((preview ?: pos).toFloat() / dur).coerceIn(0f, 1f) else 0f
-                        val colors = SliderDefaults.colors(thumbColor = cs.primary, activeTrackColor = cs.primary, inactiveTrackColor = cs.onSurface.copy(alpha = 0.3f))
-                        val drag = remember { MutableInteractionSource() }
                         Slider(state = slider, modifier = Modifier.weight(1f), enabled = dur > 0,
                             onValueChange = { preview = (it * dur).toLong(); poke++ },
-                            onValueChangeFinished = { preview?.let { p.seekTo(it) }; preview = null },
-                            colors = colors, interactionSource = drag,
-                            thumb = { SliderDefaults.Thumb(interactionSource = drag, colors = colors, thumbSize = DpSize(4.dp, 16.dp)) },
-                            track = { SliderDefaults.Track(it, Modifier.height(4.dp), colors = colors, drawStopIndicator = null, thumbTrackGapSize = 0.dp) })
-                        Text("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = time, color = cs.onSurfaceVariant)
+                            onValueChangeFinished = { preview?.let { p.seekTo(it) }; preview = null })
+                        Text("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = time)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (next.isNotEmpty()) PhoneAction("Next episode", Icons.Rounded.SkipNext, null, ::playNext)
-                            if (episodes.size > 1) PhoneAction("Episodes", Icons.Rounded.VideoLibrary, glass) { episodesOpen = true }
-                            PhoneAction("Audio, subtitles & quality", Icons.Rounded.Subtitles, glass) { tracksOpen = true }
-                            PhoneAction(speedLabel, Icons.Rounded.Speed, glass, ::cycleSpeed)
-                            PhoneAction(if (zoom) "Zoom" else "Fit", Icons.Rounded.AspectRatio, glass) { zoom = !zoom }
+                        PlayerToolbar(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState())) {
+                            if (next.isNotEmpty()) ToolbarAction("Next episode", Icons.Rounded.SkipNext, ::playNext, primary = true)
+                            if (episodes.size > 1) ToolbarAction("Episodes", Icons.Rounded.VideoLibrary, { episodesOpen = true })
+                            ToolbarAction("Audio & subtitles", Icons.Rounded.Subtitles, { tracksOpen = true })
+                            ToolbarAction(speedLabel, Icons.Rounded.Speed, ::cycleSpeed)
+                            ToolbarAction(if (zoom) "Zoom" else "Fit", Icons.Rounded.AspectRatio, { zoom = !zoom })
                         }
-                        if (LocalWide.current) Text("Double-tap a side to skip", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                        Spacer(Modifier.weight(1f))
+                        if (LocalWide.current) Text("Double-tap a side to skip", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
             }
@@ -320,7 +320,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top = 84.dp, end = 24.dp),
                 enter = fade.first + slideInHorizontally(Springs.spatial()) { it / 2 }, exit = fade.second + slideOutHorizontally(Springs.spatial()) { it / 2 }) {
                 val n = next.firstOrNull() ?: return@AnimatedVisibility
-                Row(Modifier.width(220.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh).clickable(onClickLabel = "Play now", onClick = ::playNext).padding(12.dp),
+                Row(Modifier.width(240.dp).clip(RoundedCornerShape(16.dp)).background(cs.surfaceContainerHigh).clickable(onClickLabel = "Play now", onClick = ::playNext).padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Artwork(n.image, n.title, 1, Modifier.size(72.dp, 44.dp).clip(RoundedCornerShape(8.dp)), showTitle = false)
                     Column {
@@ -332,56 +332,46 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         } else {
             val tcs = TvTheme.colorScheme
             val type = TvTheme.typography
-            AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { -it / 6 },
-                exit = fade.second + slideOutVertically(Springs.effects()) { -it / 6 }) {
-                Column(Modifier.fillMaxWidth().height(150.dp).background(glass).padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, top = 40.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (item.meta.isNotBlank()) TvText(item.meta, style = type.bodyLarge, color = tcs.onSurfaceVariant, maxLines = 1)
-                    TvText(item.title, style = type.headlineLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).padding(top = 296.dp, end = TvSafe.Horizontal),
+            AnimatedVisibility(shown, Modifier.fillMaxSize(), enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { BottomScrim(0.55f) } }
+            AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).padding(top = TvSafe.Vertical + 16.dp, end = TvSafe.Horizontal),
                 enter = fade.first + slideInHorizontally(Springs.spatialFast()) { 40 }, exit = fade.second + slideOutHorizontally(Springs.effects()) { 40 }) {
                 val n = next.firstOrNull() ?: return@AnimatedVisibility
-                Column(Modifier.width(304.dp).clip(RoundedCornerShape(28.dp)).background(cs.surfaceContainer.copy(alpha = 0.94f)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TvText("Up next in ${(dur - pos) / 1000} s", style = type.labelLarge, color = tcs.onSurfaceVariant)
-                    TvText(n.title, style = type.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    TvButton("Play now", ::playNext, Modifier.fillMaxWidth(), primary = true)
+                Row(Modifier.width(400.dp).clip(RoundedCornerShape(16.dp)).background(com.avetero.relay.ui.theme.Tok.Container.copy(alpha = 0.94f)).padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(n.image, n.title, 1, Modifier.size(112.dp, 63.dp).clip(RoundedCornerShape(8.dp)), showTitle = false)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TvText("Up next in ${(dur - pos) / 1000} s", style = type.labelLarge, color = tcs.onSurfaceVariant)
+                        TvText(n.title, style = type.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TvButton("Play now", ::playNext, primary = true)
+                    }
                 }
             }
-            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { it / 10 },
-                exit = fade.second + slideOutVertically(Springs.effects()) { it / 10 }) {
-                Column(Modifier.fillMaxWidth().background(cs.surface.copy(alpha = 0.82f)).padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, top = 32.dp, bottom = TvSafe.Vertical),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        TvText(fmtDur(preview ?: pos), style = type.titleMedium)
+            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { 24 },
+                exit = fade.second + slideOutVertically(Springs.effects()) { 24 }) {
+                Column(Modifier.fillMaxWidth().padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, bottom = TvSafe.Vertical), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TvText(item.title, style = type.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (item.meta.isNotBlank()) TvText(item.meta, style = type.bodyLarge, color = tcs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        TvText(fmtDur(preview ?: pos), style = type.labelLarge, color = tcs.onSurfaceVariant)
                         ScrubBar(pos, dur, p.bufferedPosition, preview, { preview = it; poke++ }, { p.seekTo(it); preview = null }, nudge = ::nudge, focus = scrubFocus,
                             modifier = Modifier.weight(1f).focusProperties { down = playBtn })
-                        TvText("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = type.titleMedium)
+                        TvText("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = type.labelLarge, color = tcs.onSurfaceVariant)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            TvSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds", RoundedCornerShape(28.dp, 10.dp, 10.dp, 28.dp)) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
-                            val playing = app.player.playing
-                            val src = remember { MutableInteractionSource() }
-                            val focused by src.collectIsFocusedAsState()
-                            TvSurface(::toggle, Modifier.size(80.dp, 64.dp), shape = RoundedCornerShape(20.dp), idle = tcs.primary, focusRequester = playBtn, interactionSource = src) {
-                                Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", Modifier.align(Alignment.Center).size(28.dp),
-                                    tint = if (focused) tcs.inverseOnSurface else tcs.onPrimary)
-                            }
-                            // the gap to the actions is wide; point the remote at them explicitly
-                            TvSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds", RoundedCornerShape(10.dp, 28.dp, 28.dp, 10.dp), Modifier.focusProperties { right = firstAction }) {
-                                p.seekTo(p.currentPosition + fwd)
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TvButton("Audio, subtitles & quality", { tracksOpen = true }, focusRequester = firstAction)
-                        TvButton(speedLabel, ::cycleSpeed)
-                        TvButton(if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() })
-                        if (episodes.size > 1) TvButton("Episodes", { episodesOpen = true })
-                        if (next.isNotEmpty()) TvButton("Next ▶", ::playNext)
-                        TvButton(if (zoom) "Zoom" else "Fit", { zoom = !zoom })
+                    Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TvSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds") { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                        val playing = app.player.playing
+                        TvControl(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, ::toggle, primary = true, focusRequester = playBtn, description = if (playing) "Pause" else "Play")
+                        TvSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds", Modifier.focusProperties { right = firstAction }) { p.seekTo(p.currentPosition + fwd) }
+                        Spacer(Modifier.width(12.dp))
+                        if (next.isNotEmpty()) TvControl(Icons.Rounded.SkipNext, "Next episode", ::playNext, focusRequester = firstAction)
+                        if (episodes.size > 1) TvControl(Icons.Rounded.VideoLibrary, "Episodes", { episodesOpen = true })
+                        TvControl(Icons.Rounded.Subtitles, "Audio & subtitles", { tracksOpen = true }, focusRequester = firstAction.takeIf { next.isEmpty() })
+                        TvControl(Icons.Rounded.Speed, speedLabel, ::cycleSpeed)
+                        TvControl(Icons.Rounded.AspectRatio, if (zoom) "Zoom" else "Fit", { zoom = !zoom })
+                        TvControl(if (app.player.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, null, { app.player.toggleMute() },
+                            description = if (app.player.muted) "Unmute" else "Mute")
                     }
-                    TvHints("◀ ▶" to "Seek, hold to scrub", "OK" to "Play / pause", "▼" to "More", "Back" to "Hide, then exit", modifier = Modifier.align(Alignment.End))
+                    TvHints("◀▶" to "Seek, hold to scrub", "Back" to "Hide", modifier = Modifier.align(Alignment.End))
                 }
             }
         }
@@ -392,15 +382,9 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
 }
 
 @Composable
-private fun RoundIcon(icon: ImageVector, label: String, container: Color, onClick: () -> Unit) =
-    FilledIconButton(onClick, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(48.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(icon, label) }
-
-@Composable
-private fun PhoneSkip(sec: Int, label: String, container: Color, onClick: () -> Unit) =
-    FilledIconButton(onClick, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(64.dp).semantics { contentDescription = label },
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) {
-        skipIcon(sec)?.let { Icon(it, null, Modifier.size(28.dp)) } ?: Text(skipText(sec), style = MaterialTheme.typography.labelLarge)
+private fun PhoneSkip(sec: Int, label: String, onClick: () -> Unit) =
+    PlayerIcon(Icons.Rounded.Replay, label, onClick, Modifier.semantics { contentDescription = label }, iconSize = 36.dp) {
+        skipIcon(sec)?.let { Icon(it, null, Modifier.size(36.dp)) } ?: Text(skipText(sec), style = MaterialTheme.typography.titleMedium)
     }
 
 /** Material has replay/forward icons for 5, 10 and 30 seconds; other skip lengths fall back to text. */
@@ -412,20 +396,9 @@ private fun skipIcon(sec: Int): ImageVector? = when (sec) {
 
 private fun skipText(sec: Int) = if (sec < 0) "−${-sec}" else "+$sec"
 
-/** Pill action: translucent [container], or the primary colour when null. */
 @Composable
-private fun PhoneAction(text: String, icon: ImageVector, container: Color?, onClick: () -> Unit) =
-    Button(onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp), contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-        colors = if (container == null) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) {
-        Icon(icon, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text(text)
-    }
-
-@Composable
-private fun TvSkip(sec: Int, label: String, shape: RoundedCornerShape, modifier: Modifier = Modifier, onClick: () -> Unit) =
-    TvSurface(onClick, modifier.size(64.dp, 56.dp).semantics { contentDescription = label }, shape = shape, idle = com.avetero.relay.ui.theme.Tok.ContainerHigh) {
-        skipIcon(sec)?.let { androidx.tv.material3.Icon(it, null, Modifier.align(Alignment.Center).size(28.dp)) }
-            ?: TvText(skipText(sec), style = TvTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center))
-    }
+private fun TvSkip(sec: Int, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) =
+    TvControl(skipIcon(sec) ?: if (sec < 0) Icons.Rounded.FastRewind else Icons.Rounded.FastForward, null, onClick, modifier, description = label)
 
 /**
  * TV scrub bar. Focus it, then Left/Right move a preview point (faster the longer you hold), OK jumps there now,

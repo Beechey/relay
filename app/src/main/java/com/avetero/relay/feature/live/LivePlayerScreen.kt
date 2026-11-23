@@ -1,6 +1,22 @@
 package com.avetero.relay.feature.live
 
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import com.avetero.relay.feature.playback.BottomScrim
+import com.avetero.relay.feature.playback.PlayerIcon
+import com.avetero.relay.feature.playback.PlayPause
+import com.avetero.relay.feature.playback.PlayerToolbar
+import com.avetero.relay.feature.playback.PlayerTopBar
+import com.avetero.relay.feature.playback.ToolbarAction
+import com.avetero.relay.feature.playback.TopScrim
+import com.avetero.relay.feature.playback.TvControl
+import com.avetero.relay.feature.playback.TvProgress
+import com.avetero.relay.feature.playback.TvStateBadge
+import com.avetero.relay.ui.tv.TvSafe
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.FiberManualRecord
 import android.view.KeyEvent.KEYCODE_0
@@ -18,6 +34,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -133,6 +150,10 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     var previous by remember { mutableStateOf<Channel?>(null) }
     val stripFocus = remember { FocusRequester() }
     var stripOn by remember { mutableStateOf(false) }
+    // OK brings up the controls row; ◀▶ swaps it for the strip of neighbouring channels until the info hides
+    val ctrlFocus = remember { FocusRequester() }
+    var ctrlOn by remember { mutableStateOf(false) }
+    var browsing by remember { mutableStateOf(false) }
     var okLong by remember { mutableStateOf(false) }
     // live pause: when it was paused, and how far behind live the picture is (catch-up channels can be watched behind)
     var pausedAt by remember { mutableStateOf<Long?>(null) }
@@ -153,7 +174,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     LaunchedEffect(poke, pausedAt) { showInfo = true; if (pausedAt == null) { delay(5_000); showInfo = false } }
     LaunchedEffect(Unit) { focus.settle() }
     // the strip leaves with the info; give focus back to the player so the keys keep working
-    LaunchedEffect(showInfo) { if (!showInfo) { if (stripOn && !listOpen && !menu) runCatching { focus.requestFocus() }; stripOn = false } }
+    LaunchedEffect(showInfo) { if (!showInfo) { if ((stripOn || ctrlOn) && !listOpen && !menu && !tracksOpen) runCatching { focus.requestFocus() }; stripOn = false; ctrlOn = false; browsing = false } }
 
     fun go(to: Channel, inList: List<Channel> = list) {
         if (to.id != c.id) previous = c
@@ -192,10 +213,9 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     // the Live tab is the bottom of the stack: Back from it goes to For you
     fun leave() { if (app.stack.size > 1) app.back() else app.go(Screen.Home) }
     fun closeList() { listOpen = false; runCatching { focus.requestFocus() } }
-    fun showStrip() {
-        poke++
-        scope.launch { repeat(10) { if (runCatching { stripFocus.requestFocus() }.isSuccess) return@launch; delay(30) } }
-    }
+    fun focusSoon(f: FocusRequester) { scope.launch { repeat(10) { if (runCatching { f.requestFocus() }.getOrDefault(false)) return@launch; delay(30) } } }
+    fun showStrip() { poke++; browsing = true; focusSoon(stripFocus) }
+    fun showControls() { poke++; browsing = false; focusSoon(ctrlFocus) }
     // Back closes the channel list; otherwise it leaves Live (the info hides by itself, it doesn't need a press)
     BackHandler(listOpen && !app.inPip && !menu && !tracksOpen) { closeList() }
     // the list tucks itself away when the remote goes quiet
@@ -222,14 +242,21 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     }
 
     Box(
-        Modifier.fillMaxSize().background(Color.Black).focusRequester(focus).focusable()
+        Modifier.fillMaxSize().background(Color.Black)
+            // TV: Back with a control or the strip focused hides the info (Compose would otherwise spend it clearing focus)
+            .onPreviewKeyEvent { e ->
+                if (!(tv && e.key == Key.Back && (stripOn || ctrlOn) && !listOpen && !menu && !tracksOpen)) return@onPreviewKeyEvent false
+                if (e.type == KeyEventType.KeyUp) showInfo = false
+                true
+            }
+            .focusRequester(focus).focusable()
             .onKeyEvent { e ->
                 if (menu || tracksOpen) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 val center = e.key == Key.DirectionCenter || e.key == Key.Enter
                 // OK acts on release, so the row it brings up doesn't receive the release as a click
                 if (center && e.type == KeyEventType.KeyUp) {
-                    if (!okLong) { if (tv) showStrip() else poke++ }
+                    if (!okLong) { if (tv) showControls() else poke++ }
                     okLong = false
                     return@onKeyEvent true
                 }
@@ -249,7 +276,7 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                     // hold ◀: the channel list
                     tv && left && e.nativeKeyEvent.repeatCount > 0 -> { listOpen = true; listPoke++; true }
                     // along the strip, focus moves itself
-                    tv && stripOn && (left || right) -> { poke++; false }
+                    tv && (stripOn || ctrlOn) && (left || right) -> { poke++; false }
                     right && behind > 0 && pausedAt == null -> { goLive(); true }
                     tv && (left || right) -> { showStrip(); true }
                     // hold OK = options (audio, subtitles, quality, favourite)
@@ -289,13 +316,19 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
             PhoneControls(app, c, now, at, state, paused = pausedAt != null, onBack = ::leave, onPlayPause = { if (pausedAt != null) resume() else pause() },
                 onZap = ::zap, onSkip = ::skip, onSeek = ::seekTo, onLive = ::goLive, onTracks = { tracksOpen = true }, poke = { poke++ })
         } else {
-            AnimatedVisibility((visible || listOpen) && !app.inPip, Modifier.align(Alignment.TopEnd).padding(top = 27.dp, end = 48.dp), enter = fadeIn(), exit = fadeOut()) {
-                LiveBadge(text = state ?: "LIVE", style = MaterialTheme.typography.labelLarge)
+            val shown = visible && !listOpen && app.player.error == null
+            AnimatedVisibility(shown, Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
+                Box(Modifier.fillMaxSize()) { TopScrim(0.25f); BottomScrim() }
             }
-            AnimatedVisibility(visible && !listOpen && app.player.error == null, Modifier.align(Alignment.BottomCenter),
+            AnimatedVisibility(shown, Modifier.align(Alignment.TopStart), enter = fadeIn() + slideInVertically { -24 }, exit = fadeOut() + slideOutVertically { -24 }) {
+                TvTopInfo(c, state)
+            }
+            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter),
                 enter = fadeIn() + slideInVertically { 24 }, exit = fadeOut() + slideOutVertically { 24 }) {
-                TvInfo(app, c, now, at, list, index, stripFocus, onStrip = { stripOn = it; if (it) poke++ }, onPick = { go(it) }, onMenu = { menu = true },
-                    hint = if (behind > 0 && pausedAt == null) "▶ / ⏩" to "Go live" else "⏯" to if (pausedAt != null) "Play" else "Pause")
+                TvInfo(app, c, now, at, list, index, browsing, stripFocus, ctrlFocus, live = state == null, paused = pausedAt != null,
+                    onStrip = { stripOn = it; if (it) poke++ }, onControls = { ctrlOn = it; if (it) poke++ }, onPick = { go(it) }, onMenu = { menu = true },
+                    onPlayPause = { if (pausedAt != null) resume() else pause() }, onLive = ::goLive, onSeek = ::seekTo, onTracks = { tracksOpen = true },
+                    onChannels = { listOpen = true; listPoke++ }, poke = { poke++ })
             }
             AnimatedVisibility(listOpen && !app.inPip, Modifier.fillMaxSize(), enter = fadeIn() + slideInHorizontally { -it / 6 }, exit = fadeOut() + slideOutHorizontally { -it / 6 }) {
                 // Back must reach the list itself: with a row focused, Compose would otherwise spend the first press clearing focus
@@ -313,56 +346,49 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
 /** 2:14, or 1:02:14 past the hour. */
 private fun dur(s: Long) = if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 
-/** PhoneLiveFull: top bar, centre transport, scrub bar and actions on a dimmed picture. */
+/** PhoneLiveFull: top app bar, centre transport and the scrub bar with actions, on scrims over the picture. */
 @Composable
 private fun PhoneControls(
     app: AppState, c: Channel, now: Programme?, at: Long, state: String?, paused: Boolean, onBack: () -> Unit, onPlayPause: () -> Unit,
     onZap: (Int) -> Unit, onSkip: (Int) -> Unit, onSeek: (Long) -> Unit, onLive: () -> Unit, onTracks: () -> Unit, poke: () -> Unit,
-) = Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).displayCutoutPadding()) {
+) = Box(Modifier.fillMaxSize()) {
     val cs = MaterialTheme.colorScheme
-    val glass = IconButtonDefaults.filledIconButtonColors(containerColor = cs.surface.copy(alpha = 0.6f), contentColor = cs.onSurface)
-    Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        FilledIconButton(onBack, Modifier.size(48.dp), colors = glass) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-        ChannelLogo(c.icon, c.name)
-        Column(Modifier.weight(1f)) {
-            val next = app.programmesFor(c).upcoming().firstOrNull()
-            Text(now?.title ?: c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name, next?.let { "Next ${fmtTime(it.start)} · ${it.title}" }).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    TopScrim(0.35f)
+    BottomScrim(0.5f)
+    Box(Modifier.fillMaxSize().displayCutoutPadding()) {
+        val next = app.programmesFor(c).upcoming().firstOrNull()
+        PlayerTopBar(onBack, now?.title ?: c.name,
+            listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name, next?.let { "Next ${fmtTime(it.start)} · ${it.title}" }).joinToString(" · "),
+            Modifier.align(Alignment.TopStart).padding(horizontal = 12.dp, vertical = 8.dp), leading = { ChannelLogo(c.icon, c.name, size = 40.dp) }) {
+            if (state != null) Text(state, Modifier.clip(RoundedCornerShape(8.dp)).background(cs.secondaryContainer).padding(horizontal = 12.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelLarge, color = cs.onSecondaryContainer)
+            else LiveBadge(style = MaterialTheme.typography.labelLarge)
+            if (app.player.canCast) PlayerIcon(Icons.Rounded.Cast, "Cast", rememberCastPicker())
+            val activity = LocalContext.current as? MainActivity
+            PlayerIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture", { activity?.enterPip() })
+            PlayerIcon(if (app.player.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp, if (app.player.muted) "Unmute" else "Mute", { app.player.toggleMute() })
         }
-        if (state != null) Text(state, Modifier.clip(RoundedCornerShape(8.dp)).background(cs.secondaryContainer).padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium, color = cs.onSecondaryContainer)
-        else LiveBadge()
-        if (app.player.canCast) {
-            val pick = rememberCastPicker()
-            FilledIconButton(pick, Modifier.size(48.dp), colors = glass) { Icon(Icons.Rounded.Cast, "Cast") }
+        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            PlayerIcon(Icons.Rounded.SkipPrevious, "Previous channel", { onZap(-1) }, iconSize = 32.dp)
+            PlayerIcon(Icons.Rounded.Replay10, "Back 10 seconds", { onSkip(-10) }, iconSize = 36.dp)
+            PlayPause(paused, onPlayPause)
+            PlayerIcon(Icons.Rounded.Forward10, "Forward 10 seconds", { onSkip(10) }, iconSize = 36.dp)
+            PlayerIcon(Icons.Rounded.SkipNext, "Next channel", { onZap(1) }, iconSize = 32.dp)
         }
-        val activity = LocalContext.current as? MainActivity
-        FilledIconButton({ activity?.enterPip() }, Modifier.size(48.dp), colors = glass) { Icon(Icons.Rounded.PictureInPictureAlt, "Picture in picture") }
-    }
-    Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        FilledIconButton({ onZap(-1) }, Modifier.size(56.dp), colors = glass) { Icon(Icons.Rounded.SkipPrevious, "Previous channel") }
-        FilledIconButton({ onSkip(-10) }, Modifier.size(56.dp), colors = glass) { Icon(Icons.Rounded.Replay10, "Back 10 seconds") }
-        FilledIconButton(onPlayPause, Modifier.size(96.dp, 72.dp), shape = RoundedCornerShape(24.dp)) {
-            Icon(if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, if (paused) "Play" else "Pause", Modifier.size(32.dp))
-        }
-        FilledIconButton({ onSkip(10) }, Modifier.size(56.dp), colors = glass) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds") }
-        FilledIconButton({ onZap(1) }, Modifier.size(56.dp), colors = glass) { Icon(Icons.Rounded.SkipNext, "Next channel") }
-    }
-    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (now != null) Scrub(now, at, c.archive, onSeek, poke)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val glassButton = ButtonDefaults.buttonColors(containerColor = cs.surface.copy(alpha = 0.6f), contentColor = cs.onSurface)
-            if (state != null) Button(onLive, colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.FiberManualRecord, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("Go live") }
-            if (c.archive && now != null) Button({ onSeek(now.start) }, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.Restore, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("From the start") }
-            Button(onTracks, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.Subtitles, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("Audio, subtitles & quality") }
-            val fav = app.isFav("c${c.id}")
-            Button({ app.toggleFav("c${c.id}") }, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.StarOutline, null, Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("Saved")
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (now != null) Scrub(now, at, c.archive, onSeek, poke)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlayerToolbar {
+                    if (state != null) ToolbarAction("Go live", Icons.Rounded.FiberManualRecord, onLive, primary = true)
+                    if (c.archive && now != null) ToolbarAction("From the start", Icons.Rounded.Restore, { onSeek(now.start) })
+                    ToolbarAction("Audio & subtitles", Icons.Rounded.Subtitles, onTracks)
+                    val fav = app.isFav("c${c.id}")
+                    ToolbarAction(if (fav) "Saved" else "Save", if (fav) Icons.Rounded.Star else Icons.Rounded.StarOutline, { app.toggleFav("c${c.id}") })
+                }
+                Spacer(Modifier.weight(1f))
+                Text("Swipe ↑↓ to change channel", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.weight(1f))
-            Text("Swipe ↑↓ to change channel · double-tap a side to skip", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -397,49 +423,76 @@ private fun Scrub(p: Programme, at: Long, archive: Boolean, onSeek: (Long) -> Un
     }
 }
 
-/** TvPlayer's bottom panel: what's on, progress, the strip of neighbouring channels, and the keys. */
+/** TvPlayer top line: logo, number · name, and LIVE (or how far behind). */
+@Composable
+private fun TvTopInfo(c: Channel, state: String?) =
+    Row(Modifier.padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, top = TvSafe.Vertical + 8.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        ChannelLogo(c.icon, c.name, size = 48.dp)
+        androidx.tv.material3.Text(listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name).joinToString(" · "), style = androidx.tv.material3.MaterialTheme.typography.titleLarge,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        TvStateBadge(state ?: "LIVE", live = state == null)
+        if (c.archive && state == null) TvStateBadge("Catch-up", live = false)
+    }
+
+/**
+ * TvPlayer's bottom info on the scrim: what's on, its progress, then the controls row (OK) or, while browsing with
+ * ◀▶, the strip of neighbouring channels.
+ */
 @Composable
 private fun TvInfo(
-    app: AppState, c: Channel, now: Programme?, at: Long, list: List<Channel>, index: Int, stripFocus: FocusRequester,
-    onStrip: (Boolean) -> Unit, onPick: (Channel) -> Unit, onMenu: () -> Unit, hint: Pair<String, String>,
+    app: AppState, c: Channel, now: Programme?, at: Long, list: List<Channel>, index: Int, browsing: Boolean, stripFocus: FocusRequester, ctrlFocus: FocusRequester,
+    live: Boolean, paused: Boolean, onStrip: (Boolean) -> Unit, onControls: (Boolean) -> Unit, onPick: (Channel) -> Unit, onMenu: () -> Unit,
+    onPlayPause: () -> Unit, onLive: () -> Unit, onSeek: (Long) -> Unit, onTracks: () -> Unit, onChannels: () -> Unit, poke: () -> Unit,
 ) {
     val cs = androidx.tv.material3.MaterialTheme.colorScheme
     val ty = androidx.tv.material3.MaterialTheme.typography
-    Column(Modifier.padding(start = 48.dp, end = 48.dp, bottom = 27.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Tok.Container.copy(alpha = 0.9f)).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            androidx.tv.material3.Text(if (c.num > 0) "${c.num}" else "", style = ty.headlineMedium, color = cs.onSurfaceVariant, modifier = Modifier.width(64.dp))
-            ChannelLogo(c.icon, c.name, Modifier.width(88.dp), size = 56.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                androidx.tv.material3.Text(now?.title ?: c.name, style = ty.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                androidx.tv.material3.Text(listOfNotNull(c.name, now?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)}" } ?: "No guide for this channel",
-                    "★ Favourite".takeIf { app.isFav("c${c.id}") }, "Catch-up".takeIf { c.archive }).joinToString(" · "), style = ty.bodyLarge, color = cs.onSurfaceVariant, maxLines = 1)
-            }
-            app.programmesFor(c).upcoming().firstOrNull()?.let { n ->
-                androidx.tv.material3.Text("Next ${fmtTime(n.start)} · ${n.title}", style = ty.titleSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(0.3f))
-            }
+    Column(Modifier.fillMaxWidth().padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, bottom = TvSafe.Vertical), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        androidx.tv.material3.Text(now?.title ?: c.name, style = ty.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val next = app.programmesFor(c).upcoming().firstOrNull()
+        androidx.tv.material3.Text(listOfNotNull(now?.let { "${fmtTime(it.start)} – ${fmtTime(it.end)}" } ?: "No guide for this channel",
+            next?.let { "Next ${fmtTime(it.start)} · ${it.title}" }).joinToString("  ·  "), style = ty.bodyLarge, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (now != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            val span = (now.end - now.start).coerceAtLeast(1).toFloat()
+            androidx.tv.material3.Text(fmtTime(now.start), style = ty.labelLarge, color = cs.onSurfaceVariant)
+            TvProgress((at - now.start) / span, live = (nowSec() - now.start) / span, modifier = Modifier.weight(1f))
+            androidx.tv.material3.Text(fmtTime(now.end), style = ty.labelLarge, color = cs.onSurfaceVariant)
         }
-        if (now != null) Bar(((at - now.start).toFloat() / (now.end - now.start).coerceAtLeast(1)), cs.primary)
-        val strip = remember(list, index) { if (list.isEmpty()) emptyList() else (-2..2).map { list[Math.floorMod(index + it, list.size)] }.distinctBy { it.id } }
-        Row(Modifier.fillMaxWidth().onFocusChanged { onStrip(it.hasFocus) }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            strip.forEach { s ->
-                key(s.id) {
-                    val on = s.id == c.id
-                    TvSurface({ onPick(s) }, Modifier.weight(1f).height(72.dp), onLongClick = onMenu, selected = on, idle = Tok.ContainerHigh,
-                        focusRequester = if (on) stripFocus else null) {
-                        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                            androidx.tv.material3.Text(listOfNotNull(s.num.takeIf { it > 0 }?.toString(), s.name).joinToString(" · "), style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            androidx.tv.material3.Text(app.programmesFor(s).current()?.title ?: "Live", style = ty.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = androidx.tv.material3.LocalContentColor.current.copy(alpha = 0.8f))
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.CenterStart) {
+            if (browsing) {
+                val strip = remember(list, index) { if (list.isEmpty()) emptyList() else (-2..2).map { list[Math.floorMod(index + it, list.size)] }.distinctBy { it.id } }
+                Row(Modifier.fillMaxWidth().onFocusChanged { onStrip(it.hasFocus) }.focusGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    strip.forEach { s ->
+                        key(s.id) {
+                            val on = s.id == c.id
+                            TvSurface({ onPick(s) }, Modifier.weight(1f).height(64.dp), onLongClick = onMenu, selected = on, idle = Tok.ContainerHighest.copy(alpha = 0.8f),
+                                focusRequester = if (on) stripFocus else null) {
+                                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    ChannelLogo(s.icon, s.name, size = 40.dp, playing = on)
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        androidx.tv.material3.Text(listOfNotNull(s.num.takeIf { it > 0 }?.toString(), s.name).joinToString(" · "), style = ty.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        androidx.tv.material3.Text(app.programmesFor(s).current()?.title ?: "Live", style = ty.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                            color = androidx.tv.material3.LocalContentColor.current.copy(alpha = 0.8f))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+            } else Row(Modifier.onFocusChanged { onControls(it.hasFocus) }.focusGroup(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                fun act(f: () -> Unit): () -> Unit = { f(); poke() }
+                TvControl(if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, null, act(onPlayPause), primary = true, focusRequester = ctrlFocus,
+                    onLongClick = onMenu, description = if (paused) "Play" else "Pause")
+                if (!live) TvControl(Icons.Rounded.FiberManualRecord, "Go live", act(onLive), onLongClick = onMenu)
+                if (c.archive && now != null) TvControl(Icons.Rounded.Restore, "From the start", act { onSeek(now.start) }, onLongClick = onMenu)
+                TvControl(Icons.Rounded.Subtitles, "Audio & subtitles", act(onTracks), onLongClick = onMenu)
+                val fav = app.isFav("c${c.id}")
+                TvControl(if (fav) Icons.Rounded.Star else Icons.Rounded.StarOutline, if (fav) "Saved" else "Save", act { app.toggleFav("c${c.id}") }, onLongClick = onMenu)
+                TvControl(Icons.AutoMirrored.Rounded.List, "Channels", onChannels, onLongClick = onMenu)
+                TvControl(Icons.Rounded.MoreVert, null, onMenu, description = "More options")
             }
         }
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("▲▼" to "Channel", "◀▶" to "Browse strip", "OK" to "Watch", hint, "0–9" to "Go to number", "◀ hold" to "Channel list",
-                "☰" to "Audio, subtitles, favourite", "Back" to "Live TV").forEach { TvHints(it) }
-        }
+        TvHints("▲▼" to "Channel", "◀▶" to "Browse", "◀ hold" to "All channels", modifier = Modifier.align(Alignment.End))
     }
 }

@@ -58,6 +58,17 @@ import com.avetero.relay.ui.m3.ChannelLogo
 import com.avetero.relay.ui.m3.PosterCard
 import com.avetero.relay.ui.m3.SectionHeader
 import com.avetero.relay.ui.m3.segmentShape
+import com.avetero.relay.data.model.minutesLeft
+import com.avetero.relay.util.fmtTime
+import com.avetero.relay.ui.theme.tone
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.AssistChip
+import androidx.compose.foundation.layout.FlowRow
 
 @Composable
 internal fun HomePhone(app: AppState, data: HomeData) {
@@ -67,16 +78,32 @@ internal fun HomePhone(app: AppState, data: HomeData) {
     LaunchedEffect(app.reselect) { if (app.reselect != reselect0) list.animateScrollToItem(0) }
     val parts = app.parts
 
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), list, contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        item(key = "search") { SearchRow(app) }
+    // what's on: your favourite and recent channels, or (new playlists) the first channels that have a guide, so the
+    // page never opens bare
+    val onNow = remember(data.live, app.channelsVisible, app.guide) {
+        data.live.ifEmpty { app.channelsVisible.asSequence().filter { c -> c.epgId.isNotEmpty() && !app.guide[c.epgId].isNullOrEmpty() }.take(4).toList() }
+    }
+    val featured = app.liveChannel?.takeIf { lc -> onNow.any { it.id == lc.id } } ?: onNow.firstOrNull()
+    val others = onNow.filter { it.id != featured?.id }.take(3)
 
-        if (data.heroItems.isEmpty() && data.live.isEmpty() && data.recentMovies.isEmpty() && data.recentSeries.isEmpty() && data.addedMovies.isEmpty()) item(key = "empty") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (app.libraryLoading) LoadingIndicator()
-                Text(if (app.libraryLoading) "Loading your library…" else greeting(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Ready when you are", style = MaterialTheme.typography.headlineSmall)
-                Text(if ("vod" in parts || "series" in parts) "Pick a channel in Live, or browse movies and series in Library." else "Open Live for the full list of channels.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), list, contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+        item(key = "search") {
+            Column {
+                SearchRow(app)
+                Text(greeting(), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp))
+            }
+        }
+
+        if (featured != null) item(key = "onnow") {
+            // one grouped block: a big card for the channel you were on, then the next few channels
+            Column(Modifier.animateItem().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                FeaturedLive(app, featured, onNow, last = others.isEmpty(), lastWatched = app.liveChannel?.id == featured.id || data.live.isNotEmpty())
+                others.forEachIndexed { i, c -> key(c.id) { LiveRow(app, c, onNow, i, others.size) } }
+            }
+        } else if (app.libraryLoading) item(key = "loading") {
+            Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LoadingIndicator()
+                Text("Loading your library…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -84,16 +111,6 @@ internal fun HomePhone(app: AppState, data: HomeData) {
             Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Continue watching", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
                 ContinueCarousel(app, data)
-            }
-        }
-
-        if (data.live.isNotEmpty()) {
-            // one item, so the rows sit 2dp apart as a grouped list rather than spaced like sections
-            item(key = "live") {
-                Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SectionHeader("Live now", Modifier.padding(bottom = 6.dp), action = "See all") { app.go(Screen.Live()) }
-                    data.live.forEachIndexed { i, c -> key(c.id) { LiveRow(app, c, data.live, i, Modifier) } }
-                }
             }
         }
 
@@ -111,6 +128,46 @@ internal fun HomePhone(app: AppState, data: HomeData) {
             PosterRow("Recently added movies", Modifier.animateItem()) {
                 items(data.addedMovies, key = { it.id }) { m -> PosterCard(m.icon, m.name, m.id, { app.push(Screen.MovieDetail(m)) }, width = 120.dp, sharedKey = "poster-m${m.id}") }
             }
+        }
+
+        if (app.liveCatsVisible.isNotEmpty() || app.vodCatsVisible.isNotEmpty()) item(key = "cats") {
+            Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Browse categories", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
+                FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    app.liveCatsVisible.take(8).forEach { c ->
+                        AssistChip({ app.go(Screen.Live(c.id)) }, { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { Icon(Icons.Rounded.LiveTv, null, Modifier.size(AssistChipDefaults.IconSize)) })
+                    }
+                    app.vodCatsVisible.take(4).forEach { c ->
+                        AssistChip({ app.go(Screen.VodGrid(false, c.id)) }, { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            leadingIcon = { Icon(Icons.Rounded.Movie, null, Modifier.size(AssistChipDefaults.IconSize)) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The big "on now" card at the top of the group: what's on, how far through, tap to watch. */
+@Composable
+private fun FeaturedLive(app: AppState, c: Channel, list: List<Channel>, last: Boolean, lastWatched: Boolean) {
+    LaunchedEffect(c.id) { app.loadEpg(c) }
+    val now = app.programmesFor(c).current()
+    val shape = if (last) RoundedCornerShape(28.dp) else RoundedCornerShape(28.dp, 28.dp, 4.dp, 4.dp)
+    Box(Modifier.fillMaxWidth().height(208.dp).clip(shape).background(tone(c.id))
+        .clickable(onClickLabel = "Watch ${c.name}") { watchChannel(app, c, list) }) {
+        // the channel's logo, large and soft, as the card's artwork
+        if (c.icon.isNotBlank()) AsyncImage(c.icon, null, Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 20.dp).size(120.dp, 72.dp), contentScale = ContentScale.Fit, alpha = 0.9f)
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("LIVE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onError,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.error).padding(horizontal = 8.dp, vertical = 2.dp))
+            if (lastWatched) Text("Last watched", style = MaterialTheme.typography.labelMedium, color = Color.White,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(horizontal = 8.dp, vertical = 2.dp))
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.45f)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(now?.title ?: c.name, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (now != null) "${c.name} · until ${fmtTime(now.end)}" else "Live now", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth().padding(top = 6.dp), trackColor = Color.White.copy(alpha = 0.3f))
         }
     }
 }
@@ -153,21 +210,21 @@ private fun ContinueCarousel(app: AppState, data: HomeData) {
     }
 }
 
-/** A channel on air now: logo, name · programme, how far through (grouped list row). */
+/** A channel on air now, under the featured card: logo, what's on, the channel and time left (grouped list row). */
 @Composable
-private fun LiveRow(app: AppState, c: Channel, list: List<Channel>, i: Int, modifier: Modifier) {
+private fun LiveRow(app: AppState, c: Channel, list: List<Channel>, i: Int, count: Int) {
     LaunchedEffect(c.id) { app.loadEpg(c) }
     val now = app.programmesFor(c).current()
-    Row(modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 80.dp).clip(segmentShape(i, list.size))
+    val shape = if (i == count - 1) RoundedCornerShape(4.dp, 4.dp, 28.dp, 28.dp) else RoundedCornerShape(4.dp)
+    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(shape)
         .background(MaterialTheme.colorScheme.surfaceContainer).clickable(onClickLabel = "Watch ${c.name}") { watchChannel(app, c, list) }.padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        ChannelLogo(c.icon, c.name, playing = app.liveChannel?.id == c.id)
-        // two lines like Live's rows: the channel, then what's on with its progress
-        Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(now?.title ?: "Live", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth().padding(top = 4.dp))
+        ChannelLogo(c.icon, c.name, size = 44.dp, playing = app.liveChannel?.id == c.id)
+        Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(now?.title ?: c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (now != null) "${c.name} · ${now.minutesLeft()}" else "Live", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Icon(Icons.Rounded.PlayArrow, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
