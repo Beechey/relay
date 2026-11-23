@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -103,10 +104,12 @@ fun LiveTvScreen(app: AppState, group: String?) {
             Column(Modifier.width(232.dp).fillMaxHeight().padding(start = 24.dp, end = 16.dp, top = 27.dp)) {
                 Header("Groups")
                 val gi = groups.indexOfFirst { it.id == groupId }.coerceAtLeast(0)
-                LazyColumn(state = rememberLazyListState(gi), verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)) {
+                val selectedGroup = remember { FocusRequester() }
+                // Left from the channels always lands on the group you're in, not whichever group is level with the channel
+                LazyColumn(Modifier.focusProperties { onEnter = { selectedGroup.requestFocus() } }, state = rememberLazyListState(gi), verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp)) {
                     itemsIndexed(groups, key = { _, g -> g.id }) { _, g ->
                         val on = g.id == groupId
-                        TvSurface({ groupId = g.id }, Modifier.fillMaxWidth().height(48.dp), onLongClick = { groupMenu = g }, selected = on, shape = RoundedCornerShape(24.dp)) {
+                        TvSurface({ groupId = g.id }, Modifier.fillMaxWidth().height(48.dp), onLongClick = { groupMenu = g }, selected = on, shape = RoundedCornerShape(24.dp), focusRequester = if (on) selectedGroup else null) {
                             Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(groupLabel(g), style = ty.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 Text("%,d".format(g.count), style = ty.labelLarge, color = LocalContentColor.current.copy(alpha = 0.7f))
