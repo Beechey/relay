@@ -127,7 +127,8 @@ fun TvButton(
 /** Remote hints along the bottom right: keys drawn as small chips, e.g. TvHints("◀" to "Menu", "☰" to "Options"). */
 @Composable
 fun TvHints(vararg hints: Pair<String, String>, modifier: Modifier = Modifier) =
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+    // on its own surface, so it stays readable over rows that scroll beneath it
+    Row(modifier.clip(RoundedCornerShape(16.dp)).background(com.avetero.relay.ui.theme.Tok.Container.copy(alpha = 0.92f)).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
         hints.forEach { (key, label) ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 8.dp, vertical = 2.dp)) {

@@ -112,8 +112,13 @@ private val TvColors = androidx.tv.material3.darkColorScheme(
 @Composable
 fun RelayTheme(tv: Boolean, content: @Composable () -> Unit) =
     MaterialExpressiveTheme(colorScheme = RelayColors, motionScheme = MotionScheme.expressive(), typography = RelayTypography) {
-        if (tv) androidx.tv.material3.MaterialTheme(colorScheme = TvColors, typography = TvTypography, content = content)
-        else content()
+        // text and icons outside a Surface default to onSurface (not black) on both component sets
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Tok.OnSurface) {
+            if (tv) androidx.tv.material3.MaterialTheme(colorScheme = TvColors, typography = TvTypography) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.tv.material3.LocalContentColor provides Tok.OnSurface, content = content)
+            }
+            else content()
+        }
     }
 
 private val tones = listOf(0xFF2B3A4A, 0xFF2A3A4F, 0xFF33405A, 0xFF3D2F4A, 0xFF1F3B3A, 0xFF2B3D3A, 0xFF2A3A2A, 0xFF34384A).map { Color(it) }

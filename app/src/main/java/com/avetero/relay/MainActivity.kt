@@ -19,7 +19,8 @@ class MainActivity : FragmentActivity() {
     private lateinit var app: AppState
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // the app is always dark: light status/navigation bar icons whatever the system theme
+        enableEdgeToEdge(androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
         setContent { DesignScale { androidx.compose.runtime.CompositionLocalProvider(com.avetero.relay.ui.components.LocalParts provides app.shownParts) { App(app, onExit = ::finish) } } }
