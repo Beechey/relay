@@ -165,7 +165,9 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
     if (isTv()) TvLibrary(app, series, initialGroup) else PhoneLibrary(app, series, initialGroup)
 
 @Composable
-private fun PhoneLibrary(app: AppState, series: Boolean, initialGroup: String?) {
+private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: String?) {
+    // Movies/Series switch in place (no navigation), so the title, toggle and chips stay put and only the grid changes
+    var series by rememberSaveable(startSeries) { mutableStateOf(startSeries) }
     val lib = rememberLibrary(app, series)
     val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
     var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: ALL) }
@@ -174,11 +176,13 @@ private fun PhoneLibrary(app: AppState, series: Boolean, initialGroup: String?) 
     // a group that emptied (last saved title removed, category hidden) falls back to All
     val current = groups.firstOrNull { it.id == groupId }?.id ?: ALL
     val tiles = remember(lib, current, sort, app.favourites) { lib.tiles(current, sort, "", app.favourites) }
-    val grid = rememberLazyGridState()
+    val movieGrid = rememberLazyGridState()
+    val seriesGrid = rememberLazyGridState()
+    val grid = if (series) seriesGrid else movieGrid
     val chips = rememberLazyListState()
     // scroll to the top on a new group or sort and when Library is tapped again; not when coming back from a title
-    LaunchedEffect(Unit) { snapshotFlow { current to sort }.drop(1).collect { grid.scrollToItem(0) } }
-    LaunchedEffect(Unit) { snapshotFlow { app.reselect }.drop(1).collect { grid.animateScrollToItem(0) } }
+    LaunchedEffect(grid) { snapshotFlow { current to sort }.drop(1).collect { grid.scrollToItem(0) } }
+    LaunchedEffect(grid) { snapshotFlow { app.reselect }.drop(1).collect { grid.animateScrollToItem(0) } }
     LaunchedEffect(current) { groups.indexOfFirst { it.id == current }.takeIf { it > 0 }?.let { chips.animateScrollToItem(it) } }
     var menuFor by remember { mutableStateOf<Group?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
@@ -191,8 +195,8 @@ private fun PhoneLibrary(app: AppState, series: Boolean, initialGroup: String?) 
                 Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
             ) {
-                ToggleButton(!series, { if (series) app.go(Screen.VodGrid(false)) }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedLeadingButtonShapes()) { Text("Movies") }
-                ToggleButton(series, { if (!series) app.go(Screen.VodGrid(true)) }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text("Series") }
+                ToggleButton(!series, { series = false; app.librarySeries = false }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedLeadingButtonShapes()) { Text("Movies") }
+                ToggleButton(series, { series = true; app.librarySeries = true }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text("Series") }
             }
             LazyRow(state = chips, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(groups, key = { it.id }) { g ->

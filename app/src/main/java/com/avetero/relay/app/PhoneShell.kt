@@ -68,7 +68,7 @@ private val dests = listOf(
     PhoneDest("For you", Icons.Rounded.Home, Icons.Outlined.Home, setOf("home", "search", "settings"), { Screen.Home }),
     PhoneDest("Live", Icons.Rounded.LiveTv, Icons.Outlined.LiveTv, setOf("live"), { Screen.Live() }, "live"),
     PhoneDest("Guide", Icons.AutoMirrored.Rounded.EventNote, Icons.AutoMirrored.Outlined.EventNote, setOf("guide"), { Screen.Guide }, "live"),
-    PhoneDest("Library", Icons.Rounded.VideoLibrary, Icons.Outlined.VideoLibrary, setOf("movies", "series"), { Screen.VodGrid(it.librarySeries && "series" in it.parts || "vod" !in it.parts) }, "lib"),
+    PhoneDest("Library", Icons.Rounded.VideoLibrary, Icons.Outlined.VideoLibrary, setOf("movies", "series"), { Screen.VodGrid("vod" !in it.parts) }, "lib"),
     PhoneDest("Saved", Icons.Rounded.Star, Icons.Outlined.StarOutline, setOf("saved"), { Screen.Favourites }),
 )
 

@@ -35,6 +35,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -86,8 +88,13 @@ internal fun HomePhone(app: AppState, data: HomeData) {
         }
 
         if (data.live.isNotEmpty()) {
-            item(key = "live-h") { SectionHeader("Live now", Modifier.animateItem(), action = "See all") { app.go(Screen.Live()) } }
-            itemsIndexed(data.live, key = { _, c -> "live-${c.id}" }) { i, c -> LiveRow(app, c, data.live, i, Modifier.animateItem()) }
+            // one item, so the rows sit 2dp apart as a grouped list rather than spaced like sections
+            item(key = "live") {
+                Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    SectionHeader("Live now", Modifier.padding(bottom = 6.dp), action = "See all") { app.go(Screen.Live()) }
+                    data.live.forEachIndexed { i, c -> key(c.id) { LiveRow(app, c, data.live, i, Modifier) } }
+                }
+            }
         }
 
         if (data.recentMovies.isNotEmpty()) item(key = "rm") {
@@ -151,16 +158,15 @@ private fun ContinueCarousel(app: AppState, data: HomeData) {
 private fun LiveRow(app: AppState, c: Channel, list: List<Channel>, i: Int, modifier: Modifier) {
     LaunchedEffect(c.id) { app.loadEpg(c) }
     val now = app.programmesFor(c).current()
-    Row(modifier.padding(horizontal = 16.dp).padding(bottom = 2.dp).fillMaxWidth().height(72.dp).clip(segmentShape(i, list.size))
+    Row(modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 80.dp).clip(segmentShape(i, list.size))
         .background(MaterialTheme.colorScheme.surfaceContainer).clickable(onClickLabel = "Watch ${c.name}") { watchChannel(app, c, list) }.padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         ChannelLogo(c.icon, c.name, playing = app.liveChannel?.id == c.id)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row {
-                Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Text(" · " + (now?.title ?: "Live"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth())
+        // two lines like Live's rows: the channel, then what's on with its progress
+        Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(now?.title ?: "Live", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth().padding(top = 4.dp))
         }
     }
 }
