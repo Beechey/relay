@@ -1,12 +1,11 @@
-# Relay IPTV 0.3.0 beta 3
+# Relay IPTV 0.3.0 beta 4
 
-Third beta of the redesign. Only installs with **Beta updates** switched on (Settings › About and updates) are offered it.
+Fourth beta of the redesign. Only installs with **Beta updates** switched on (Settings › About and updates) are offered it.
 
-**New since beta 2 (phones)**
-- **Swipe instead of tapping:** swipe between Movies and Series in Library, Channels / Movies / Series in Saved, categories in Live, seasons on a series page, Audio / Subtitles / Quality, and Today / Tomorrow in a channel's schedule
-- **Mini player:** swipe it sideways to close it
-- **Players look cleaner:** the picture dims under the controls, a slim seek bar, skip buttons that stand out, and the actions no longer get cut off
-- **Library categories scroll smoothly:** dragging along them no longer opens the category menu
-- In Saved, remove a channel with press-and-hold or ⋮ (swiping now changes tab)
+**New since beta 3 (phones)**
+- **The rounded Material buttons and chips are back** (beta 3 had swapped them for plain tabs); swiping still works
+- **Library:** tap Movies or Series; swipe the posters to move between categories (All, Top Movies…)
+- **Guide:** swiping through time now slides each channel's programmes along with it
+- **Settings:** every page has the same large title under the back arrow, shrinking as you scroll
 
 Found something odd? You can switch Beta updates off at any time; you'll then get the next stable release.
