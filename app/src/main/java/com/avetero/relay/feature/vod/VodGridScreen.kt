@@ -179,7 +179,7 @@ private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: Stri
         else {
             val pager = rememberPagerState(if (startSeries) 1 else 0) { 2 }
             LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { app.librarySeries = it == 1 } }
-            PagerTabs(pager, listOf("Movies", "Series"))
+            PagerTabs(pager, listOf("Movies", "Series"), Modifier.padding(top = 8.dp, bottom = 16.dp))
             HorizontalPager(pager, Modifier.fillMaxSize().padding(top = 12.dp)) { page ->
                 LibraryPage(app, page == 1, initialGroup.takeIf { (page == 1) == startSeries })
             }

@@ -178,7 +178,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), singleLine = true,
                 placeholder = { Text("Search channels in this category") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton({ query = "" }) { Icon(Icons.Rounded.Close, "Clear") } }, shape = RoundedCornerShape(28.dp))
-        PagerTabs(pager, remember(groups) { groups.map(::chipLabel) }, scrollable = true)
+        PagerTabs(pager, remember(groups) { groups.map(::chipLabel) }, Modifier.padding(vertical = 8.dp), scrollable = true)
         // only the page on screen is composed (hundreds of categories); each keeps its own scroll by its key
         HorizontalPager(pager, Modifier.weight(1f), key = { groups[it].id }, verticalAlignment = Alignment.Top) { i ->
             val id = groups[i].id

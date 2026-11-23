@@ -174,7 +174,7 @@ private fun Seasons(d: SeriesDetail, season: Int, setSeason: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val pager = rememberPagerState(d.seasons.indexOf(season).coerceAtLeast(0)) { d.seasons.size }
     LaunchedEffect(pager, d.seasons) { snapshotFlow { pager.currentPage }.collect { d.seasons.getOrNull(it)?.let(setSeason) } }
-    PagerTabs(pager, d.seasons.map { "Season $it" }, scrollable = true)
+    PagerTabs(pager, d.seasons.map { "Season $it" }, Modifier.padding(vertical = 8.dp), scrollable = true)
     HorizontalPager(pager, Modifier.fillMaxSize(), key = { d.seasons[it] }, verticalAlignment = Alignment.Top) { page ->
         val inSeason = remember(d, page) { d.eps.filter { it.season == d.seasons[page] } }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {

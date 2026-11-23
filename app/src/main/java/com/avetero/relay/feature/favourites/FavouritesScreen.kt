@@ -106,7 +106,7 @@ private fun PhoneSaved(app: AppState) {
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         LargeTitle("Saved")
-        PagerTabs(pager, saved.labels.mapIndexed { i, label -> "$label ${saved.count(i)}" })
+        PagerTabs(pager, saved.labels.mapIndexed { i, label -> "$label ${saved.count(i)}" }, Modifier.padding(top = 8.dp, bottom = 16.dp))
         // a key per page so each keeps its own scroll; only the page on screen is composed
         HorizontalPager(pager, Modifier.fillMaxSize().padding(top = 16.dp)) { tab ->
             val list = rememberLazyListState()

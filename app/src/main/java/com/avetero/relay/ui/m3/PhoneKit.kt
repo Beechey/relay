@@ -43,6 +43,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.semantics.role
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import com.avetero.relay.ui.motion.sharedBounds
 import com.avetero.relay.ui.motion.shimmer
 import androidx.compose.foundation.layout.height
@@ -153,20 +158,41 @@ fun SkeletonRows(count: Int, height: Dp, modifier: Modifier = Modifier) =
     }
 
 /**
- * Tabs over a [androidx.compose.foundation.pager.HorizontalPager] (Material's swipeable views): the indicator follows the
- * pager, tapping a tab animates to its page. [scrollable] for many or long labels (Live categories, seasons).
+ * The switcher over a [androidx.compose.foundation.pager.HorizontalPager]: swipe the page or tap an option.
+ * A few options are connected toggle buttons; many ([scrollable]: Live categories, seasons) are filter chips.
  */
 @Composable
 fun PagerTabs(pager: androidx.compose.foundation.pager.PagerState, labels: List<String>, modifier: Modifier = Modifier, scrollable: Boolean = false,
-              container: Color = MaterialTheme.colorScheme.surface) {
+              @Suppress("UNUSED_PARAMETER") container: Color = MaterialTheme.colorScheme.surface) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val cs = MaterialTheme.colorScheme
-    val tabs = @Composable {
+    val go: (Int) -> Unit = { i -> scope.launch { pager.animateScrollToPage(i) } }
+    // the Expressive look (connected toggle buttons, or filter chips for many options), following the pager
+    if (!scrollable) Row(modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(androidx.compose.material3.ButtonGroupDefaults.ConnectedSpaceBetween)) {
         labels.forEachIndexed { i, label ->
-            androidx.compose.material3.Tab(pager.currentPage == i, { scope.launch { pager.animateScrollToPage(i) } }, Modifier.heightIn(min = 48.dp),
-                text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }, selectedContentColor = cs.primary, unselectedContentColor = cs.onSurfaceVariant)
+            val shapes = when (i) {
+                0 -> androidx.compose.material3.ButtonGroupDefaults.connectedLeadingButtonShapes()
+                labels.lastIndex -> androidx.compose.material3.ButtonGroupDefaults.connectedTrailingButtonShapes()
+                else -> androidx.compose.material3.ButtonGroupDefaults.connectedMiddleButtonShapes()
+            }
+            androidx.compose.material3.ToggleButton(pager.currentPage == i, { go(i) }, Modifier.weight(1f).heightIn(min = 48.dp)
+                .semantics { role = androidx.compose.ui.semantics.Role.Tab }, shapes = shapes) {
+                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    } else {
+        val row = androidx.compose.foundation.lazy.rememberLazyListState()
+        // keep the selected chip in view as the pager moves (only scrolls when it's off screen)
+        androidx.compose.runtime.LaunchedEffect(pager.currentPage) {
+            val i = pager.currentPage
+            val seen = row.layoutInfo.visibleItemsInfo
+            if (seen.none { it.index == i && it.offset >= 0 && it.offset + it.size <= row.layoutInfo.viewportEndOffset }) row.animateScrollToItem(i)
+        }
+        androidx.compose.foundation.lazy.LazyRow(modifier, row, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(labels.size) { i ->
+                val on = pager.currentPage == i
+                androidx.compose.material3.FilterChip(on, { go(i) }, { Text(labels[i], maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = if (on) ({ Icon(androidx.compose.material.icons.Icons.Rounded.Check, null, Modifier.size(androidx.compose.material3.FilterChipDefaults.IconSize)) }) else null)
+            }
         }
     }
-    if (scrollable) androidx.compose.material3.PrimaryScrollableTabRow(pager.currentPage, modifier, containerColor = container, edgePadding = 16.dp, tabs = tabs)
-    else androidx.compose.material3.PrimaryTabRow(pager.currentPage, modifier, containerColor = container, tabs = tabs)
 }
