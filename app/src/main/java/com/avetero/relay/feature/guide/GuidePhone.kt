@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.guide
 
+import com.avetero.relay.ui.motion.rememberEntrance
+import com.avetero.relay.ui.motion.entrance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -84,6 +86,7 @@ internal fun GuidePhone(app: AppState, g: GuideState) {
     val point = if (g.shift == 0) nowSec() else g.windowStart
 
     val rows = rememberLazyListState(app.guideScroll.first, app.guideScroll.second)
+    val enter = rememberEntrance(ready = list.isNotEmpty())
     DisposableEffect(Unit) { onDispose { app.guideScroll = rows.firstVisibleItemIndex to rows.firstVisibleItemScrollOffset } }
     val reselect0 = remember { app.reselect }
     LaunchedEffect(app.reselect) { if (app.reselect != reselect0) rows.animateScrollToItem(0) }
@@ -102,7 +105,7 @@ internal fun GuidePhone(app: AppState, g: GuideState) {
         LazyColumn(Modifier.fillMaxSize().pointerInput(Unit) {
             detectHorizontalDragGestures(onDragStart = { swipe = 0f }, onDragEnd = { if (swipe < -120f) g.move(1) else if (swipe > 120f) g.move(-1) }) { c, d -> c.consume(); swipe += d }
         }, rows, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            itemsIndexed(list, key = { _, c -> c.id }) { i, c -> GuideRow(app, c, point, g.shift == 0, i, list.size, Modifier.animateItem()) { sheetFor = c } }
+            itemsIndexed(list, key = { _, c -> c.id }) { i, c -> GuideRow(app, c, point, g.shift == 0, i, list.size, Modifier.animateItem().entrance(enter, i)) { sheetFor = c } }
         }
     }
 

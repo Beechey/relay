@@ -1,5 +1,9 @@
 package com.avetero.relay.feature.live
 
+import com.avetero.relay.ui.motion.rememberEntrance
+import com.avetero.relay.ui.motion.entrance
+import com.avetero.relay.ui.m3.SkeletonRows
+import com.avetero.relay.ui.motion.sharedBounds
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -125,6 +129,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     val playing = rememberPlaying(app, list)
     LaunchedEffect(playing) { if (playing != null) app.liveChannel = playing }
     val listState = rememberLazyListState()
+    val enter = rememberEntrance(ready = list.isNotEmpty())
     val scope = rememberCoroutineScope()
     val groups = rememberLiveGroups(app)
     val keyboard = LocalSoftwareKeyboardController.current
@@ -144,7 +149,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     Column(Modifier.fillMaxSize().background(cs.surface).statusBarsPadding()) {
         if (playing == null) LargeTitle("Live", actions = { SearchToggle(searching) { searching = !searching; if (!searching) query = "" } })
         else Column {
-            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black).clickable(onClickLabel = "Watch ${playing.name} fullscreen") {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).sharedBounds("live-video").background(Color.Black).clickable(onClickLabel = "Watch ${playing.name} fullscreen") {
                 app.push(Screen.LivePlayer(playing, list))
             }) {
                 // keyed on PiP: the floating window borrows the video surface, so rebuild this one afterwards
@@ -178,7 +183,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
         LazyColumn(Modifier.weight(1f), listState, contentPadding = PaddingValues(bottom = 24.dp)) {
             when {
                 list.isEmpty() && app.libraryLoading -> item(key = "loading") {
-                    Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
+                    SkeletonRows(8, 72.dp, Modifier.padding(horizontal = 16.dp))
                 }
                 list.isEmpty() -> item(key = "empty") {
                     Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -191,7 +196,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             itemsIndexed(list, key = { _, c -> c.id }, contentType = { _, _ -> "channel" }) { i, c ->
                 LaunchedEffect(c.id) { app.loadEpg(c) }
                 val on = playing?.id == c.id
-                ChannelRow(app, c, on, segmentShape(i, list.size), Modifier.animateItem().padding(horizontal = 16.dp).padding(bottom = 2.dp),
+                ChannelRow(app, c, on, segmentShape(i, list.size), Modifier.animateItem().entrance(enter, i).padding(horizontal = 16.dp).padding(bottom = 2.dp),
                     onClick = {
                         keyboard?.hide(); focusManager.clearFocus()
                         if (on) app.push(Screen.LivePlayer(c, list)) else play(c)

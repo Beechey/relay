@@ -54,6 +54,7 @@ import com.avetero.relay.ui.theme.isTv
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun App(app: AppState, onExit: () -> Unit) {
     val tv = isTv()
@@ -94,14 +95,15 @@ fun App(app: AppState, onExit: () -> Unit) {
     val autoPip = app.pipEligible
     LaunchedEffect(autoPip) { activity?.setAutoPip(autoPip) }
 
-    Box(Modifier.fillMaxSize()) {
+    // one shared-transition scope over everything, so the phone's mini player (outside the screens) can morph into Live
+    SharedTransitionLayout(Modifier.fillMaxSize()) { CompositionLocalProvider(LocalSharedScope provides this) { Box(Modifier.fillMaxSize()) {
         if (tv) TvShell(app, nav, onExit) else PhoneShell(app, nav)
         // PiP from Live TV's preview: the floating window shows only the video
         if (app.inPip && !app.onPlayerScreen) Box(Modifier.fillMaxSize().background(Color.Black)) {
             PlayerSurface(app.player.player, Modifier.fillMaxSize())
         }
         ReminderCard(app, Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 32.dp))
-    }
+    } } }
     app.update?.let { if (updatePrompt) UpdateDialog(app, it) { updatePrompt = false } }
 }
 
@@ -164,15 +166,18 @@ fun RelayNavDisplay(app: AppState, nav: (Tab) -> Unit, modifier: Modifier = Modi
     }
     val current = decorated[app.tab] ?: return
     val shown = if (!tv && app.tab != "home" && app.tab != "start") decorated["home"].orEmpty() + current else current
-    SharedTransitionLayout(modifier) {
-        CompositionLocalProvider(LocalSharedScope provides this) {
+    // container transforms only within a tab: across tabs the same poster can sit on both screens and would fly over
+    val lastTab = remember { arrayOf(app.tab) }
+    val sameTab = remember(app.tab, app.navKind, current.size) { (lastTab[0] == app.tab).also { lastTab[0] = app.tab } }
+    val shared = LocalSharedScope.current ?: return
+    CompositionLocalProvider(LocalSharedScope provides shared.takeIf { sameTab }) {
             NavDisplay(
+                modifier = modifier,
                 entries = shown,
-                sharedTransitionScope = this,
+                sharedTransitionScope = shared,
                 transitionSpec = { if (tv) tvFade() else if (app.navKind == NavKind.Tab) fadeThrough() else sharedAxisIn() },
                 popTransitionSpec = { if (tv) tvFade() else if (app.navKind == NavKind.Tab) fadeThrough() else sharedAxisOut() },
                 onBack = { app.back() },
             )
-        }
     }
 }

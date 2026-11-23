@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.avetero.relay.player.PlayerSurface
+import com.avetero.relay.ui.motion.sharedBounds
 import com.avetero.relay.ui.components.LocalParts
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.theme.LocalWide
@@ -100,7 +101,9 @@ fun PhoneShell(app: AppState, nav: (Tab) -> Unit) {
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             Column {
-                AnimatedVisibility(showMini(app), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) { MiniPlayer(app) }
+                AnimatedVisibility(showMini(app), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.avetero.relay.ui.motion.LocalScreenAnim provides this) { MiniPlayer(app) }
+                }
                 AnimatedVisibility(showNav && !wide, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     ShortNavigationBar {
                         shown.forEach { d ->
@@ -141,7 +144,8 @@ private fun MiniPlayer(app: AppState) {
         color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(32.dp), shadowElevation = 6.dp,
     ) {
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(width = 85.dp, height = 48.dp).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainerLowest)) {
+            // the video grows into Live's full-screen player (key "live-video"), its corners squaring off on the way
+            Box(Modifier.size(width = 85.dp, height = 48.dp).sharedBounds("live-video", RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainerLowest)) {
                 PlayerSurface(app.player.player, Modifier.fillMaxSize())
             }
             Column(Modifier.weight(1f)) {

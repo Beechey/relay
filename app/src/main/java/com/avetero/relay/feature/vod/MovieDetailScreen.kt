@@ -99,9 +99,10 @@ private fun PhoneMovieDetail(d: MovieDetail, more: List<Vod>) {
     Box(Modifier.fillMaxSize().background(cs.surface)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Box(Modifier.fillMaxWidth().height(300.dp)) {
-                Artwork(info?.backdrop?.ifEmpty { null } ?: vod.icon, vod.name, vod.id, Modifier.fillMaxSize().sharedBounds(posterKey(false, vod.id)), showTitle = false)
+                Artwork(info?.backdrop?.ifEmpty { null } ?: vod.icon, vod.name, vod.id, Modifier.fillMaxSize(), showTitle = false)
+                // the poster you tapped grows into this one (same 2:3 artwork, already loaded)
                 Artwork(vod.icon, vod.name, vod.id, Modifier.align(Alignment.BottomStart).offset(x = 20.dp, y = 40.dp).size(104.dp, 156.dp)
-                    .shadow(12.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)), showTitle = vod.icon.isBlank())
+                    .sharedBounds(posterKey(false, vod.id), RoundedCornerShape(16.dp)).shadow(12.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)), showTitle = vod.icon.isBlank())
             }
             FlowRow(Modifier.padding(start = 140.dp, end = 20.dp, top = 12.dp).heightIn(min = 40.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 d.facts.forEach { PhoneFact(it) }
@@ -136,7 +137,7 @@ private fun PhoneMovieDetail(d: MovieDetail, more: List<Vod>) {
                 HorizontalMultiBrowseCarousel(rememberCarouselState { more.size }, 150.dp, Modifier.fillMaxWidth().height(200.dp), itemSpacing = 8.dp,
                     contentPadding = PaddingValues(horizontal = 16.dp)) { i ->
                     val m = more[i]
-                    Artwork(m.icon, m.name, m.id, Modifier.fillMaxSize().maskClip(MaterialTheme.shapes.large).sharedBounds(posterKey(false, m.id)).clickable { d.open(m) })
+                    Artwork(m.icon, m.name, m.id, Modifier.fillMaxSize().maskClip(MaterialTheme.shapes.large).clickable { d.open(m) })
                 }
             }
             Spacer(Modifier.height(32.dp))

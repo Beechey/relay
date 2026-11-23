@@ -1,5 +1,17 @@
 package com.avetero.relay.feature.live
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.platform.LocalDensity
+import com.avetero.relay.ui.motion.Springs
+import com.avetero.relay.ui.motion.sharedBounds
+import com.avetero.relay.ui.motion.LocalScreenAnim
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.media3.common.Player
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -162,8 +174,20 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
     var seekGen by remember { mutableIntStateOf(0) }
     LaunchedEffect(pausedAt, showInfo) { while (pausedAt != null || showInfo) { clock = nowSec(); delay(1_000) } }
 
+    // channel changes dip the picture to black and fade the new one up on its first frame (one decoder, so no true crossfade)
+    val veil = remember { Animatable(0f) }
+    var zapped by remember { mutableStateOf(false) }
+    val fadeUp = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    DisposableEffect(app.player.player) {
+        val l = object : Player.Listener { override fun onRenderedFirstFrame() { scope.launch { veil.animateTo(0f, fadeUp) } } }
+        app.player.player.addListener(l)
+        onDispose { app.player.player.removeListener(l) }
+    }
+    val dip = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     LaunchedEffect(c.id) {
         app.liveChannel = c
+        if (zapped) launch { veil.animateTo(1f, dip) }
+        zapped = true
         delay(400) // debounce fast zapping
         pausedAt = null; behind = 0
         app.player.play(app.liveUrl(c), title = c.name)
@@ -243,9 +267,9 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
-            // TV: Back with a control or the strip focused hides the info (Compose would otherwise spend it clearing focus)
+            // TV: Back with the info up hides it, whatever has focus; only the next Back leaves
             .onPreviewKeyEvent { e ->
-                if (!(tv && e.key == Key.Back && (stripOn || ctrlOn) && !listOpen && !menu && !tracksOpen)) return@onPreviewKeyEvent false
+                if (!(tv && e.key == Key.Back && showInfo && !app.inPip && !listOpen && !menu && !tracksOpen)) return@onPreviewKeyEvent false
                 if (e.type == KeyEventType.KeyUp) showInfo = false
                 true
             }
@@ -304,7 +328,15 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
                 detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = { if (total < -120f) zap(1) else if (total > 120f) zap(-1) }) { _, dy -> total += dy }
             },
     ) {
-        PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
+        // from the mini player or Live's preview, the picture grows to full screen and its corners square off (32 → 0)
+        val anim = LocalScreenAnim.current
+        val corner = anim?.transition?.animateDp(label = "corner", transitionSpec = { MaterialTheme.motionScheme.defaultSpatialSpec() }) { if (it == EnterExitState.Visible) 0.dp else 32.dp }
+        val shape = RoundedCornerShape((corner?.value ?: 0.dp).coerceAtLeast(0.dp)) // the spring overshoots past 0
+        Box(Modifier.fillMaxSize().sharedBounds("live-video", shape).clip(shape).background(Color.Black)) {
+            PlayerSurface(app.player.player, Modifier.fillMaxSize(), zoom = app.store.zoomDefault)
+            // channel change: the old picture dips out and the new one fades up once its first frame is drawn
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = veil.value }.background(Color.Black))
+        }
         app.player.castDevice?.let { CastingOverlay(it, listOfNotNull(c.name, now?.title).joinToString(" · "), app.player.castStatus) }
         app.player.error?.let { err ->
             PlayerError(err, onRetry = { app.player.retry() }, onBack = ::leave, onSwitch = {
@@ -312,25 +344,30 @@ fun LivePlayerScreen(app: AppState, start: Channel, startList: List<Channel>, op
             }, hls = app.hls)
         }
         val visible = showInfo && !app.inPip
-        if (!tv) AnimatedVisibility(visible, Modifier.fillMaxSize(), enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()), exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec())) {
+        // overlays: fade, with the bars sliding in from their edge (spatial fast); hiding is a slower 300ms fade
+        val rise = with(LocalDensity.current) { 24.dp.roundToPx() }
+        if (!tv) AnimatedVisibility(visible, Modifier.fillMaxSize(), enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()), exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())) {
             PhoneControls(app, c, now, at, state, paused = pausedAt != null, onBack = ::leave, onPlayPause = { if (pausedAt != null) resume() else pause() },
                 onZap = ::zap, onSkip = ::skip, onSeek = ::seekTo, onLive = ::goLive, onTracks = { tracksOpen = true }, poke = { poke++ })
         } else {
             val shown = visible && !listOpen && app.player.error == null
-            AnimatedVisibility(shown, Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
+            val fadeUp = fadeIn(tween(200))
+            val fadeAway = fadeOut(tween(300))
+            AnimatedVisibility(shown, Modifier.fillMaxSize(), enter = fadeUp, exit = fadeAway) {
                 Box(Modifier.fillMaxSize()) { TopScrim(0.25f); BottomScrim() }
             }
-            AnimatedVisibility(shown, Modifier.align(Alignment.TopStart), enter = fadeIn() + slideInVertically { -24 }, exit = fadeOut() + slideOutVertically { -24 }) {
+            AnimatedVisibility(shown, Modifier.align(Alignment.TopStart), enter = fadeUp + slideInVertically(Springs.spatialFast()) { -rise }, exit = fadeAway + slideOutVertically(tween(300)) { -rise }) {
                 TvTopInfo(c, state)
             }
             AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter),
-                enter = fadeIn() + slideInVertically { 24 }, exit = fadeOut() + slideOutVertically { 24 }) {
+                enter = fadeUp + slideInVertically(Springs.spatialFast()) { rise }, exit = fadeAway + slideOutVertically(tween(300)) { rise }) {
                 TvInfo(app, c, now, at, list, index, browsing, stripFocus, ctrlFocus, live = state == null, paused = pausedAt != null,
                     onStrip = { stripOn = it; if (it) poke++ }, onControls = { ctrlOn = it; if (it) poke++ }, onPick = { go(it) }, onMenu = { menu = true },
                     onPlayPause = { if (pausedAt != null) resume() else pause() }, onLive = ::goLive, onSeek = ::seekTo, onTracks = { tracksOpen = true },
                     onChannels = { listOpen = true; listPoke++ }, poke = { poke++ })
             }
-            AnimatedVisibility(listOpen && !app.inPip, Modifier.fillMaxSize(), enter = fadeIn() + slideInHorizontally { -it / 6 }, exit = fadeOut() + slideOutHorizontally { -it / 6 }) {
+            AnimatedVisibility(listOpen && !app.inPip, Modifier.fillMaxSize(), enter = fadeIn(Springs.effectsFast()) + slideInHorizontally(Springs.spatialFast()) { -it / 6 },
+                exit = fadeOut(Springs.effectsFast()) + slideOutHorizontally(Springs.effects()) { -it / 6 }) {
                 // Back must reach the list itself: with a row focused, Compose would otherwise spend the first press clearing focus
                 ChannelOverlay(app, group, { group = it }, c, { ch, l -> go(ch, l); app.store.lastLiveGroup = group }, { listPoke++ },
                     Modifier.onPreviewKeyEvent { e -> if (e.key == Key.Back) { if (e.type == KeyEventType.KeyUp) closeList(); true } else false })
@@ -348,18 +385,20 @@ private fun dur(s: Long) = if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60
 
 /** PhoneLiveFull: top app bar, centre transport and the scrub bar with actions, on scrims over the picture. */
 @Composable
-private fun PhoneControls(
+private fun AnimatedVisibilityScope.PhoneControls(
     app: AppState, c: Channel, now: Programme?, at: Long, state: String?, paused: Boolean, onBack: () -> Unit, onPlayPause: () -> Unit,
     onZap: (Int) -> Unit, onSkip: (Int) -> Unit, onSeek: (Long) -> Unit, onLive: () -> Unit, onTracks: () -> Unit, poke: () -> Unit,
 ) = Box(Modifier.fillMaxSize()) {
     val cs = MaterialTheme.colorScheme
+    val r = with(LocalDensity.current) { 24.dp.roundToPx() }
     TopScrim(0.35f)
     BottomScrim(0.5f)
     Box(Modifier.fillMaxSize().displayCutoutPadding()) {
         val next = app.programmesFor(c).upcoming().firstOrNull()
         PlayerTopBar(onBack, now?.title ?: c.name,
             listOfNotNull(c.num.takeIf { it > 0 }?.toString(), c.name, next?.let { "Next ${fmtTime(it.start)} · ${it.title}" }).joinToString(" · "),
-            Modifier.align(Alignment.TopStart).padding(horizontal = 12.dp, vertical = 8.dp), leading = { ChannelLogo(c.icon, c.name, size = 40.dp) }) {
+            Modifier.align(Alignment.TopStart).animateEnterExit(slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { -it / 3 }, slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { -it / 3 })
+                .padding(horizontal = 12.dp, vertical = 8.dp), leading = { ChannelLogo(c.icon, c.name, size = 40.dp) }) {
             if (state != null) Text(state, Modifier.clip(RoundedCornerShape(8.dp)).background(cs.secondaryContainer).padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelLarge, color = cs.onSecondaryContainer)
             else LiveBadge(style = MaterialTheme.typography.labelLarge)
@@ -375,7 +414,8 @@ private fun PhoneControls(
             PlayerIcon(Icons.Rounded.Forward10, "Forward 10 seconds", { onSkip(10) }, iconSize = 36.dp)
             PlayerIcon(Icons.Rounded.SkipNext, "Next channel", { onZap(1) }, iconSize = 32.dp)
         }
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.align(Alignment.BottomStart).animateEnterExit(slideInVertically(MaterialTheme.motionScheme.fastSpatialSpec()) { r }, slideOutVertically(MaterialTheme.motionScheme.defaultEffectsSpec()) { r })
+            .fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (now != null) Scrub(now, at, c.archive, onSeek, poke)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PlayerToolbar {

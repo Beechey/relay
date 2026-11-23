@@ -127,7 +127,7 @@ private fun PhoneSeriesDetail(d: SeriesDetail, season: Int, setSeason: (Int) -> 
             item(key = "head") {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(s.cover, s.name, s.id, Modifier.size(72.dp, 108.dp).sharedBounds(posterKey(true, s.id)).clip(RoundedCornerShape(12.dp)), showTitle = s.cover.isBlank())
+                        Artwork(s.cover, s.name, s.id, Modifier.size(72.dp, 108.dp).sharedBounds(posterKey(true, s.id), RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)), showTitle = s.cover.isBlank())
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(d.facts.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             if (d.plot.isNotBlank()) ExpandablePlot(d.plot, lines = 2)

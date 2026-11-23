@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import coil3.request.crossfade
 import com.avetero.relay.app.App
 import com.avetero.relay.app.AppState
 import com.avetero.relay.ui.theme.DesignScale
@@ -23,6 +24,9 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge(androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         app = AppState(applicationContext)
+        // every image fades in as it loads (not with "Remove animations" on)
+        val fade = android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        coil3.SingletonImageLoader.setSafe { coil3.ImageLoader.Builder(it).crossfade(fade).build() }
         setContent { DesignScale { androidx.compose.runtime.CompositionLocalProvider(com.avetero.relay.ui.components.LocalParts provides app.shownParts) { App(app, onExit = ::finish) } } }
     }
 

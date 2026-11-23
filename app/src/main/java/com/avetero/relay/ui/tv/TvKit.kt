@@ -49,6 +49,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.avetero.relay.ui.components.settle
+import com.avetero.relay.ui.motion.Springs
 
 /**
  * TV building blocks (Material 3 for TV, design-spec.md): one focus look everywhere — inverse fill, a small lift,
@@ -151,12 +152,13 @@ fun TvSidePanel(visible: Boolean, onDismiss: () -> Unit, first: FocusRequester? 
     val state = remember { MutableTransitionState(false) }.apply { targetState = visible }
     if (!state.currentState && !state.targetState) return
     BackHandler(visible, onDismiss)
+    val slide = with(androidx.compose.ui.platform.LocalDensity.current) { 40.dp.roundToPx() }
     Box(Modifier.fillMaxSize()) {
-        AnimatedVisibility(state, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(state, enter = fadeIn(Springs.effectsFast()), exit = fadeOut(Springs.effectsFast())) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss))
         }
         AnimatedVisibility(state, Modifier.align(Alignment.CenterEnd),
-            enter = slideInHorizontally { 40 } + fadeIn(), exit = slideOutHorizontally { 40 } + fadeOut()) {
+            enter = slideInHorizontally(Springs.spatialFast()) { slide } + fadeIn(Springs.effectsFast()), exit = slideOutHorizontally(Springs.effectsFast()) { slide } + fadeOut(Springs.effectsFast())) {
             Column(
                 Modifier.width(420.dp).fillMaxHeight().shadow(24.dp, RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp))
                     .clip(RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)).background(com.avetero.relay.ui.theme.Tok.Container).padding(horizontal = 28.dp, vertical = 32.dp)
@@ -177,7 +179,7 @@ fun TvSidePanel(visible: Boolean, onDismiss: () -> Unit, first: FocusRequester? 
 fun TvDialog(onDismiss: () -> Unit, width: Dp = 560.dp, content: @Composable ColumnScope.() -> Unit) =
     Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false)) {
         val state = remember { MutableTransitionState(false) }.apply { targetState = true }
-        AnimatedVisibility(state, enter = scaleIn(initialScale = 0.9f) + fadeIn(), exit = scaleOut(targetScale = 0.9f) + fadeOut()) {
+        AnimatedVisibility(state, enter = scaleIn(Springs.spatialFast(), 0.9f) + fadeIn(Springs.effectsFast()), exit = scaleOut(Springs.effectsFast(), 0.9f) + fadeOut(Springs.effectsFast())) {
             Column(
                 Modifier.width(width).clip(RoundedCornerShape(28.dp)).background(com.avetero.relay.ui.theme.Tok.ContainerHigh).padding(32.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp), content = content,

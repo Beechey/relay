@@ -1,5 +1,10 @@
 package com.avetero.relay.feature.vod
 
+import com.avetero.relay.ui.motion.rememberEntrance
+import com.avetero.relay.ui.motion.entrance
+import com.avetero.relay.ui.m3.Skeleton
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -176,6 +181,7 @@ private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: Stri
     // a group that emptied (last saved title removed, category hidden) falls back to All
     val current = groups.firstOrNull { it.id == groupId }?.id ?: ALL
     val tiles = remember(lib, current, sort, app.favourites) { lib.tiles(current, sort, "", app.favourites) }
+    val enter = rememberEntrance(ready = tiles.isNotEmpty())
     val movieGrid = rememberLazyGridState()
     val seriesGrid = rememberLazyGridState()
     val grid = if (series) seriesGrid else movieGrid
@@ -207,17 +213,19 @@ private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: Stri
                 }
             }
             when {
-                tiles.isEmpty() && app.vodLoading -> Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
-                    LoadingIndicator()
-                    Text("Loading $what…", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp))
+                // poster-shaped placeholders, shimmering, while the catalogue loads
+                tiles.isEmpty() && app.vodLoading -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Live TV is ready to watch while your $what load.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    repeat(3) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { repeat(3) { Skeleton(Modifier.weight(1f).aspectRatio(2f / 3f)) } }
+                    }
                 }
                 tiles.isEmpty() -> Text(if (lib.all.isEmpty()) "Your provider hasn't listed any $what." else "Nothing here yet.",
                     style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                 else -> LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(tiles, key = { it.id }) { t ->
-                        PosterCard(t.image, t.name, t.id, { openTitle(app, series, t.id) }, Modifier.animateItem(), sharedKey = posterKey(series, t.id),
+                    itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
+                        PosterCard(t.image, t.name, t.id, { openTitle(app, series, t.id) }, Modifier.animateItem().entrance(enter, i), sharedKey = posterKey(series, t.id),
                             onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) })
                     }
                 }

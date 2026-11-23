@@ -261,6 +261,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         val cs = MaterialTheme.colorScheme
         val glass = cs.surface.copy(alpha = 0.6f)
         val fade = fadeIn(Springs.effects()) to fadeOut(Springs.effects())
+        val d = androidx.compose.ui.platform.LocalDensity.current
 
         if (!tv) {
             AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { TopScrim(0.35f); BottomScrim(0.5f) } }
@@ -334,7 +335,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             val type = TvTheme.typography
             AnimatedVisibility(shown, Modifier.fillMaxSize(), enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { BottomScrim(0.55f) } }
             AnimatedVisibility(upNext != null, Modifier.align(Alignment.TopEnd).padding(top = TvSafe.Vertical + 16.dp, end = TvSafe.Horizontal),
-                enter = fade.first + slideInHorizontally(Springs.spatialFast()) { 40 }, exit = fade.second + slideOutHorizontally(Springs.effects()) { 40 }) {
+                enter = fade.first + slideInHorizontally(Springs.spatialFast()) { with(d) { 40.dp.roundToPx() } }, exit = fade.second + slideOutHorizontally(Springs.effects()) { with(d) { 40.dp.roundToPx() } }) {
                 val n = next.firstOrNull() ?: return@AnimatedVisibility
                 Row(Modifier.width(400.dp).clip(RoundedCornerShape(16.dp)).background(com.avetero.relay.ui.theme.Tok.Container.copy(alpha = 0.94f)).padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -346,8 +347,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     }
                 }
             }
-            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { 24 },
-                exit = fade.second + slideOutVertically(Springs.effects()) { 24 }) {
+            AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter), enter = fade.first + slideInVertically(Springs.spatialFast()) { with(d) { 24.dp.roundToPx() } },
+                exit = fade.second + slideOutVertically(Springs.effects()) { with(d) { 24.dp.roundToPx() } }) {
                 Column(Modifier.fillMaxWidth().padding(start = TvSafe.Horizontal, end = TvSafe.Horizontal, bottom = TvSafe.Vertical), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     TvText(item.title, style = type.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (item.meta.isNotBlank()) TvText(item.meta, style = type.bodyLarge, color = tcs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

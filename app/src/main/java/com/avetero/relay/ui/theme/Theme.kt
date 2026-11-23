@@ -117,7 +117,11 @@ fun RelayTheme(tv: Boolean, content: @Composable () -> Unit) =
             if (tv) androidx.tv.material3.MaterialTheme(colorScheme = TvColors, typography = TvTypography) {
                 androidx.compose.runtime.CompositionLocalProvider(androidx.tv.material3.LocalContentColor provides Tok.OnSurface, content = content)
             }
-            else content()
+            // phone: custom clickable surfaces (cards, posters, rows) dip slightly on press, not just ripple
+            else androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.foundation.LocalIndication provides com.avetero.relay.ui.motion.PressScale(androidx.compose.material3.ripple(), androidx.compose.material3.MaterialTheme.motionScheme.fastSpatialSpec()),
+                content = content,
+            )
         }
     }
 

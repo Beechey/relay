@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.home
 
+import com.avetero.relay.ui.motion.rememberEntrance
+import com.avetero.relay.ui.motion.entrance
+import com.avetero.relay.ui.m3.Skeleton
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -86,6 +89,7 @@ internal fun HomePhone(app: AppState, data: HomeData) {
     val featured = app.liveChannel?.takeIf { lc -> onNow.any { it.id == lc.id } } ?: onNow.firstOrNull()
     val others = onNow.filter { it.id != featured?.id }.take(3)
 
+    val enter = rememberEntrance(ready = !app.libraryLoading || featured != null)
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), list, contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item(key = "search") {
             Column {
@@ -96,42 +100,43 @@ internal fun HomePhone(app: AppState, data: HomeData) {
 
         if (featured != null) item(key = "onnow") {
             // one grouped block: a big card for the channel you were on, then the next few channels
-            Column(Modifier.animateItem().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.animateItem().entrance(enter, 0).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 FeaturedLive(app, featured, onNow, last = others.isEmpty(), lastWatched = app.liveChannel?.id == featured.id || data.live.isNotEmpty())
                 others.forEachIndexed { i, c -> key(c.id) { LiveRow(app, c, onNow, i, others.size) } }
             }
         } else if (app.libraryLoading) item(key = "loading") {
-            Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LoadingIndicator()
-                Text("Loading your library…", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // the shape of the "on now" block, shimmering, until the playlist is in
+            Column(Modifier.animateItem().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Skeleton(Modifier.fillMaxWidth().height(208.dp), RoundedCornerShape(28.dp, 28.dp, 4.dp, 4.dp))
+                repeat(3) { i -> Skeleton(Modifier.fillMaxWidth().height(72.dp), if (i == 2) RoundedCornerShape(4.dp, 4.dp, 28.dp, 28.dp) else RoundedCornerShape(4.dp)) }
             }
         }
 
         if (data.heroItems.isNotEmpty()) item(key = "continue") {
-            Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.animateItem().entrance(enter, 2), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Continue watching", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
                 ContinueCarousel(app, data)
             }
         }
 
         if (data.recentMovies.isNotEmpty()) item(key = "rm") {
-            PosterRow("Recently watched movies", Modifier.animateItem()) {
+            PosterRow("Recently watched movies", Modifier.animateItem().entrance(enter, 3)) {
                 items(data.recentMovies, key = { it.id }) { m -> PosterCard(m.icon, m.name, m.id, { app.push(Screen.MovieDetail(m)) }, width = 120.dp, sharedKey = "poster-m${m.id}") }
             }
         }
         if (data.recentSeries.isNotEmpty()) item(key = "rs") {
-            PosterRow("Recently watched series", Modifier.animateItem()) {
+            PosterRow("Recently watched series", Modifier.animateItem().entrance(enter, 4)) {
                 items(data.recentSeries, key = { it.id }) { s -> PosterCard(s.cover, s.name, s.id, { app.push(Screen.SeriesDetail(s)) }, width = 120.dp, sharedKey = "poster-s${s.id}") }
             }
         }
         if (data.addedMovies.isNotEmpty()) item(key = "added") {
-            PosterRow("Recently added movies", Modifier.animateItem()) {
+            PosterRow("Recently added movies", Modifier.animateItem().entrance(enter, 5)) {
                 items(data.addedMovies, key = { it.id }) { m -> PosterCard(m.icon, m.name, m.id, { app.push(Screen.MovieDetail(m)) }, width = 120.dp, sharedKey = "poster-m${m.id}") }
             }
         }
 
         if (app.liveCatsVisible.isNotEmpty() || app.vodCatsVisible.isNotEmpty()) item(key = "cats") {
-            Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.animateItem().entrance(enter, 6), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Browse categories", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp))
                 FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     app.liveCatsVisible.take(8).forEach { c ->

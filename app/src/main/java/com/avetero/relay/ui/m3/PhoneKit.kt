@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.avetero.relay.ui.motion.sharedBounds
+import com.avetero.relay.ui.motion.shimmer
+import androidx.compose.foundation.layout.height
 import com.avetero.relay.ui.theme.tone
 
 /**
@@ -106,7 +108,7 @@ fun PosterCard(url: String, title: String, seed: Int, onClick: () -> Unit, modif
     Column(modifier.then(if (width != null) Modifier.width(width) else Modifier).clip(RoundedCornerShape(16.dp))
         .combinedClickableCompat(onClick, onLongClick).semantics(mergeDescendants = true) {}) {
         Artwork(url, title, seed,
-            (if (sharedKey != null) Modifier.sharedBounds(sharedKey) else Modifier).fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)),
+            (if (sharedKey != null) Modifier.sharedBounds(sharedKey, RoundedCornerShape(16.dp)) else Modifier).fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)),
             showTitle = url.isBlank())
         Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
     }
@@ -136,3 +138,15 @@ fun RelaySheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Uni
 private fun Modifier.combinedClickableCompat(onClick: () -> Unit, onLongClick: (() -> Unit)?): Modifier =
     if (onLongClick == null) clickable(onClick = onClick)
     else this.then(Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick))
+
+/** Loading placeholder in the shape of what's coming, with a soft shimmer. */
+@Composable
+fun Skeleton(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp)) =
+    Box(modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHigh).shimmer())
+
+/** A grouped list's worth of skeleton rows ([height] each), as Live and For you show while the playlist loads. */
+@Composable
+fun SkeletonRows(count: Int, height: Dp, modifier: Modifier = Modifier) =
+    Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
+        repeat(count) { i -> Skeleton(Modifier.fillMaxWidth().height(height), segmentShape(i, count)) }
+    }
