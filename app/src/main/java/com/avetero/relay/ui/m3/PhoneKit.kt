@@ -47,6 +47,7 @@ import com.avetero.relay.ui.motion.sharedBounds
 import com.avetero.relay.ui.motion.shimmer
 import androidx.compose.foundation.layout.height
 import com.avetero.relay.ui.theme.tone
+import kotlinx.coroutines.launch
 
 /**
  * Phone building blocks (Material 3 Expressive, design-spec.md). Screens draw edge to edge: a screen with a
@@ -150,3 +151,22 @@ fun SkeletonRows(count: Int, height: Dp, modifier: Modifier = Modifier) =
     Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
         repeat(count) { i -> Skeleton(Modifier.fillMaxWidth().height(height), segmentShape(i, count)) }
     }
+
+/**
+ * Tabs over a [androidx.compose.foundation.pager.HorizontalPager] (Material's swipeable views): the indicator follows the
+ * pager, tapping a tab animates to its page. [scrollable] for many or long labels (Live categories, seasons).
+ */
+@Composable
+fun PagerTabs(pager: androidx.compose.foundation.pager.PagerState, labels: List<String>, modifier: Modifier = Modifier, scrollable: Boolean = false,
+              container: Color = MaterialTheme.colorScheme.surface) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val cs = MaterialTheme.colorScheme
+    val tabs = @Composable {
+        labels.forEachIndexed { i, label ->
+            androidx.compose.material3.Tab(pager.currentPage == i, { scope.launch { pager.animateScrollToPage(i) } }, Modifier.heightIn(min = 48.dp),
+                text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }, selectedContentColor = cs.primary, unselectedContentColor = cs.onSurfaceVariant)
+        }
+    }
+    if (scrollable) androidx.compose.material3.PrimaryScrollableTabRow(pager.currentPage, modifier, containerColor = container, edgePadding = 16.dp, tabs = tabs)
+    else androidx.compose.material3.PrimaryTabRow(pager.currentPage, modifier, containerColor = container, tabs = tabs)
+}

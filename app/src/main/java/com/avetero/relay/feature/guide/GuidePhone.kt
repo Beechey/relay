@@ -71,6 +71,9 @@ import com.avetero.relay.ui.components.matching
 import com.avetero.relay.ui.m3.ChannelLogo
 import com.avetero.relay.ui.m3.LargeTitle
 import com.avetero.relay.ui.m3.RelaySheet
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.avetero.relay.ui.m3.segmentShape
 import com.avetero.relay.util.fmtTime
 import com.avetero.relay.util.nowSec
@@ -118,7 +121,9 @@ internal fun GuidePhone(app: AppState, g: GuideState) {
 @Composable
 private fun TimeChips(g: GuideState, ch: GuideChannels) {
     val shifts = remember(g.shift, g.tonightShift, g.tomorrowShift) { (listOf(0, 1, 2, g.shift) + listOfNotNull(g.tonightShift, g.tomorrowShift)).distinct().sorted() }
-    LazyRow(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val state = rememberLazyListState()
+    LaunchedEffect(g.shift) { state.animateScrollToItem((shifts.indexOf(g.shift) - 1).coerceAtLeast(0)) }
+    LazyRow(state = state, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(shifts, key = { it }) { s ->
             val label = when (s) { 0 -> "Now"; g.tonightShift -> "Tonight"; g.tomorrowShift -> "Tomorrow"; else -> fmtTime(g.baseStart + s * 3600L) }
             Chip(label, g.shift == s, Modifier.animateItem()) { g.shift = s }
@@ -167,8 +172,6 @@ private fun ChannelSheet(app: AppState, c: Channel, list: List<Channel>, point: 
     val progs = rememberProgrammes(app, c)
     val today = remember { Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis / 1000 }
     val tomorrow = today + 86_400
-    var day by remember { mutableStateOf(if (point >= tomorrow) 1 else 0) }
-    val shown = remember(progs, day) { val from = today + day * 86_400L; progs.filter { it.end > from && it.start < from + 86_400 } }
     val now = nowSec()
 
     Row(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -185,16 +188,18 @@ private fun ChannelSheet(app: AppState, c: Channel, list: List<Channel>, point: 
         FilledTonalToggleButton(fav, { app.toggleFav("c${c.id}") }, Modifier.heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
             icon = { Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.StarOutline, null, Modifier.size(18.dp)) }) { Text(if (fav) "Saved" else "Save") }
     }
-    Row(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Chip("Today", day == 0) { day = 0 }
-        if (progs.any { it.end > tomorrow }) Chip("Tomorrow", day == 1) { day = 1 }
-    }
-    if (shown.isEmpty()) Text(if (progs.isEmpty()) "No guide for this channel." else "Nothing listed for this day.", style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp))
-    // opens on what's on now (one row of the past above it)
-    val state = rememberLazyListState(remember(shown) { (shown.indexOfFirst { it.end > now } - 1).coerceAtLeast(0) })
-    LazyColumn(state = state, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        itemsIndexed(shown, key = { _, p -> p.start }) { i, p -> ScheduleRow(app, c, p, list, i, shown.size, now, onDismiss) }
+    // Today | Tomorrow as tabs you can swipe between; each day's list opens on what's on now (one row of the past above it)
+    val days = if (progs.any { it.end > tomorrow }) 2 else 1
+    val pager = rememberPagerState(if (point >= tomorrow && days == 2) 1 else 0) { days }
+    PagerTabs(pager, listOf("Today", "Tomorrow").take(days), Modifier.padding(bottom = 12.dp), container = MaterialTheme.colorScheme.surfaceContainerLow)
+    HorizontalPager(pager, Modifier.weight(1f, fill = false), verticalAlignment = Alignment.Top) { day ->
+        val shown = remember(progs, day) { val from = today + day * 86_400L; progs.filter { it.end > from && it.start < from + 86_400 } }
+        if (shown.isEmpty()) Text(if (progs.isEmpty()) "No guide for this channel." else "Nothing listed for this day.", style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp))
+        val state = rememberLazyListState(remember(shown) { (shown.indexOfFirst { it.end > now } - 1).coerceAtLeast(0) })
+        LazyColumn(state = state, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            itemsIndexed(shown, key = { _, p -> p.start }) { i, p -> ScheduleRow(app, c, p, list, i, shown.size, now, onDismiss) }
+        }
     }
 }
 

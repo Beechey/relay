@@ -20,18 +20,14 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +40,9 @@ import androidx.media3.common.C
 import com.avetero.relay.app.AppState
 import com.avetero.relay.player.PlayerHost
 import com.avetero.relay.ui.m3.RelaySheet
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.avetero.relay.ui.m3.segmentShape
 import com.avetero.relay.ui.theme.isTv
 import com.avetero.relay.ui.tv.TvSidePanel
@@ -74,38 +73,28 @@ private fun split(label: String) = label.substringBefore(" · ") to label.substr
 private fun PhoneTracks(sections: List<Pair<String, List<PlayerHost.TrackOption>>>, pick: (PlayerHost.TrackOption) -> Unit, onDismiss: () -> Unit) =
     RelaySheet(onDismiss) {
         val cs = MaterialTheme.colorScheme
-        var tab by rememberSaveable { mutableIntStateOf(0) }
         Text("Audio, subtitles & quality", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 16.dp))
         if (sections.isEmpty()) Text(EMPTY, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
         else {
-            val at = tab.coerceIn(0, sections.lastIndex)
-            if (sections.size > 1) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                sections.forEachIndexed { i, (title, _) ->
-                    ToggleButton(
-                        checked = i == at, onCheckedChange = { tab = i }, modifier = Modifier.weight(1f).height(48.dp),
-                        shapes = when (i) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            sections.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                        colors = ToggleButtonDefaults.colors(containerColor = cs.surfaceContainerHigh, contentColor = cs.onSurface, checkedContainerColor = cs.primary, checkedContentColor = cs.onPrimary),
-                    ) { Text(title, style = MaterialTheme.typography.labelLarge) }
-                }
-            }
-            val opts = sections[at].second
-            LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                itemsIndexed(opts, key = { i, o -> "$at-$i-${o.label}" }) { i, o ->
-                    val (label, sub) = split(o.label)
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = if (sub != null) 72.dp else 56.dp).clip(segmentShape(i, opts.size))
-                            .background(if (o.selected) cs.secondaryContainer else cs.surfaceContainer)
-                            .selectable(o.selected, role = Role.RadioButton) { pick(o) }.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        RadioButton(o.selected, null, colors = RadioButtonDefaults.colors(selectedColor = cs.primary, unselectedColor = cs.outline))
-                        Column {
-                            Text(label, style = MaterialTheme.typography.titleMedium)
-                            if (sub != null) Text(sub, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            // Audio | Subtitles | Quality as tabs you can swipe between; dragging down still closes the sheet
+            val pager = rememberPagerState { sections.size }
+            if (sections.size > 1) PagerTabs(pager, sections.map { it.first }, Modifier.padding(bottom = 16.dp), container = cs.surfaceContainerLow)
+            HorizontalPager(pager, Modifier.weight(1f, fill = false), key = { sections[it].first }, verticalAlignment = Alignment.Top) { at ->
+                val opts = sections[at].second
+                LazyColumn(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    itemsIndexed(opts, key = { i, o -> "$i-${o.label}" }) { i, o ->
+                        val (label, sub) = split(o.label)
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = if (sub != null) 72.dp else 56.dp).clip(segmentShape(i, opts.size))
+                                .background(if (o.selected) cs.secondaryContainer else cs.surfaceContainer)
+                                .selectable(o.selected, role = Role.RadioButton) { pick(o) }.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            RadioButton(o.selected, null, colors = RadioButtonDefaults.colors(selectedColor = cs.primary, unselectedColor = cs.outline))
+                            Column {
+                                Text(label, style = MaterialTheme.typography.titleMedium)
+                                if (sub != null) Text(sub, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            }
                         }
                     }
                 }

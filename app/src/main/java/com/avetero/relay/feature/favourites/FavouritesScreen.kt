@@ -29,18 +29,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +61,9 @@ import com.avetero.relay.data.model.progress
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.m3.ChannelLogo
 import com.avetero.relay.ui.m3.LargeTitle
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.avetero.relay.ui.m3.PosterCard
 import com.avetero.relay.ui.m3.RelaySheet
 import com.avetero.relay.ui.m3.segmentShape
@@ -94,7 +92,7 @@ internal fun unsave(app: AppState, key: String, name: String) {
     app.say("Removed $name") { if (!app.isFav(key)) app.toggleFav(key) }
 }
 
-/** Saved (PhoneSaved / TvSaved boards). Phone: swipe a channel away or press and hold anything to remove it, with Undo. */
+/** Saved (PhoneSaved / TvSaved boards). Phone: Channels | Movies | Series tabs you can swipe between; press and hold anything to remove it, with Undo. */
 @Suppress("UNUSED_PARAMETER")
 @Composable
 fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = if (isTv()) TvSaved(app) else PhoneSaved(app)
@@ -102,42 +100,40 @@ fun FavouritesScreen(app: AppState, nav: (Tab) -> Unit) = if (isTv()) TvSaved(ap
 @Composable
 private fun PhoneSaved(app: AppState) {
     val saved = rememberSaved(app)
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    val list = rememberLazyListState()
-    val grid = rememberLazyGridState()
-    LaunchedEffect(Unit) { snapshotFlow { app.reselect }.drop(1).collect { if (tab == 0) list.animateScrollToItem(0) else grid.animateScrollToItem(0) } }
+    val pager = rememberPagerState { 3 }
     var options by remember { mutableStateOf<Channel?>(null) }
     val cs = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         LargeTitle("Saved")
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-            saved.labels.forEachIndexed { i, label ->
-                val shapes = when (i) { 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes(); 2 -> ButtonGroupDefaults.connectedTrailingButtonShapes(); else -> ButtonGroupDefaults.connectedMiddleButtonShapes() }
-                ToggleButton(tab == i, { tab = i }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = shapes) { Text("$label ${saved.count(i)}", maxLines = 1) }
-            }
-        }
-        when {
-            saved.count(tab) == 0 -> Column(Modifier.fillMaxSize().padding(horizontal = 32.dp).padding(bottom = 80.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Rounded.StarOutline, null, Modifier.size(72.dp), tint = cs.primary)
-                Text(if (tab == 0) "No saved channels yet" else if (tab == 1) "No saved movies yet" else "No saved series yet", style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 24.dp))
-                Text("Press and hold any channel, movie or series to save it here.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-                val (label, dest) = when (tab) { 0 -> "Browse live TV" to Screen.Live(); 1 -> "Browse movies" to Screen.VodGrid(false); else -> "Browse series" to Screen.VodGrid(true) }
-                Button({ app.go(dest) }, Modifier.padding(top = 24.dp)) { Text(label) }
-            }
-            tab == 0 -> LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                itemsIndexed(saved.chans, key = { _, c -> c.id }) { i, c ->
-                    SavedChannelRow(app, c, saved.chans, segmentShape(i, saved.chans.size), Modifier.animateItem()) { options = c }
+        PagerTabs(pager, saved.labels.mapIndexed { i, label -> "$label ${saved.count(i)}" })
+        // a key per page so each keeps its own scroll; only the page on screen is composed
+        HorizontalPager(pager, Modifier.fillMaxSize().padding(top = 16.dp)) { tab ->
+            val list = rememberLazyListState()
+            val grid = rememberLazyGridState()
+            LaunchedEffect(Unit) { snapshotFlow { app.reselect }.drop(1).collect { if (tab == 0) list.animateScrollToItem(0) else grid.animateScrollToItem(0) } }
+            when {
+                saved.count(tab) == 0 -> Column(Modifier.fillMaxSize().padding(horizontal = 32.dp).padding(bottom = 80.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.StarOutline, null, Modifier.size(72.dp), tint = cs.primary)
+                    Text(if (tab == 0) "No saved channels yet" else if (tab == 1) "No saved movies yet" else "No saved series yet", style = MaterialTheme.typography.headlineSmall,
+                        textAlign = TextAlign.Center, modifier = Modifier.padding(top = 24.dp))
+                    Text("Press and hold any channel, movie or series to save it here.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
+                        textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                    val (label, dest) = when (tab) { 0 -> "Browse live TV" to Screen.Live(); 1 -> "Browse movies" to Screen.VodGrid(false); else -> "Browse series" to Screen.VodGrid(true) }
+                    Button({ app.go(dest) }, Modifier.padding(top = 24.dp)) { Text(label) }
                 }
-            }
-            else -> LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (tab == 1) items(saved.movies, key = { it.id }) { m ->
-                    PosterCard(m.icon, m.name, m.id, { app.push(Screen.MovieDetail(m)) }, Modifier.animateItem(), sharedKey = "poster-m${m.id}", onLongClick = { unsave(app, "m${m.id}", m.name) })
-                } else items(saved.series, key = { it.id }) { s ->
-                    PosterCard(s.cover, s.name, s.id, { app.push(Screen.SeriesDetail(s)) }, Modifier.animateItem(), sharedKey = "poster-s${s.id}", onLongClick = { unsave(app, "s${s.id}", s.name) })
+                tab == 0 -> LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    itemsIndexed(saved.chans, key = { _, c -> c.id }) { i, c ->
+                        SavedChannelRow(app, c, saved.chans, segmentShape(i, saved.chans.size), Modifier.animateItem()) { options = c }
+                    }
+                }
+                else -> LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (tab == 1) items(saved.movies, key = { it.id }) { m ->
+                        PosterCard(m.icon, m.name, m.id, { app.push(Screen.MovieDetail(m)) }, Modifier.animateItem(), sharedKey = "poster-m${m.id}", onLongClick = { unsave(app, "m${m.id}", m.name) })
+                    } else items(saved.series, key = { it.id }) { s ->
+                        PosterCard(s.cover, s.name, s.id, { app.push(Screen.SeriesDetail(s)) }, Modifier.animateItem(), sharedKey = "poster-s${s.id}", onLongClick = { unsave(app, "s${s.id}", s.name) })
+                    }
                 }
             }
         }
@@ -153,33 +149,22 @@ private fun PhoneSaved(app: AppState) {
     }
 }
 
-/** A saved channel: number, logo, name, what's on with its progress; swipe left (or hold) to remove. */
+/** A saved channel: number, logo, name, what's on with its progress; hold (or ⋮) to remove; no swipe-to-remove, that swipe moves between the tabs. */
 @Composable
 private fun SavedChannelRow(app: AppState, c: Channel, all: List<Channel>, shape: androidx.compose.ui.graphics.Shape, modifier: Modifier, onOptions: () -> Unit) {
     LaunchedEffect(c.id) { app.loadEpg(c) }
     val now = app.programmesFor(c).current()
     val cs = MaterialTheme.colorScheme
-    val swipe = rememberSwipeToDismissBoxState()
-    SwipeToDismissBox(swipe, modifier = modifier.clip(shape), enableDismissFromStartToEnd = false,
-        onDismiss = { if (it == SwipeToDismissBoxValue.EndToStart) unsave(app, "c${c.id}", c.name) },
-        backgroundContent = {
-            Row(Modifier.fillMaxSize().background(cs.error).padding(end = 20.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Delete, null, tint = cs.onError)
-                Spacer(Modifier.width(8.dp))
-                Text("Remove", style = MaterialTheme.typography.labelLarge, color = cs.onError)
-            }
-        }) {
-        Row(Modifier.fillMaxWidth().height(72.dp).background(cs.surfaceContainer)
-            .combinedClickable(onLongClick = { unsave(app, "c${c.id}", c.name) }) { app.push(Screen.LivePlayer(c, all)) }
-            .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(if (c.num > 0) "${c.num}" else "", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.width(28.dp))
-            ChannelLogo(c.icon, c.name, size = 44.dp, playing = app.liveChannel?.id == c.id)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(now?.title ?: "No programme info", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth())
-            }
-            IconButton(onOptions) { Icon(Icons.Rounded.MoreVert, "Options for ${c.name}", tint = cs.onSurfaceVariant) }
+    Row(modifier.clip(shape).fillMaxWidth().height(72.dp).background(cs.surfaceContainer)
+        .combinedClickable(onLongClick = { unsave(app, "c${c.id}", c.name) }) { app.push(Screen.LivePlayer(c, all)) }
+        .padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(if (c.num > 0) "${c.num}" else "", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.width(28.dp))
+        ChannelLogo(c.icon, c.name, size = 44.dp, playing = app.liveChannel?.id == c.id)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(now?.title ?: "No programme info", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (now != null) LinearWavyProgressIndicator({ now.progress() }, Modifier.fillMaxWidth())
         }
+        IconButton(onOptions) { Icon(Icons.Rounded.MoreVert, "Options for ${c.name}", tint = cs.onSurfaceVariant) }
     }
 }

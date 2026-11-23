@@ -43,6 +43,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import com.avetero.relay.ui.m3.PagerTabs
+import kotlin.math.roundToInt
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.Episode
@@ -109,48 +122,65 @@ fun SeriesDetailScreen(app: AppState, series: Series) {
     }
     val d = remember(series, info, error, app.resumes) { SeriesDetail(app, series, info, error, app.resumes) }
     var season by remember(info) { mutableIntStateOf(d.resumeEp?.season ?: d.seasons.firstOrNull() ?: 1) }
-    val inSeason = remember(d, season) { d.eps.filter { it.season == season } }
-    if (isTv()) TvSeriesDetail(d, season, { season = it }, inSeason) else PhoneSeriesDetail(d, season, { season = it }, inSeason)
+    if (isTv()) TvSeriesDetail(d, season, { season = it }, remember(d, season) { d.eps.filter { it.season == season } }) else PhoneSeriesDetail(d, season) { season = it }
 }
 
 @Composable
-private fun PhoneSeriesDetail(d: SeriesDetail, season: Int, setSeason: (Int) -> Unit, inSeason: List<Episode>) {
+private fun PhoneSeriesDetail(d: SeriesDetail, season: Int, setSeason: (Int) -> Unit) {
     val s = d.s
     val cs = MaterialTheme.colorScheme
+    val collapse = remember { CollapseHeader() }
     Column(Modifier.fillMaxSize().background(cs.surface)) {
         RelayTopBar(s.name, { d.app.back() }, actions = {
             IconToggleButton(d.saved, { d.toggleSaved() }) {
                 Icon(if (d.saved) Icons.Rounded.Star else Icons.Rounded.StarOutline, if (d.saved) "Remove from saved" else "Add to saved", tint = if (d.saved) cs.primary else cs.onSurfaceVariant)
             }
         })
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            item(key = "head") {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(s.cover, s.name, s.id, Modifier.size(72.dp, 108.dp).sharedBounds(posterKey(true, s.id), RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)), showTitle = s.cover.isBlank())
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(d.facts.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                            if (d.plot.isNotBlank()) ExpandablePlot(d.plot, lines = 2)
-                        }
+        Column(Modifier.fillMaxSize().nestedScroll(collapse)) {
+            // the header scrolls away as the episodes scroll up and comes back when they're at the top; the season tabs stay
+            Column(Modifier.clipToBounds().layout { m, c ->
+                val p = m.measure(c.copy(maxHeight = Constraints.Infinity))
+                collapse.max = p.height
+                val y = collapse.offset.roundToInt()
+                layout(p.width, (p.height + y).coerceAtLeast(0)) { p.place(0, y) }
+            }.padding(top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(s.cover, s.name, s.id, Modifier.size(72.dp, 108.dp).sharedBounds(posterKey(true, s.id), RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)), showTitle = s.cover.isBlank())
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(d.facts.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        if (d.plot.isNotBlank()) ExpandablePlot(d.plot, lines = 2)
                     }
-                    Button({ d.target?.let(d::play) }, ButtonDefaults.shapes(), Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(56.dp), enabled = d.target != null) {
-                        Icon(Icons.Rounded.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(d.playLabel)
-                    }
-                    when {
-                        d.error != null -> Text("Couldn't load episodes: ${d.error}", style = MaterialTheme.typography.bodyMedium, color = cs.error, modifier = Modifier.padding(horizontal = 20.dp))
-                        d.info == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
-                        d.eps.isEmpty() -> Text("No episodes listed for this series.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
-                        else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            LazyRow(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(d.seasons) { n -> FilterChip(n == season, { setSeason(n) }, { Text("Season $n") }, Modifier.height(40.dp)) }
-                            }
-                            Text("${inSeason.size} episodes", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(end = 16.dp))
-                        }
-                    }
-                    Spacer(Modifier.height(0.dp))
                 }
+                Button({ d.target?.let(d::play) }, ButtonDefaults.shapes(), Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(56.dp), enabled = d.target != null) {
+                    Icon(Icons.Rounded.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(d.playLabel)
+                }
+                when {
+                    d.error != null -> Text("Couldn't load episodes: ${d.error}", style = MaterialTheme.typography.bodyMedium, color = cs.error, modifier = Modifier.padding(horizontal = 20.dp))
+                    d.info == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                    d.eps.isEmpty() -> Text("No episodes listed for this series.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
+                }
+            }
+            if (d.seasons.isNotEmpty()) Seasons(d, season, setSeason)
+        }
+    }
+}
+
+/** Season tabs over a pager of episode lists: swipe or tap between seasons; each list keeps its scroll. */
+@Composable
+private fun Seasons(d: SeriesDetail, season: Int, setSeason: (Int) -> Unit) {
+    val s = d.s
+    val cs = MaterialTheme.colorScheme
+    val pager = rememberPagerState(d.seasons.indexOf(season).coerceAtLeast(0)) { d.seasons.size }
+    LaunchedEffect(pager, d.seasons) { snapshotFlow { pager.currentPage }.collect { d.seasons.getOrNull(it)?.let(setSeason) } }
+    PagerTabs(pager, d.seasons.map { "Season $it" }, scrollable = true)
+    HorizontalPager(pager, Modifier.fillMaxSize(), key = { d.seasons[it] }, verticalAlignment = Alignment.Top) { page ->
+        val inSeason = remember(d, page) { d.eps.filter { it.season == d.seasons[page] } }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            item(key = "count") {
+                Text(if (inSeason.size == 1) "1 episode" else "${inSeason.size} episodes", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp))
             }
             itemsIndexed(inSeason, key = { _, e -> e.id }) { i, e ->
                 val next = e == d.resumeEp
@@ -169,5 +199,19 @@ private fun PhoneSeriesDetail(d: SeriesDetail, season: Int, setSeason: (Int) -> 
                 }
             }
         }
+    }
+}
+
+/** Lets a header scroll away ahead of the list under it (scrolling up) and return once the list is back at its top. */
+private class CollapseHeader : NestedScrollConnection {
+    var max = 0
+    var offset by mutableFloatStateOf(0f)
+    override fun onPreScroll(available: Offset, source: NestedScrollSource) = take(available.y.coerceAtMost(0f))
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = take(available.y.coerceAtLeast(0f))
+    private fun take(dy: Float): Offset {
+        val o = (offset + dy).coerceIn(-max.toFloat(), 0f)
+        val used = o - offset
+        offset = o
+        return Offset(0f, used)
     }
 }

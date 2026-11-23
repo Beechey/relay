@@ -50,6 +50,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.sign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,13 +146,27 @@ fun PhoneShell(app: AppState, nav: (Tab) -> Unit) {
 private fun showMini(app: AppState) =
     app.liveChannel != null && app.player.active && !app.onPlayerScreen && app.screen !is Screen.Live && app.tab != "start" && !app.inPip
 
-/** Live TV keeps playing here when you browse elsewhere; tap to go back to it full screen. */
+/** Live TV keeps playing here when you browse elsewhere; tap to go back to it full screen, swipe it sideways to stop. */
 @Composable
 private fun MiniPlayer(app: AppState) {
     val c = app.liveChannel ?: return
     val now = app.programmesFor(c)?.firstOrNull { val t = System.currentTimeMillis() / 1000; it.start <= t && t < it.end }
+    // swipe sideways to dismiss (stops playback, like Close): follows the finger and fades, flings or past a third of the width close
+    val dx = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var width by remember { mutableIntStateOf(1) }
+    val back = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+    val away = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).height(64.dp).clip(RoundedCornerShape(32.dp))
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).height(64.dp).onSizeChanged { width = it.width }
+            .graphicsLayer { translationX = dx.value; alpha = 1f - (abs(dx.value) / width).coerceIn(0f, 1f) }
+            .draggable(rememberDraggableState { d -> scope.launch { dx.snapTo(dx.value + d) } }, Orientation.Horizontal, onDragStopped = { v ->
+                if (abs(dx.value) > width / 3f || abs(v) > 1500f) {
+                    dx.animateTo(sign(if (abs(v) > 1500f) v else dx.value) * width, away)
+                    app.liveChannel = null; app.player.stop()
+                } else dx.animateTo(0f, back)
+            })
+            .clip(RoundedCornerShape(32.dp))
             .clickable(onClickLabel = "Open ${c.name}") { app.push(Screen.LivePlayer(c, app.channelsIn(c.categoryId))) },
         color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(32.dp), shadowElevation = 6.dp,
     ) {

@@ -4,7 +4,6 @@ import com.avetero.relay.ui.motion.rememberEntrance
 import com.avetero.relay.ui.motion.entrance
 import com.avetero.relay.ui.m3.SkeletonRows
 import com.avetero.relay.ui.motion.sharedBounds
-import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -24,8 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
@@ -42,11 +38,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.material.icons.rounded.Subtitles
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +55,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -94,15 +86,19 @@ import com.avetero.relay.ui.components.Group
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.m3.ChannelLogo
 import com.avetero.relay.ui.m3.LargeTitle
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.flow.drop
 import com.avetero.relay.ui.m3.segmentShape
 import com.avetero.relay.util.fmtTime
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
-import kotlinx.coroutines.launch
 
 /**
- * Phone Live (PhoneLive): the playing channel on top, its programme, the Saved/Cast/Audio/Guide group, category chips,
- * then the group's channels. Tap a channel to play it here, tap it again (or the picture) for fullscreen; ⋮ or a long
+ * Phone Live (PhoneLive): the playing channel on top, its programme, the Saved/Cast/Audio/Guide group, category tabs
+ * over a pager of the groups' channels (swipe between categories). Tap a channel to play it here, tap it again (or the picture) for fullscreen; ⋮ or a long
  * press opens its options. While casting, the controls for the TV take the buttons' place (PhoneCasting).
  */
 @Suppress("UNUSED_PARAMETER")
@@ -120,24 +116,23 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
     var query by rememberSaveable { mutableStateOf("") }
     // only the Recent group depends on the recents; rebuilding the list on every play would jump the list
     val recentKey = if (groupId == AppState.RECENT) app.recentChannels else null
-    val list = remember(groupId, app.channels, app.favourites, app.hidden, recentKey, query) {
-        app.channelsIn(groupId).let { l -> if (query.isBlank()) l else l.filter { it.name.contains(query.trim(), ignoreCase = true) } }
-    }
+    val list = remember(groupId, app.channels, app.favourites, app.hidden, recentKey, query) { channelsMatching(app, groupId, query) }
     var menuFor by remember { mutableStateOf<Channel?>(null) }
     var tracks by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf<Channel?>(null) }
     val playing = rememberPlaying(app, list)
     LaunchedEffect(playing) { if (playing != null) app.liveChannel = playing }
-    val listState = rememberLazyListState()
-    val enter = rememberEntrance(ready = list.isNotEmpty())
-    val scope = rememberCoroutineScope()
     val groups = rememberLiveGroups(app)
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    val reselect0 = remember { app.reselect }
-    LaunchedEffect(app.reselect) { if (app.reselect != reselect0) listState.animateScrollToItem(0) }
+    // categories are tabs over a pager of channel lists: swipe the list or tap a tab; the sheet's pick moves the pager
+    val pager = rememberPagerState(groups.indexOfFirst { it.id == groupId }.takeIf { it >= 0 } ?: groups.indexOfFirst { it.id == ALL }) { groups.size }
+    val latestGroups by rememberUpdatedState(groups)
+    LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { i -> latestGroups.getOrNull(i)?.let { groupId = it.id } } }
+    val page = groups.indexOfFirst { it.id == groupId }
+    LaunchedEffect(page) { if (page >= 0 && page != pager.settledPage) pager.animateScrollToPage(page) }
 
-    fun pickGroup(id: String) { groupId = id; scope.launch { listState.scrollToItem(0) } }
+    fun pickGroup(id: String) { groupId = id }
     fun play(c: Channel) {
         if (playing != null && playing.id != c.id) previous = playing
         app.player.play(app.liveUrl(c), title = c.name); app.addRecentChannel(c.id); app.liveChannel = c
@@ -147,7 +142,10 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
 
     // the picture and its controls stay put; only the channels scroll
     Column(Modifier.fillMaxSize().background(cs.surface).statusBarsPadding()) {
-        if (playing == null) LargeTitle("Live", actions = { SearchToggle(searching) { searching = !searching; if (!searching) query = "" } })
+        if (playing == null) LargeTitle("Live", actions = {
+            AllCategories { drawer = true }
+            SearchToggle(searching) { searching = !searching; if (!searching) query = "" }
+        })
         else Column {
             Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).sharedBounds("live-video").background(Color.Black).clickable(onClickLabel = "Watch ${playing.name} fullscreen") {
                 app.push(Screen.LivePlayer(playing, list))
@@ -170,6 +168,7 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
                     Text(listOfNotNull(playing.num.takeIf { it > 0 }?.toString(), playing.name, now?.let { "until ${fmtTime(it.end)}" }).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                AllCategories { drawer = true }
                 SearchToggle(searching) { searching = !searching; if (!searching) query = "" }
             }
             if (app.player.castDevice != null) CastControls(app, castPicker)
@@ -179,29 +178,39 @@ fun LiveScreen(app: AppState, nav: (Tab) -> Unit, initialGroup: String? = null) 
             OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp), singleLine = true,
                 placeholder = { Text("Search channels in this category") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton({ query = "" }) { Icon(Icons.Rounded.Close, "Clear") } }, shape = RoundedCornerShape(28.dp))
-        GroupChips(groups, groupId, ::pickGroup) { drawer = true }
-        LazyColumn(Modifier.weight(1f), listState, contentPadding = PaddingValues(bottom = 24.dp)) {
-            when {
-                list.isEmpty() && app.libraryLoading -> item(key = "loading") {
-                    SkeletonRows(8, 72.dp, Modifier.padding(horizontal = 16.dp))
-                }
-                list.isEmpty() -> item(key = "empty") {
-                    Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(when { query.isNotBlank() -> "No matches"; groupId == FAVS -> "Nothing saved yet"; else -> "No channels here" }, style = MaterialTheme.typography.titleMedium)
-                        Text(if (query.isNotBlank()) "No channel here matches “${query.trim()}”." else "Press and hold any channel, or tap ⋮, to save it.",
-                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+        PagerTabs(pager, remember(groups) { groups.map(::chipLabel) }, scrollable = true)
+        // only the page on screen is composed (hundreds of categories); each keeps its own scroll by its key
+        HorizontalPager(pager, Modifier.weight(1f), key = { groups[it].id }, verticalAlignment = Alignment.Top) { i ->
+            val id = groups[i].id
+            // only the Recent group depends on the recents; rebuilding the list on every play would jump the list
+            val recent = if (id == AppState.RECENT) app.recentChannels else null
+            val shown = remember(id, app.channels, app.favourites, app.hidden, recent, query) { channelsMatching(app, id, query) }
+            val listState = rememberLazyListState()
+            val enter = rememberEntrance(ready = shown.isNotEmpty())
+            LaunchedEffect(listState) { snapshotFlow { app.reselect }.drop(1).collect { listState.animateScrollToItem(0) } }
+            LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)) {
+                when {
+                    shown.isEmpty() && app.libraryLoading -> item(key = "loading") {
+                        SkeletonRows(8, 72.dp, Modifier.padding(horizontal = 16.dp))
+                    }
+                    shown.isEmpty() -> item(key = "empty") {
+                        Column(Modifier.fillMaxWidth().padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(when { query.isNotBlank() -> "No matches"; id == FAVS -> "Nothing saved yet"; else -> "No channels here" }, style = MaterialTheme.typography.titleMedium)
+                            Text(if (query.isNotBlank()) "No channel here matches “${query.trim()}”." else "Press and hold any channel, or tap ⋮, to save it.",
+                                style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        }
                     }
                 }
-            }
-            itemsIndexed(list, key = { _, c -> c.id }, contentType = { _, _ -> "channel" }) { i, c ->
-                LaunchedEffect(c.id) { app.loadEpg(c) }
-                val on = playing?.id == c.id
-                ChannelRow(app, c, on, segmentShape(i, list.size), Modifier.animateItem().entrance(enter, i).padding(horizontal = 16.dp).padding(bottom = 2.dp),
-                    onClick = {
-                        keyboard?.hide(); focusManager.clearFocus()
-                        if (on) app.push(Screen.LivePlayer(c, list)) else play(c)
-                    },
-                    onMenu = { menuFor = c })
+                itemsIndexed(shown, key = { _, c -> c.id }, contentType = { _, _ -> "channel" }) { n, c ->
+                    LaunchedEffect(c.id) { app.loadEpg(c) }
+                    val on = playing?.id == c.id
+                    ChannelRow(app, c, on, segmentShape(n, shown.size), Modifier.animateItem().entrance(enter, n).padding(horizontal = 16.dp).padding(bottom = 2.dp),
+                        onClick = {
+                            keyboard?.hide(); focusManager.clearFocus()
+                            if (on) app.push(Screen.LivePlayer(c, shown)) else play(c)
+                        },
+                        onMenu = { menuFor = c })
+                }
             }
         }
     }
@@ -305,28 +314,13 @@ internal fun rememberCastPicker(): () -> Unit {
     return remember { { ref[0]?.performClick() } }
 }
 
-/** "All categories" (the categories sheet), then a filter chip per group. */
+/** "All categories": the categories sheet (find, move, hide); picking one there moves the tabs. */
 @Composable
-private fun GroupChips(groups: List<Group>, selected: String, onPick: (String) -> Unit, onAll: () -> Unit) {
-    val state = rememberLazyListState()
-    LaunchedEffect(selected, groups.size) {
-        val i = groups.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.plus(1) ?: return@LaunchedEffect
-        snapshotFlow { state.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it } // wait for the first layout
-        val info = state.layoutInfo
-        val shown = info.visibleItemsInfo.firstOrNull { it.index == i }?.let { it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset } == true
-        if (!shown) state.animateScrollToItem(i)
-    }
-    LazyRow(state = state, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        item(key = "all") {
-            AssistChip(onAll, { Text("All categories") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.List, null, Modifier.size(FilterChipDefaults.IconSize)) })
-        }
-        items(groups, key = { it.id }) { g ->
-            val on = g.id == selected
-            FilterChip(on, { onPick(g.id) }, { Text(chipLabel(g)) },
-                leadingIcon = if (on) { { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } } else null)
-        }
-    }
-}
+private fun AllCategories(onClick: () -> Unit) = IconButton(onClick) { Icon(Icons.AutoMirrored.Rounded.List, "All categories") }
+
+/** A group's channels, narrowed by the channel search. */
+private fun channelsMatching(app: AppState, groupId: String, query: String) =
+    app.channelsIn(groupId).let { l -> if (query.isBlank()) l else l.filter { it.name.contains(query.trim(), ignoreCase = true) } }
 
 /** Phone wording: favourites are "Saved", All channels is "All". */
 private fun chipLabel(g: Group) = when (g.id) { FAVS -> "Saved"; ALL -> "All"; else -> g.name }

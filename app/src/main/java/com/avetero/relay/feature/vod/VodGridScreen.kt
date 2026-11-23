@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -49,7 +47,6 @@ import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +69,9 @@ import com.avetero.relay.ui.components.Group
 import com.avetero.relay.ui.components.Tab
 import com.avetero.relay.ui.components.norm
 import com.avetero.relay.ui.m3.LargeTitle
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.avetero.relay.ui.m3.PosterCard
 import com.avetero.relay.ui.m3.RelaySheet
 import com.avetero.relay.ui.theme.LocalWide
@@ -171,20 +171,35 @@ fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGro
 
 @Composable
 private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: String?) {
-    // Movies/Series switch in place (no navigation), so the title, toggle and chips stay put and only the grid changes
-    var series by rememberSaveable(startSeries) { mutableStateOf(startSeries) }
+    // Movies | Series are tabs over a pager in place (no navigation): swipe or tap; each keeps its own chips, sort and scroll
+    val both = "vod" in app.parts && "series" in app.parts
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        LargeTitle("Library") { IconButton({ app.go(Screen.Search) }) { Icon(Icons.Rounded.Search, "Search the library") } }
+        if (!both) LibraryPage(app, startSeries, initialGroup)
+        else {
+            val pager = rememberPagerState(if (startSeries) 1 else 0) { 2 }
+            LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { app.librarySeries = it == 1 } }
+            PagerTabs(pager, listOf("Movies", "Series"))
+            HorizontalPager(pager, Modifier.fillMaxSize().padding(top = 12.dp)) { page ->
+                LibraryPage(app, page == 1, initialGroup.takeIf { (page == 1) == startSeries })
+            }
+        }
+    }
+}
+
+/** One of Library's pages: category chips, the poster grid and the sort button. */
+@Composable
+private fun LibraryPage(app: AppState, series: Boolean, initialGroup: String?) {
     val lib = rememberLibrary(app, series)
     val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
-    var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: ALL) }
-    var sort by rememberSaveable(series) { mutableIntStateOf(0) }
+    var groupId by rememberSaveable(initialGroup) { mutableStateOf(initialGroup ?: ALL) }
+    var sort by rememberSaveable { mutableIntStateOf(0) }
     val groups = remember(lib, cats, app.favourites) { lib.groups(cats, app.favourites, tv = false) }
     // a group that emptied (last saved title removed, category hidden) falls back to All
     val current = groups.firstOrNull { it.id == groupId }?.id ?: ALL
     val tiles = remember(lib, current, sort, app.favourites) { lib.tiles(current, sort, "", app.favourites) }
     val enter = rememberEntrance(ready = tiles.isNotEmpty())
-    val movieGrid = rememberLazyGridState()
-    val seriesGrid = rememberLazyGridState()
-    val grid = if (series) seriesGrid else movieGrid
+    val grid = rememberLazyGridState()
     val chips = rememberLazyListState()
     // scroll to the top on a new group or sort and when Library is tapped again; not when coming back from a title
     LaunchedEffect(grid) { snapshotFlow { current to sort }.drop(1).collect { grid.scrollToItem(0) } }
@@ -194,16 +209,8 @@ private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: Stri
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     val what = if (series) "series" else "movies"
 
-    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+    Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            LargeTitle("Library") { IconButton({ app.go(Screen.Search) }) { Icon(Icons.Rounded.Search, "Search the library") } }
-            if ("vod" in app.parts && "series" in app.parts) Row(
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-            ) {
-                ToggleButton(!series, { series = false; app.librarySeries = false }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedLeadingButtonShapes()) { Text("Movies") }
-                ToggleButton(series, { series = true; app.librarySeries = true }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text("Series") }
-            }
             LazyRow(state = chips, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(groups, key = { it.id }) { g ->
                     val on = g.id == current
@@ -289,9 +296,15 @@ private fun SortButton(sort: Int, onSort: (Int) -> Unit, modifier: Modifier = Mo
  */
 internal fun Modifier.onLongPress(action: () -> Unit) = pointerInput(action) {
     awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation(PointerEventPass.Initial) }
-        if (up == null) {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // a hold only counts if the finger stays put: lifting, or moving past the touch slop (scrolling the row), cancels it
+        val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            while (true) {
+                val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                if (!c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+            }
+        }
+        if (ended == null) {
             action()
             do {
                 val e = awaitPointerEvent(PointerEventPass.Initial)
