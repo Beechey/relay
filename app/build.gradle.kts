@@ -14,7 +14,7 @@ android {
         applicationId = "com.avetero.relay"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.3.0-beta.1"
+        versionName = "0.3.0-beta.2"
         // 1.2.3 -> 10203, so every tagged release installs over the last
         versionCode = versionName!!.substringBefore('-').split('.').map { it.toInt() }.let { (a, b, c) -> a * 10000 + b * 100 + c }
         // GitHub updates: updateRepo=owner/name in gradle.properties; updateToken only for a private repo, in local.properties (never commit it)
