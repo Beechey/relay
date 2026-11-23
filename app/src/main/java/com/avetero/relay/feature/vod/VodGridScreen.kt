@@ -1,25 +1,58 @@
 package com.avetero.relay.feature.vod
 
-import com.avetero.relay.ui.components.settle
+import com.avetero.relay.ui.motion.rememberEntrance
+import com.avetero.relay.ui.motion.entrance
+import com.avetero.relay.ui.m3.Skeleton
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ToggleButton
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -27,148 +60,270 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
+import com.avetero.relay.data.model.Move
 import com.avetero.relay.feature.categories.categoryMover
-import com.avetero.relay.ui.components.Art
-import com.avetero.relay.ui.components.Badge
-import com.avetero.relay.ui.components.CategoryButton
-import com.avetero.relay.ui.components.CategoryDrawer
-import com.avetero.relay.ui.components.EmptyState
-import com.avetero.relay.ui.components.FilterField
-import com.avetero.relay.ui.components.FocusSurface
 import com.avetero.relay.ui.components.Group
-import com.avetero.relay.ui.components.GroupColumn
-import com.avetero.relay.ui.components.SegmentedTabs
 import com.avetero.relay.ui.components.Tab
-import com.avetero.relay.ui.components.WithRail
-import com.avetero.relay.ui.theme.Bold
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Heavy
-import com.avetero.relay.ui.theme.Semi
-import com.avetero.relay.ui.theme.T
-import com.avetero.relay.ui.theme.compact
-import com.avetero.relay.ui.theme.fg
-import com.avetero.relay.ui.theme.sub
+import com.avetero.relay.ui.components.norm
+import com.avetero.relay.ui.m3.LargeTitle
+import com.avetero.relay.ui.m3.PagerTabs
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import com.avetero.relay.ui.m3.PosterCard
+import com.avetero.relay.ui.m3.RelaySheet
+import com.avetero.relay.ui.theme.LocalWide
+import com.avetero.relay.ui.theme.isTv
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.withTimeoutOrNull
 
-private const val RESUME = "__resume"
-
+internal const val RESUME = "__resume"
 internal const val ALL = "__all"
-
 internal const val RECENT = "__recent"
-
 internal const val FOR_YOU = "__foryou"
+internal const val SAVED = "__saved"
+
+internal const val HIDE = "Hide category"
+
+internal val SORTS = listOf("Newest", "A – Z", "Rating")
 
 /** A poster in the grid; movies and series share it. */
 internal data class Tile(val id: Int, val name: String, val image: String, val rating: Double, val meta: String, val added: Long)
 
-/**
- * Movies and Series (redesign board 04). They open on For you: a hero that follows the focused title, then rows by
- * category. Picking a category opens its full grid with search and sort.
- */
-@Composable
-fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) {
-    var groupId by rememberSaveable(series, initialGroup) { mutableStateOf(initialGroup ?: FOR_YOU) }
-    val rows = androidx.compose.foundation.lazy.rememberLazyListState()
-    val browsing = groupId == FOR_YOU
-    val phone = compact()
-    WithRail(if (series) Tab.Series else Tab.Movies, nav, behindDock = browsing && !phone) {
-        if (browsing) BrowseRows(app, series, rows) { groupId = it } else VodGrid(app, series, groupId) { groupId = it }
+/** Movies or series prepared once per library load: tiles with their category, lookups, and what you're watching. */
+internal class Library(
+    val series: Boolean, val all: List<Pair<Tile, String>>, val byId: Map<Int, Tile>, val counts: Map<String, Int>,
+    val resumeIds: List<Int>, val recentIds: List<Int>, val progress: Map<Int, Float>,
+) {
+    private val favPrefix = if (series) "s" else "m"
+
+    fun savedIds(favourites: Collection<String>) = favourites.mapNotNull { k -> if (k.startsWith(favPrefix)) k.drop(1).toIntOrNull()?.takeIf(byId::containsKey) else null }
+
+    /** One group's titles, filtered by [query] and sorted ([SORTS]); Continue / Recent / Saved keep their own order on Newest. */
+    fun tiles(groupId: String, sort: Int, query: String, favourites: Collection<String>): List<Tile> {
+        val base = when (groupId) {
+            RESUME -> resumeIds.mapNotNull(byId::get)
+            RECENT -> recentIds.mapNotNull(byId::get)
+            SAVED -> savedIds(favourites).mapNotNull(byId::get)
+            ALL, FOR_YOU -> all.map { it.first }
+            else -> all.filter { it.second == groupId }.map { it.first }
+        }.let { l -> if (query.isBlank()) l else norm(query.trim()).let { n -> l.filter { norm(it.name).contains(n) } } }
+        val ordered = groupId == RESUME || groupId == RECENT || groupId == SAVED
+        return when (sort) { 1 -> base.sortedBy { it.name.lowercase() }; 2 -> base.sortedByDescending { it.rating }; else -> if (ordered) base else base.sortedByDescending { it.added } }
+    }
+
+    /** Built-in groups (only those with something in them) then the visible categories that have titles. */
+    fun groups(cats: List<com.avetero.relay.data.model.Category>, favourites: Collection<String>, tv: Boolean): List<Group> {
+        val saved = savedIds(favourites).size
+        return listOfNotNull(
+            Group(FOR_YOU, "For you", 0).takeIf { tv },
+            Group(RESUME, if (tv) "Continue watching" else "Continue", resumeIds.size).takeIf { resumeIds.isNotEmpty() },
+            Group(RECENT, if (tv) "Recently watched" else "Recent", recentIds.size).takeIf { recentIds.isNotEmpty() },
+            Group(SAVED, "Saved", saved).takeIf { saved > 0 },
+            Group(ALL, if (tv) (if (series) "All series" else "All movies") else "All", all.size),
+        ) + cats.mapNotNull { c -> counts[c.id]?.takeIf { it > 0 }?.let { Group(c.id, c.name, it) } }
     }
 }
 
-/** Boards 07 + 10: one category as a poster grid, with the category list beside it on TV. */
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.VodGrid(app: AppState, series: Boolean, groupId: String, setGroup: (String) -> Unit) {
-    val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
+internal fun rememberLibrary(app: AppState, series: Boolean): Library {
     val all = remember(series, app.moviesVisible, app.seriesVisible) {
         if (series) app.seriesVisible.map { Tile(it.id, it.name, it.cover, it.rating, it.year, 0) to it.categoryId }
         else app.moviesVisible.map { Tile(it.id, it.name, it.icon, it.rating, "", it.added) to it.categoryId }
     }
-    val resumeIds = app.resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct()
-    var drawer by remember { mutableStateOf(false) }
-    var sort by rememberSaveable { mutableIntStateOf(0) }
+    val byId = remember(all) { all.associate { it.first.id to it.first } }
+    val counts = remember(all) { all.groupingBy { it.second }.eachCount() }
+    val resumes = app.resumes
+    val resumeIds = remember(series, resumes) { resumes.map { if (series) it.seriesId else it.vodId }.filter { it != 0 }.distinct() }
+    // newest resume per title wins (the list is newest first)
+    val progress = remember(series, resumes) { resumes.asReversed().filter { (if (series) it.seriesId else it.vodId) != 0 }.associate { (if (series) it.seriesId else it.vodId) to it.fraction() } }
     val recentIds = if (series) app.recentSeries else app.recentMovies
-    val groups = remember(cats, all, resumeIds, recentIds) {
-        val counts = all.groupingBy { it.second }.eachCount()
-        listOfNotNull(
-            Group(FOR_YOU, "For you", 0),
-            Group(RESUME, "Continue watching", resumeIds.size).takeIf { resumeIds.isNotEmpty() },
-            Group(RECENT, "Recently watched", recentIds.size).takeIf { recentIds.isNotEmpty() },
-            Group(ALL, if (series) "All series" else "All movies", all.size),
-        ) + cats.map { Group(it.id, it.name, counts[it.id] ?: 0) }.filter { it.count > 0 }
-    }
-    var query by rememberSaveable(series) { mutableStateOf("") }
-    val tiles = remember(groupId, sort, all, resumeIds, recentIds, query) {
-        val base = when (groupId) {
-            RESUME -> resumeIds.mapNotNull { id -> all.firstOrNull { it.first.id == id }?.first }
-            RECENT -> recentIds.mapNotNull { id -> all.firstOrNull { it.first.id == id }?.first }
-            ALL -> all.map { it.first }
-            else -> all.filter { it.second == groupId }.map { it.first }
-        }
-            .filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
-        when (sort) { 1 -> base.sortedBy { it.name.lowercase() }; 2 -> base.sortedByDescending { it.rating }; else -> if (groupId == RESUME || groupId == RECENT) base else base.sortedByDescending { it.added } }
-    }
-    val gridState = rememberLazyGridState()
-    val first = remember { FocusRequester() }
-    LaunchedEffect(groupId, sort) { gridState.scrollToItem(0) }
-    LaunchedEffect(Unit) { first.settle() }
+    return remember(all, byId, counts, resumeIds, recentIds, progress) { Library(series, all, byId, counts, resumeIds, recentIds, progress) }
+}
 
-    val phone = compact()
-    val hideVod: (Group) -> Unit = { g ->
-        app.setCategoryHidden((if (series) "series:" else "vod:") + g.id, true)
-        if (g.id == groupId) setGroup(ALL)
-        app.message = "Hidden “${g.name}”"
+/** Opens a title's detail page. */
+internal fun openTitle(app: AppState, series: Boolean, id: Int) {
+    if (series) app.seriesById[id]?.let { app.push(Screen.SeriesDetail(it)) } else app.movieById[id]?.let { app.push(Screen.MovieDetail(it)) }
+}
+
+/** What you can do to a category from Library (hold it): move it, open the bulk reorder, or hide it (with Undo). */
+internal fun categoryActions(app: AppState, series: Boolean, g: Group, onHidden: () -> Unit): List<Pair<String, () -> Unit>> {
+    val move = categoryMover(app, if (series) "series" else "vod")
+    val key = (if (series) "series:" else "vod:") + g.id
+    return listOf(
+        "Move to top" to { move(g, Move.Top) }, "Move up one" to { move(g, Move.Up) },
+        "Move down one" to { move(g, Move.Down) }, "Move to bottom" to { move(g, Move.Bottom) },
+        "Reorder several…" to { move(g, null) },
+        HIDE to { app.setCategoryHidden(key, true); onHidden(); app.say("Hidden “${g.name}”") { app.setCategoryHidden(key, false) } },
+    )
+}
+
+/**
+ * Library: movies or series as a poster grid by category. Phone: one Library tab with Movies | Series, category
+ * chips and a sort split button. TV: a category column (For you first) beside the grid.
+ */
+@Suppress("UNUSED_PARAMETER")
+@Composable
+fun VodGridScreen(app: AppState, series: Boolean, nav: (Tab) -> Unit, initialGroup: String? = null) =
+    if (isTv()) TvLibrary(app, series, initialGroup) else PhoneLibrary(app, series, initialGroup)
+
+@Composable
+private fun PhoneLibrary(app: AppState, startSeries: Boolean, initialGroup: String?) {
+    // Movies | Series: tap to switch (in place, no navigation); swiping moves between the categories underneath
+    var series by rememberSaveable(startSeries) { mutableStateOf(startSeries) }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        LargeTitle("Library") { IconButton({ app.go(Screen.Search) }) { Icon(Icons.Rounded.Search, "Search the library") } }
+        if ("vod" in app.parts && "series" in app.parts) Row(
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+        ) {
+            ToggleButton(!series, { series = false; app.librarySeries = false }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedLeadingButtonShapes()) { Text("Movies") }
+            ToggleButton(series, { series = true; app.librarySeries = true }, Modifier.weight(1f).heightIn(min = 48.dp), shapes = ButtonGroupDefaults.connectedTrailingButtonShapes()) { Text("Series") }
+        }
+        key(series) { LibraryPage(app, series, initialGroup.takeIf { series == startSeries }) }
     }
-    val moveVod = categoryMover(app, if (series) "series" else "vod")
-    if (!phone) GroupColumn("Categories", groups, groupId, setGroup, onHide = hideVod, onMove = moveVod)
-    Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 0.dp else 32.dp, end = if (phone) 0.dp else 32.dp, top = if (phone) 12.dp else 28.dp),
-        verticalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 20.dp)) {
-        if (phone) {
-            T(if (series) "Series" else "Movies", 26, Heavy, modifier = Modifier.padding(horizontal = 16.dp))
-            val current = groups.firstOrNull { it.id == groupId }
-            CategoryButton(current?.name ?: "Categories", current?.count ?: 0) { drawer = true }
-            if (drawer) CategoryDrawer(if (series) "Series" else "Movies", groups, groupId, setGroup, onHide = hideVod, onMove = moveVod) { drawer = false }
-        }
-        val sortRow: @Composable () -> Unit = {
-            SegmentedTabs(listOf(0 to "Recently added", 1 to "A – Z", 2 to "Rating"), sort, { sort = it }, small = true)
-        }
-        // the category button already shows the count
-        val what = if (series) "series" else "movies"
-        if (phone) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilterField(query, { query = it }, "Search $what in this category")
-            sortRow()
-        } else Row(verticalAlignment = Alignment.CenterVertically) {
-            T(groups.firstOrNull { it.id == groupId }?.name ?: "", 26, Heavy)
-            T("   %,d %s".format(tiles.size, what), 15, Semi, C.Muted, Modifier.weight(1f))
-            FilterField(query, { query = it }, "Search $what", Modifier.width(240.dp))
-            Spacer(Modifier.width(12.dp))
-            sortRow()
-        }
-        if (tiles.isEmpty() && app.vodLoading) EmptyState("Loading $what…", "Live TV is ready to watch while your ${what} load.")
-        else if (tiles.isEmpty()) EmptyState(if (query.isNotBlank()) "No matches" else "Nothing here yet",
-            if (query.isNotBlank()) "Nothing in this category matches “${query.trim()}”." else "This category has no $what.")
-        LazyVerticalGrid(if (phone) GridCells.Adaptive(108.dp) else GridCells.Fixed(6), Modifier, gridState,
-            contentPadding = PaddingValues(start = if (phone) 12.dp else 0.dp, end = if (phone) 12.dp else 0.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
-                FocusSurface({
-                    if (series) app.series.firstOrNull { it.id == t.id }?.let { app.push(Screen.SeriesDetail(it)) }
-                    else app.movies.firstOrNull { it.id == t.id }?.let { app.push(Screen.MovieDetail(it)) }
-                }, focusRequester = if (i == 0) first else null, onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) }) { f ->
-                    Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-                            Art(t.image, t.name, t.id, Modifier.fillMaxSize())
-                            if (t.rating > 0) Badge("%.1f".format(t.rating), C.Accent, C.OnLight, Modifier.align(Alignment.TopEnd).padding(6.dp))
-                        }
-                        T(t.name, 13, Bold, fg(f))
-                        if (t.meta.isNotEmpty()) T(t.meta, 12, color = sub(f))
+}
+
+/** One of Library's pages: category chips, the poster grid and the sort button. */
+@Composable
+private fun LibraryPage(app: AppState, series: Boolean, initialGroup: String?) {
+    val lib = rememberLibrary(app, series)
+    val cats = if (series) app.seriesCatsVisible else app.vodCatsVisible
+    var groupId by rememberSaveable(initialGroup) { mutableStateOf(initialGroup ?: ALL) }
+    var sort by rememberSaveable { mutableIntStateOf(0) }
+    val groups = remember(lib, cats, app.favourites) { lib.groups(cats, app.favourites, tv = false) }
+    // a group that emptied (last saved title removed, category hidden) falls back to All
+    val current = groups.firstOrNull { it.id == groupId }?.id ?: ALL
+    val chips = rememberLazyListState()
+    // swipe the grid to move between categories; tapping a chip slides to it
+    val pager = rememberPagerState(groups.indexOfFirst { it.id == current }.coerceAtLeast(0)) { groups.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pager, groups) { snapshotFlow { pager.currentPage }.collect { groups.getOrNull(it)?.let { g -> groupId = g.id } } }
+    LaunchedEffect(current) {
+        val i = groups.indexOfFirst { it.id == current }.coerceAtLeast(0)
+        if (pager.currentPage != i) pager.animateScrollToPage(i)
+        // keep the selected chip in view, only scrolling when it's off screen
+        if (chips.layoutInfo.visibleItemsInfo.none { it.index == i && it.offset >= 0 && it.offset + it.size <= chips.layoutInfo.viewportEndOffset }) chips.animateScrollToItem(i)
+    }
+    val anyTiles = lib.all.isNotEmpty()
+    var menuFor by remember { mutableStateOf<Group?>(null) }
+    var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    val what = if (series) "series" else "movies"
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            LazyRow(state = chips, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(groups, key = { it.id }) { g ->
+                    val on = g.id == current
+                    FilterChip(on, { groupId = g.id; scope.launch { pager.animateScrollToPage(groups.indexOf(g)) } }, { Text(g.name) },
+                        Modifier.animateItem().then(if (g.id.startsWith("__")) Modifier else Modifier.onLongPress { menuFor = g }),
+                        leadingIcon = if (on) ({ Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null)
+                }
+            }
+            if (!anyTiles && app.vodLoading) Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // poster-shaped placeholders, shimmering, while the catalogue loads
+                Text("Live TV is ready to watch while your $what load.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                repeat(3) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { repeat(3) { Skeleton(Modifier.weight(1f).aspectRatio(2f / 3f)) } }
+                }
+            } else HorizontalPager(pager, Modifier.fillMaxSize(), key = { groups.getOrNull(it)?.id ?: it }) { page ->
+                val g = groups.getOrNull(page) ?: return@HorizontalPager
+                val tiles = remember(lib, g.id, sort, app.favourites) { lib.tiles(g.id, sort, "", app.favourites) }
+                val enter = rememberEntrance(ready = tiles.isNotEmpty())
+                val grid = rememberLazyGridState()
+                // back to the top on a new sort, and when Library is tapped again (not when coming back from a title)
+                LaunchedEffect(grid) { snapshotFlow { sort }.drop(1).collect { grid.scrollToItem(0) } }
+                LaunchedEffect(grid) { snapshotFlow { app.reselect }.drop(1).collect { grid.animateScrollToItem(0) } }
+                if (tiles.isEmpty()) Text(if (!anyTiles) "Your provider hasn't listed any $what." else "Nothing here yet.",
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxSize().padding(20.dp))
+                else LazyVerticalGrid(if (LocalWide.current) GridCells.Adaptive(120.dp) else GridCells.Fixed(3), Modifier.fillMaxSize(), grid,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(tiles, key = { _, t -> t.id }) { i, t ->
+                        PosterCard(t.image, t.name, t.id, { openTitle(app, series, t.id) }, Modifier.animateItem().entrance(enter, i), sharedKey = posterKey(series, t.id),
+                            onLongClick = { app.toggleFav((if (series) "s" else "m") + t.id) })
                     }
                 }
             }
+        }
+        if (anyTiles) SortButton(sort, { sort = it }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+    }
+
+    menuFor?.let { g ->
+        RelaySheet({ menuFor = null }) {
+            Text(g.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp))
+            categoryActions(app, series, g) { if (g.id == groupId) groupId = ALL }.forEach { (label, act) ->
+                ListItem({ menuFor = null; if (label == HIDE) confirm = g.name to act else act() },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) { Text(label) }
+            }
+            Spacer(Modifier.padding(bottom = 24.dp))
+        }
+    }
+    confirm?.let { (name, hide) ->
+        AlertDialog({ confirm = null }, { TextButton({ confirm = null; hide() }) { Text("Hide") } },
+            dismissButton = { TextButton({ confirm = null }) { Text("Cancel") } },
+            title = { Text("Hide “$name”?") },
+            text = { Text("It won't appear in lists, All, the guide or search. Bring it back in Settings → Manage categories.") })
+    }
+}
+
+/** Sort as a split button: the label cycles to the next order, the arrow lists them all. */
+@Composable
+private fun SortButton(sort: Int, onSort: (Int) -> Unit, modifier: Modifier = Modifier) {
+    var menu by remember { mutableStateOf(false) }
+    SplitButtonLayout(
+        leadingButton = {
+            SplitButtonDefaults.TonalLeadingButton({ onSort((sort + 1) % SORTS.size) }, Modifier.heightIn(min = 56.dp),
+                shapes = SplitButtonDefaults.leadingButtonShapesFor(56.dp), contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(56.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.Sort, null)
+                Spacer(Modifier.width(8.dp))
+                Text(SORTS[sort])
+            }
+        },
+        trailingButton = {
+            Box {
+                SplitButtonDefaults.TonalTrailingButton(menu, { menu = it }, Modifier.heightIn(min = 56.dp),
+                    shapes = SplitButtonDefaults.trailingButtonShapesFor(56.dp), contentPadding = SplitButtonDefaults.trailingButtonContentPaddingFor(56.dp)) {
+                    Icon(Icons.Rounded.KeyboardArrowDown, "Change sort")
+                }
+                DropdownMenu(menu, { menu = false }) {
+                    SORTS.forEachIndexed { i, label ->
+                        DropdownMenuItem({ Text(label) }, { onSort(i); menu = false },
+                            leadingIcon = { if (i == sort) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) })
+                    }
+                }
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+/**
+ * Press and hold on a component that already handles taps (a chip): watches the gesture before the component does,
+ * and swallows the release after a long press so the tap doesn't fire too.
+ */
+internal fun Modifier.onLongPress(action: () -> Unit) = pointerInput(action) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // a hold only counts if the finger stays put: lifting, or moving past the touch slop (scrolling the row), cancels it
+        val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+            while (true) {
+                val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                if (!c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+            }
+        }
+        if (ended == null) {
+            action()
+            do {
+                val e = awaitPointerEvent(PointerEventPass.Initial)
+                e.changes.forEach { it.consume() }
+            } while (e.changes.any { it.pressed })
         }
     }
 }

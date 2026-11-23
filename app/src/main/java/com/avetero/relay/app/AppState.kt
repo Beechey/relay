@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import com.avetero.relay.data.epg.Guide
 import com.avetero.relay.data.epg.readGuide
@@ -50,8 +52,20 @@ import kotlinx.coroutines.withContext
 class AppState(val ctx: Context) {
     val store = Store(ctx)
     val player = PlayerHost(ctx, store)
-    val stack = mutableStateListOf<Screen>()
-    val screen get() = stack.last()
+    /** Per-tab histories (Navigator.kt); the members below keep the screens' existing calls working. */
+    val nav = Navigator()
+    val stacks get() = nav.stacks
+    val tab get() = nav.tab
+    val stack get() = nav.stack
+    val screen get() = nav.screen
+    val navKind get() = nav.navKind
+    val reselect get() = nav.reselect
+    var librarySeries by nav::librarySeries
+    fun push(s: Screen) = nav.push(s)
+    fun back() = nav.back()
+    fun go(s: Screen) = nav.go(s)
+    /** The live channel playing, so leaving Live keeps it going in the phone's mini player. */
+    var liveChannel by mutableStateOf<Channel?>(null)
 
     var account by mutableStateOf(store.active())
     var info by mutableStateOf<AccountInfo?>(null)
@@ -102,6 +116,10 @@ class AppState(val ctx: Context) {
         store.setOrder(account, type, next)
         orders = orders + (type to next)
     }
+    // id lookups, so favourites and recents don't scan a 50k-item catalogue once per entry
+    val channelById by derivedStateOf { channels.associateBy { it.id } }
+    val movieById by derivedStateOf { movies.associateBy { it.id } }
+    val seriesById by derivedStateOf { series.associateBy { it.id } }
     val channelsVisible by derivedStateOf { if (hidden.none { it.startsWith("live:") }) channels else channels.filter { "live:${it.categoryId}" !in hidden } }
     val moviesVisible by derivedStateOf { if (hidden.none { it.startsWith("vod:") }) movies else movies.filter { "vod:${it.categoryId}" !in hidden } }
     val seriesVisible by derivedStateOf { if (hidden.none { it.startsWith("series:") }) series else series.filter { "series:${it.categoryId}" !in hidden } }
@@ -120,6 +138,9 @@ class AppState(val ctx: Context) {
     var syncSteps = mutableStateListOf<SyncStep>()
     var update by mutableStateOf<Release?>(null)
     var message by mutableStateOf<String?>(null)
+    /** Set with [message] to offer Undo on the phone's snackbar. */
+    var messageUndo: (() -> Unit)? = null
+    fun say(msg: String, undo: (() -> Unit)? = null) { messageUndo = undo; message = msg }
     // kept here so coming back from a result still shows your search
     var searchQuery by mutableStateOf("")
     // where the Guide's channel list was scrolled to, so coming back from a channel lands there
@@ -154,21 +175,16 @@ class AppState(val ctx: Context) {
     init {
         clock24 = store.clock24
         val a = account
-        stack += when {
+        go(when {
             a == null -> Screen.Login
             hasCache(a) -> { libraryLoading = true; Screen.Home }
             else -> Screen.Sync
-        }
+        })
     }
 
-    fun push(s: Screen) { stack += s }
-    fun back() { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
-    /** Rail navigation: replaces the stack. */
-    fun go(s: Screen) { stack.clear(); stack += s }
-
     fun channelsIn(groupId: String): List<Channel> = when (groupId) {
-        FAVS -> favourites.mapNotNull { k -> if (k.startsWith("c")) channels.firstOrNull { it.id == k.drop(1).toIntOrNull() } else null }
-        RECENT -> recentChannels.mapNotNull { id -> channels.firstOrNull { it.id == id } }
+        FAVS -> favourites.mapNotNull { k -> if (k.startsWith("c")) k.drop(1).toIntOrNull()?.let(channelById::get) else null }
+        RECENT -> recentChannels.mapNotNull(channelById::get)
         ALL -> channelsVisible
         else -> channels.filter { it.categoryId == groupId }
     }
@@ -483,6 +499,7 @@ class AppState(val ctx: Context) {
         recentChannels = store.recents(a, "recent"); recentMovies = store.recents(a, "rmovie").ifEmpty { resumes.map { it.vodId }.filter { it != 0 }.distinct() }
         recentSeries = store.recents(a, "rseries").ifEmpty { resumes.map { it.seriesId }.filter { it != 0 }.distinct() }
         liveCats = emptyList(); channels = emptyList(); vodCats = emptyList(); movies = emptyList(); seriesCats = emptyList(); series = emptyList()
+        nav.reset(); liveChannel = null
         if (hasCache(a)) { libraryLoading = true; go(Screen.Home) } else go(Screen.Sync)
     }
 
@@ -493,6 +510,8 @@ class AppState(val ctx: Context) {
     }
 
     companion object {
+        fun tabOf(s: Screen) = Navigator.tabOf(s)
+        fun rootScreen(tab: String) = Navigator.rootScreen(tab)
         const val FAVS = "__favs"
         const val ALL = "__all"
         const val RECENT = "__recent"

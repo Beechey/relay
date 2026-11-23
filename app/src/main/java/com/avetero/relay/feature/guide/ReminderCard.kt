@@ -6,8 +6,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,19 +23,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.Channel
-import com.avetero.relay.ui.components.Btn
-import com.avetero.relay.ui.components.BtnStyle
-import com.avetero.relay.ui.components.LivePill
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Heavy
-import com.avetero.relay.ui.theme.Icons
-import com.avetero.relay.ui.theme.Semi
-import com.avetero.relay.ui.theme.T
+import com.avetero.relay.ui.theme.Tok
+import com.avetero.relay.ui.theme.isTv
+import com.avetero.relay.ui.tv.TvButton
 import com.avetero.relay.util.nowSec
 import kotlinx.coroutines.delay
 
@@ -53,16 +57,30 @@ fun ReminderCard(app: AppState, modifier: Modifier = Modifier) {
         }
     }
     val (c, title) = due ?: return
-    val watch = remember { FocusRequester() }
-    LaunchedEffect(due) { runCatching { watch.requestFocus() }; delay(20_000); due = null }
+    val watchFocus = remember { FocusRequester() }
+    val tv = isTv()
+    LaunchedEffect(due) { if (tv) runCatching { watchFocus.requestFocus() }; delay(20_000); due = null }
     BackHandler { due = null }
-    Column(modifier.width(420.dp).clip(RoundedCornerShape(22.dp)).background(C.Glass).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { LivePill(); T("Starting now", 13, Semi, C.Muted) }
-        T(title, 22, Heavy, maxLines = 2)
-        T(c.name, 13, Semi, C.Soft)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Btn("Watch", { due = null; app.player.play(app.liveUrl(c), title = c.name); app.push(Screen.LivePlayer(c, listOf(c))) }, style = BtnStyle.Primary, icon = Icons.Play, height = 44.dp, focusRequester = watch)
-            Btn("Dismiss", { due = null }, height = 44.dp)
+    val watch = { due = null; app.player.play(app.liveUrl(c), title = c.name); app.push(Screen.LivePlayer(c, listOf(c))) }
+    if (tv) {
+        Column(modifier.width(420.dp).shadow(24.dp, RoundedCornerShape(28.dp)).clip(RoundedCornerShape(28.dp)).background(Tok.ContainerHigh).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.tv.material3.Text("Starting now · ${c.name}", style = androidx.tv.material3.MaterialTheme.typography.labelLarge, color = Tok.OnSurfaceVariant)
+            androidx.tv.material3.Text(title, style = androidx.tv.material3.MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("Watch", watch, primary = true, focusRequester = watchFocus)
+                TvButton("Dismiss", { due = null })
+            }
+        }
+    } else Surface(modifier.statusBarsPadding().widthIn(max = 420.dp).padding(start = 16.dp), shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp) {
+        Column(Modifier.padding(start = 24.dp, end = 16.dp, top = 20.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Starting now · ${c.name}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.padding(top = 8.dp).align(androidx.compose.ui.Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton({ due = null }) { Text("Dismiss") }
+                Button(watch) { Text("Watch") }
+            }
         }
     }
 }

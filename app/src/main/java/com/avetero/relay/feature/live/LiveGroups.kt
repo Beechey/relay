@@ -21,5 +21,5 @@ fun rememberLiveGroups(app: AppState): List<Group> = remember(app.liveCatsVisibl
 fun hideLive(app: AppState, g: Group, current: String, setGroup: (String) -> Unit) {
     app.setCategoryHidden("live:${g.id}", true)
     if (g.id == current) setGroup(ALL)
-    app.message = "Hidden “${g.name}”"
+    app.say("Hidden “${g.name}”") { app.setCategoryHidden("live:${g.id}", false) }
 }

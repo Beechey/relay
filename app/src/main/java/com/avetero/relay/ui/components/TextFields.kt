@@ -54,16 +54,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.avetero.relay.ui.theme.Bold
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Ico
-import com.avetero.relay.ui.theme.Icons
-import com.avetero.relay.ui.theme.Mono
-import com.avetero.relay.ui.theme.T
 import com.avetero.relay.ui.theme.compact
 import kotlinx.coroutines.delay
 
-/** Single-line filter box used to find a category. */
 /**
  * TV: a text box is first only highlighted; OK starts typing (and opens the keyboard), Back, Up/Down or the
  * keyboard's action ends it. Moving past a box with the remote never pops the keyboard. Phones type straight away.
@@ -112,65 +105,5 @@ fun TvEditable(
                 },
             hover && !editing, editing,
         )
-    }
-}
-
-@Composable
-fun FilterField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) =
-    TvEditable(modifier.fillMaxWidth(), focusRequester, startEditing = focusRequester != null) { field, hover, editing ->
-        var focused by remember { mutableStateOf(false) }
-        val focusManager = LocalFocusManager.current
-        val keyboard = LocalSoftwareKeyboardController.current
-        BasicTextField(
-            value, onChange, singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            // Done closes the keyboard and moves on, so results are reachable straight away
-            keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); focusManager.moveFocus(FocusDirection.Down) }),
-            textStyle = TextStyle(color = if (hover) C.OnLight else Color.White, fontSize = 15.sp),
-            cursorBrush = SolidColor(C.Accent),
-            modifier = field.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-            decorationBox = { inner ->
-                Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)).background(when { hover -> C.Text; focused && editing -> Color(0xFF2A3347); else -> C.Control }).padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Ico(Icons.Search, if (hover) C.OnLight else C.Muted, 16.dp)
-                    Box(Modifier.weight(1f)) { if (value.isEmpty()) T(placeholder, 14, color = if (hover) C.OnLight else C.Dim); inner() }
-                }
-            },
-        )
-    }
-
-@Composable
-fun Field(
-    label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, hint: String? = null,
-    password: Boolean = false, keyboard: KeyboardType = KeyboardType.Text, mono: Boolean = false, error: Boolean = false,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val bring = remember { BringIntoViewRequester() }
-    val imeVisible = WindowInsets.isImeVisible
-    // re-scroll once the keyboard has resized the window, so the field ends up visible
-    LaunchedEffect(focused, imeVisible) { if (focused) { delay(200); bring.bringIntoView() } }
-    Column(modifier.bringIntoViewRequester(bring), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        T(label, 13, Bold, if (error) C.Error else C.Soft)
-        TvEditable(Modifier.onFocusChanged { if (it.hasFocus) focused = true }) { field, hover, _ ->
-        BasicTextField(
-            value, onChange, singleLine = true,
-            textStyle = TextStyle(color = if (hover) C.OnLight else Color.White, fontSize = 16.sp, fontFamily = if (mono) Mono else null),
-            cursorBrush = SolidColor(C.Accent),
-            visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard, imeAction = ImeAction.Next),
-            modifier = field.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-            decorationBox = { inner ->
-                Box(
-                    Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(10.dp))
-                        .background(when { hover -> C.Text; error -> Color(0xFF3A1E24); focused -> Color(0xFF2A3347); else -> C.Control }).padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (hover && value.isEmpty()) T("Press OK to type", 14, color = C.OnLight)
-                    inner()
-                }
-            },
-        )
-        }
-        if (hint != null) T(hint, 12, color = C.Muted)
     }
 }

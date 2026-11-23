@@ -1,6 +1,11 @@
-# Relay IPTV 0.1.11
+# Relay IPTV 0.3.0 beta 4
 
-- **Live TV casting is back:** this restores the Chromecast relay from 0.1.9 exactly as it was. Relay prepares the live channel on your phone and passes it to the TV over your Wi-Fi, with about 18 seconds buffered so it plays smoothly. While casting, a "Casting to your TV" notification keeps it running with the screen off
-- Nothing else has changed
+Fourth beta of the redesign. Only installs with **Beta updates** switched on (Settings › About and updates) are offered it.
 
-Already on an earlier version? The app offers this update itself — choose **Install now** when asked.
+**New since beta 3 (phones)**
+- **The rounded Material buttons and chips are back** (beta 3 had swapped them for plain tabs); swiping still works
+- **Library:** tap Movies or Series; swipe the posters to move between categories (All, Top Movies…)
+- **Guide:** swiping through time now slides each channel's programmes along with it
+- **Settings:** every page has the same large title under the back arrow, shrinking as you scroll
+
+Found something odd? You can switch Beta updates off at any time; you'll then get the next stable release.

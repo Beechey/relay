@@ -1,106 +1,128 @@
 package com.avetero.relay.feature.search
 
-import androidx.compose.runtime.produceState
-import androidx.compose.ui.focus.focusProperties
-import com.avetero.relay.ui.components.stopAtEnd
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExpandedFullScreenSearchBar
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SearchBarValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
-import com.avetero.relay.ui.theme.Icons
-import com.avetero.relay.ui.components.ProgressLine
-import com.avetero.relay.ui.components.PillBtn
-import com.avetero.relay.ui.components.LivePill
-import com.avetero.relay.ui.components.BtnStyle
-import com.avetero.relay.ui.components.Art
-import com.avetero.relay.data.model.minutesLeft
-import com.avetero.relay.data.model.progress
-import com.avetero.relay.data.model.current
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.Spacer
 import com.avetero.relay.app.AppState
 import com.avetero.relay.app.Screen
 import com.avetero.relay.data.model.Channel
 import com.avetero.relay.data.model.Series
 import com.avetero.relay.data.model.Vod
-import com.avetero.relay.ui.components.Btn
-import com.avetero.relay.ui.components.FilterField
-import com.avetero.relay.ui.components.FocusSurface
-import com.avetero.relay.ui.components.Logo
-import com.avetero.relay.ui.components.PosterTile
+import com.avetero.relay.data.model.current
 import com.avetero.relay.ui.components.Tab
-import com.avetero.relay.ui.components.WithRail
 import com.avetero.relay.ui.components.norm
-import com.avetero.relay.ui.theme.Bold
-import com.avetero.relay.ui.theme.C
-import com.avetero.relay.ui.theme.Heavy
-import com.avetero.relay.ui.theme.Semi
-import com.avetero.relay.ui.theme.T
-import com.avetero.relay.ui.theme.compact
-import com.avetero.relay.ui.theme.fg
+import com.avetero.relay.ui.m3.Artwork
+import com.avetero.relay.ui.m3.ChannelLogo
+import com.avetero.relay.ui.m3.PosterCard
+import com.avetero.relay.ui.m3.segmentShape
+import com.avetero.relay.ui.theme.isTv
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Board 07: the box uses the device's own keyboard (so phone remote apps and voice work); a top result leads, filters narrow the rest. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Live search over the whole library, shared by both layouts. The query lives in [AppState.searchQuery]. */
+internal class SearchState(val app: AppState, filterState: androidx.compose.runtime.MutableState<String>) {
+    var results by mutableStateOf(Triple(emptyList<Channel>(), emptyList<Series>(), emptyList<Vod>()))
+    var cats by mutableStateOf(emptyList<Pair<String, Screen>>())
+    var searching by mutableStateOf(false)
+    var filter by filterState
+    private var recentTick by mutableIntStateOf(0)
+    val recent: List<String> get() { recentTick; return app.store.recentSearches() }
+    val chans get() = results.first
+    val series get() = results.second
+    val movies get() = results.third
+    val n get() = norm(app.searchQuery.trim())
+    val total get() = chans.size + series.size + movies.size
+    /** Names that start with the query lead: a channel, then a series, then a movie. */
+    val top: Any? get() {
+        val n = n
+        return listOf(chans.firstOrNull { norm(it.name).startsWith(n) }, series.firstOrNull { norm(it.name).startsWith(n) }, movies.firstOrNull { norm(it.name).startsWith(n) })
+            .firstOrNull { it != null } ?: chans.firstOrNull() ?: series.firstOrNull() ?: movies.firstOrNull()
+    }
+    fun shows(kind: String) = filter == "all" || filter == kind
+    /** Remember what was searched once something is opened from it. */
+    fun open(go: () -> Unit) {
+        val q = app.searchQuery.trim()
+        if (q.length >= 2) { app.store.addRecentSearch(q); recentTick++ }
+        go()
+    }
+}
+
 @Composable
-fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) {
-    var q by app::searchQuery
-    // Right from the search box goes into the results, not up to the bar
-    val resultsFocus = remember { FocusRequester() }
-    var results by remember { mutableStateOf(Triple(emptyList<Channel>(), emptyList<Series>(), emptyList<Vod>())) }
-    var cats by remember { mutableStateOf(emptyList<Pair<String, Screen>>()) }
-    var filter by rememberSaveable { mutableStateOf("all") }
-    var recentTick by remember { mutableIntStateOf(0) }
-    val recent = remember(recentTick) { app.store.recentSearches() }
-    val box = remember { FocusRequester() }
+internal fun rememberSearch(app: AppState): SearchState {
+    val filter = rememberSaveable { mutableStateOf("all") }
+    val s = remember { SearchState(app, filter) }
     // names prepared for matching once per library load (hundreds of thousands of titles), not on every keystroke
     val names by produceState<Triple<List<String>, List<String>, List<String>>?>(null, app.channels, app.series, app.movies) {
         value = withContext(Dispatchers.Default) { app.allSearchKeys() }
     }
-    var searching by remember { mutableStateOf(false) }
     // re-runs when the library finishes loading, not only when the text changes
-    LaunchedEffect(q, names, app.hidden) {
-        searching = true
+    LaunchedEffect(app.searchQuery, names, app.hidden) {
+        s.searching = true
         delay(250)
-        val n = norm(q.trim())
-        cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
+        val n = norm(app.searchQuery.trim())
+        s.cats = if (n.length < 2) emptyList() else withContext(Dispatchers.Default) {
             app.liveCatsVisible.filter { norm(it.name).contains(n) }.map { "Live · ${it.name}" to Screen.Live(it.id) } +
                 app.vodCatsVisible.filter { norm(it.name).contains(n) }.map { "Movies · ${it.name}" to Screen.VodGrid(false, it.id) } +
                 app.seriesCatsVisible.filter { norm(it.name).contains(n) }.map { "Series · ${it.name}" to Screen.VodGrid(true, it.id) }
         }.take(30)
-        results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
+        s.results = if (n.length < 2) Triple(emptyList(), emptyList(), emptyList()) else withContext(Dispatchers.Default) {
             // names that start with the query come first
             val (cn, sn, mn) = names ?: return@withContext Triple(emptyList(), emptyList(), emptyList())
             val hidden = app.hidden
@@ -109,125 +131,163 @@ fun SearchScreen(app: AppState, nav: (Tab) -> Unit) = WithRail(Tab.Search, nav) 
                 .sortedBy { if (keys[it].startsWith(n)) 0 else 1 }.take(30).map { this[it] }
             Triple(app.channels.ranked(cn, "live") { it.categoryId }, app.series.ranked(sn, "series") { it.categoryId }, app.movies.ranked(mn, "vod") { it.categoryId })
         }
-        searching = names == null && n.length >= 2
+        s.searching = names == null && n.length >= 2
+        // a filter whose type has no matches any more goes back to All
+        if (s.filter != "all" && when (s.filter) { "live" -> s.chans; "movies" -> s.movies; "series" -> s.series; else -> s.cats }.isEmpty()) s.filter = "all"
     }
-    // remember what was searched once something is opened from it
-    val open = { go: () -> Unit -> if (q.trim().length >= 2) { app.store.addRecentSearch(q.trim()); recentTick++ }; go() }
-    val (chans, ser, mov) = results
-    val n = norm(q.trim())
-    val top: Any? = listOf(chans.firstOrNull { norm(it.name).startsWith(n) }, ser.firstOrNull { norm(it.name).startsWith(n) }, mov.firstOrNull { norm(it.name).startsWith(n) }).firstOrNull { it != null }
-        ?: chans.firstOrNull() ?: ser.firstOrNull() ?: mov.firstOrNull()
-    val showLive = filter == "all" || filter == "live"
-    val showMovies = filter == "all" || filter == "movies"
-    val showSeries = filter == "all" || filter == "series"
+    return s
+}
 
-    val phone = compact()
-    if (!phone) Column(Modifier.padding(start = 40.dp, bottom = 32.dp).width(360.dp).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(C.Glass).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        // opens straight into typing; Done moves down to the results
-        val hasResults = results.first.size + results.second.size + results.third.size > 0
-        FilterField(q, { q = it }, "Channels, movies, series", Modifier.focusProperties { if (hasResults) right = resultsFocus }, focusRequester = box)
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .05f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            T("Type the way you like", 15, Heavy)
-            T("Press OK for your TV's own keyboard, type from the Fire TV or Google TV app on your phone, or hold the remote's mic button and say it.", 13, Semi, C.Muted, maxLines = 5, lineHeight = 20)
+/** Search (PhoneSearch / TvSearch boards). Phone: Material 3 full-screen search; TV: a search box using the TV's own keyboard, results in rows. */
+@Suppress("UNUSED_PARAMETER")
+@Composable
+fun SearchScreen(app: AppState, nav: (Tab) -> Unit) {
+    val s = rememberSearch(app)
+    if (isTv()) TvSearch(app, s) else PhoneSearch(app, s)
+}
+
+@Composable
+private fun PhoneSearch(app: AppState, s: SearchState) {
+    val bar = rememberSearchBarState()
+    val text = rememberTextFieldState(app.searchQuery)
+    val scope = rememberCoroutineScope()
+    var opened by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { snapshotFlow { text.text.toString() }.collect { app.searchQuery = it } }
+    LaunchedEffect(Unit) { bar.animateToExpanded() }
+    // closing the search view (Back, the arrow) leaves Search; opening a result closes it without leaving
+    LaunchedEffect(Unit) {
+        snapshotFlow { bar.currentValue }.collect { v ->
+            if (v == SearchBarValue.Expanded) opened = true
+            else if (opened && !leaving) app.back()
         }
-        if (recent.isNotEmpty()) {
-            T("Recent", 13, Semi, C.Muted)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                recent.forEach { r -> PillBtn(r, r.equals(q.trim(), true), { q = r }) }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        if (q.isNotEmpty()) Btn("Clear", { q = "" }, height = 40.dp)
     }
+    val go = { action: () -> Unit -> leaving = true; scope.launch { bar.snapTo(0f); s.open(action) }; Unit }
+    val field = @Composable {
+        SearchBarDefaults.InputField(text, bar, { /* results are live */ },
+            placeholder = { Text("Search channels, movies and series") },
+            leadingIcon = {
+                if (bar.currentValue == SearchBarValue.Expanded) IconButton({ scope.launch { bar.animateToCollapsed() } }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Close search") }
+                else Icon(Icons.Rounded.Search, null)
+            },
+            trailingIcon = { if (text.text.isNotEmpty()) IconButton({ text.setTextAndPlaceCursorAtEnd("") }) { Icon(Icons.Rounded.Close, "Clear") } })
+    }
+    Box(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        SearchBar(bar, field, Modifier.fillMaxWidth())
+    }
+    ExpandedFullScreenSearchBar(bar, field) {
+        PhoneResults(app, s, go) { text.setTextAndPlaceCursorAtEnd(it) }
+    }
+}
 
-    LazyColumn(Modifier.weight(1f).fillMaxHeight().padding(start = if (phone) 16.dp else 24.dp, end = if (phone) 16.dp else 40.dp), contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        // phones type with their own keyboard
-        if (phone) item { FilterField(q, { q = it }, "Search channels, movies and series", modifier = Modifier.padding(top = 6.dp)) }
-        if (phone && q.isEmpty() && recent.isNotEmpty()) item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                T("Recent", 13, Semi, C.Muted)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { recent.forEach { r -> PillBtn(r, false, { q = r }) } }
+@Composable
+private fun PhoneResults(app: AppState, s: SearchState, go: (() -> Unit) -> Unit, setQuery: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val q = app.searchQuery.trim()
+    val (chans, ser, mov) = s.results
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        if (s.n.length < 2) {
+            val recent = s.recent
+            if (recent.isNotEmpty()) item(key = "recent") {
+                Column {
+                    Text("Recent", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+                    recent.forEach { r ->
+                        ListItem({ setQuery(r) }, leadingContent = { Icon(Icons.Rounded.History, null) },
+                            colors = ListItemDefaults.colors(containerColor = cs.surfaceContainerHigh)) { Text(r) }
+                    }
+                }
             }
+            return@LazyColumn
         }
-        if (n.length >= 2 && (chans.size + ser.size + mov.size) > 0) item {
-            LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-                listOf("all" to "All · ${chans.size + ser.size + mov.size}", "live" to "Live · ${chans.size}", "movies" to "Movies · ${mov.size}", "series" to "Series · ${ser.size}")
+        if (s.total + s.cats.size > 0) item(key = "chips") {
+            LazyRow(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("all" to "All", "live" to "Channels ${chans.size}", "movies" to "Movies ${mov.size}", "series" to "Series ${ser.size}", "cats" to "Categories ${s.cats.size}")
+                    // a type with no matches loses its chip
                     .filter { (k, label) -> k == "all" || !label.endsWith(" 0") }
-                    .forEach { (k, label) -> item(key = k) { PillBtn(label, filter == k, { filter = k }, focusRequester = if (k == "all") resultsFocus else null) } }
+                    .forEach { (k, label) -> item(key = k) {
+                        val on = s.filter == k
+                        FilterChip(on, { s.filter = k }, { Text(label) },
+                            leadingIcon = if (on) { { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } } else null)
+                    } }
             }
         }
-        if (n.length >= 2 && filter == "all" && top != null) item(key = "top") { TopResult(app, top, chans) { open(it) } }
-        if (n.length >= 2 && cats.isEmpty() && chans.isEmpty() && ser.isEmpty() && mov.isEmpty()) item { T(if (app.libraryLoading || app.vodLoading) "Still loading your library…" else if (searching) "Searching…" else "No results for “$q”", 16, Bold, C.Muted) }
-        if (showLive && chans.isNotEmpty()) item {
-            ResultRow("Channels", chans.size) {
-                items(chans, key = { it.id }) { c ->
-                    FocusSurface({ open { app.push(Screen.LivePlayer(c, chans)) } }, Modifier.height(64.dp), idle = C.Glass2, shape = RoundedCornerShape(18.dp)) { f ->
-                        Row(Modifier.fillMaxHeight().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Logo(c.icon, c.name, f, Modifier.size(48.dp, 34.dp)); T(c.name, 14, Bold, fg(f))
+        if (s.filter == "all") s.top?.let { t -> item(key = "top") { PhoneTopResult(app, t, chans, go) } }
+        if (s.total == 0 && s.cats.isEmpty()) item(key = "none") {
+            if (s.searching || app.libraryLoading || app.vodLoading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            else Text("No results for “$q”", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+        }
+        if (s.shows("live") && chans.isNotEmpty()) section("Channels", chans.size) {
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                val shown = if (s.filter == "all") chans.take(5) else chans
+                shown.forEachIndexed { i, c ->
+                    LaunchedEffect(c.id) { app.loadEpg(c) }
+                    Row(Modifier.fillMaxWidth().height(72.dp).clip(segmentShape(i, shown.size)).background(cs.surfaceContainer).clickable { go { app.push(Screen.LivePlayer(c, chans)) } }
+                        .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ChannelLogo(c.icon, c.name, size = 40.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            app.programmesFor(c).current()?.let { Text(it.title, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
                     }
                 }
             }
         }
-        if (showSeries && ser.isNotEmpty()) item {
-            ResultRow("Series", ser.size) {
-                items(ser, key = { it.id }) { s -> PosterTile(s.cover, s.name, s.id, 108.dp) { open { app.push(Screen.SeriesDetail(s)) } } }
+        if (s.shows("series") && ser.isNotEmpty()) section("Series", ser.size) {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(ser, key = { it.id }) { x -> PosterCard(x.cover, x.name, x.id, { go { app.push(Screen.SeriesDetail(x)) } }, width = 84.dp, sharedKey = "poster-s${x.id}") }
             }
         }
-        if (showMovies && mov.isNotEmpty()) item {
-            ResultRow("Movies", mov.size) {
-                items(mov, key = { it.id }) { m -> PosterTile(m.icon, m.name, m.id, 108.dp) { open { app.push(Screen.MovieDetail(m)) } } }
+        if (s.shows("movies") && mov.isNotEmpty()) section("Movies", mov.size) {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(mov, key = { it.id }) { m -> PosterCard(m.icon, m.name, m.id, { go { app.push(Screen.MovieDetail(m)) } }, width = 84.dp, sharedKey = "poster-m${m.id}") }
             }
         }
-        if (filter == "all" && cats.isNotEmpty()) item {
-            ResultRow("Categories", cats.size) {
-                items(cats, key = { it.first }) { (label, screen) -> PillBtn(label, false, { open { app.go(screen) } }) }
+        if (s.shows("cats") && s.cats.isNotEmpty()) section("Categories", s.cats.size) {
+            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                s.cats.forEachIndexed { i, (label, screen) ->
+                    Box(Modifier.fillMaxWidth().height(56.dp).clip(segmentShape(i, s.cats.size)).background(cs.surfaceContainer).clickable { go { app.go(screen) } }.padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart) { Text(label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
             }
         }
     }
 }
 
-/** The best match, large: a channel shows what's on now with Watch; a title shows its artwork with Open. */
+private fun LazyListScope.section(title: String, count: Int, content: @Composable () -> Unit) = item(key = "s:$title") {
+    Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("$title · $count", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
+        content()
+    }
+}
+
+/** The best match, large: a channel with what's on and Watch; a title with its poster and Details. */
 @Composable
-private fun TopResult(app: AppState, top: Any, chans: List<Channel>, open: (() -> Unit) -> Unit) {
-    val phone = compact()
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(C.Glass).padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        val artW = if (phone) 120.dp else 300.dp
-        when (top) {
+private fun PhoneTopResult(app: AppState, top: Any, chans: List<Channel>, go: (() -> Unit) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.surfaceContainerHighest).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val (label, name, sub) = when (top) {
             is Channel -> {
                 LaunchedEffect(top.id) { app.loadEpg(top) }
-                val now = app.programmesFor(top).current()
-                Box(Modifier.size(artW, artW * 9 / 16).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .06f))) {
-                    Logo(top.icon, top.name, false, Modifier.align(Alignment.Center).size(artW * .42f, artW * .3f))
-                    LivePill(Modifier.align(Alignment.TopStart).padding(10.dp))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T(if (top.num > 0) "Top result · channel ${top.num}" else "Top result · channel", 13, Semi, C.Muted)
-                    T(top.name, if (phone) 20 else 28, Heavy, maxLines = 2)
-                    if (now != null) {
-                        T("${now.title} · ${now.minutesLeft()}", 13, Semi, C.Soft)
-                        ProgressLine(now.progress(), Modifier.widthIn(max = 360.dp).fillMaxWidth(), C.Glass3)
-                    }
-                    Btn("Watch", { open { app.push(Screen.LivePlayer(top, chans)) } }, style = BtnStyle.Primary, height = 42.dp, icon = Icons.Play)
-                }
+                ChannelLogo(top.icon, top.name, size = 64.dp)
+                Triple(if (top.num > 0) "Top result · channel ${top.num}" else "Top result · channel", top.name, app.programmesFor(top).current()?.let { "Now · ${it.title}" })
             }
-            is Series, is Vod -> {
-                val (id, name, image) = if (top is Series) Triple(top.id, top.name, top.cover) else (top as Vod).let { Triple(it.id, it.name, it.icon) }
-                Art(image, name, id, Modifier.size(artW * .45f, artW * .45f * 1.5f).clip(RoundedCornerShape(14.dp)), showTitle = false)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T(if (top is Series) "Top result · series" else "Top result · movie", 13, Semi, C.Muted)
-                    T(name, if (phone) 20 else 28, Heavy, maxLines = 2)
-                    Btn(if (top is Series) "Episodes" else "Details", { open { app.push(if (top is Series) Screen.SeriesDetail(top) else Screen.MovieDetail(top as Vod)) } },
-                        style = BtnStyle.Primary, height = 42.dp)
-                }
-            }
+            is Series -> { Artwork(top.cover, top.name, top.id, Modifier.size(64.dp, 96.dp).clip(RoundedCornerShape(12.dp)), showTitle = false); Triple("Top result · series", top.name, top.year.ifEmpty { null }) }
+            else -> { val v = top as Vod; Artwork(v.icon, v.name, v.id, Modifier.size(64.dp, 96.dp).clip(RoundedCornerShape(12.dp)), showTitle = false); Triple("Top result · movie", v.name, null) }
         }
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = cs.primary)
+            Text(name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Button({
+            go {
+                when (top) {
+                    is Channel -> app.push(Screen.LivePlayer(top, chans))
+                    is Series -> app.push(Screen.SeriesDetail(top))
+                    else -> app.push(Screen.MovieDetail(top as Vod))
+                }
+            }
+        }, Modifier.height(48.dp)) { Text(if (top is Channel) "Watch" else "Details") }
     }
 }
-
-@Composable
-private fun ResultRow(title: String, count: Int, content: LazyListScope.() -> Unit) =
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row { T(title, 19, Heavy); T("  $count", 15, Semi, C.Dim) }
-        LazyRow(modifier = Modifier.stopAtEnd(), horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 6.dp), content = content)
-    }

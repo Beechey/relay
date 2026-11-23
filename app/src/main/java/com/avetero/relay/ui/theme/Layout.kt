@@ -9,24 +9,29 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 
 /**
- * TV and landscape tablets: lay out on the boards' 1280x720 canvas at any screen size (Android TV's default 960x540dp makes everything 33% too big).
- * Phones and portrait tablets: natural density with the compact (single-column, bottom bar) layouts.
+ * TV: lay out on the designs' 1280x720 canvas at any screen size (Android TV's default 960x540dp makes everything
+ * 33% too big). Phones and tablets: natural density, touch UI (tablets and landscape get a rail, see [LocalWide]).
  */
 @Composable
 fun DesignScale(content: @Composable () -> Unit) {
     val cfg = LocalConfiguration.current
     val density = LocalDensity.current.density
     val tv = (cfg.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
-    val compact = !tv && (cfg.smallestScreenWidthDp < 600 || cfg.orientation == Configuration.ORIENTATION_PORTRAIT)
-    if (compact) CompositionLocalProvider(LocalCompact provides true, content = content)
+    if (!tv) CompositionLocalProvider(LocalCompact provides true, LocalWide provides (cfg.screenWidthDp >= 600)) { RelayTheme(false, content) }
     else {
         val scale = minOf(cfg.screenWidthDp * density / 1280f, cfg.screenHeightDp * density / 720f)
-        CompositionLocalProvider(LocalDensity provides Density(scale, 1f), content = content)
+        CompositionLocalProvider(LocalDensity provides Density(scale, 1f)) { RelayTheme(true, content) }
     }
 }
 
-/** True on phones (and tablets in portrait): single-column layouts with a bottom tab bar instead of the TV rail. */
+/** True on phones and tablets (touch UI); false on TV (remote UI). */
 val LocalCompact = staticCompositionLocalOf { false }
+
+/** Phones in landscape and tablets: 600dp or wider, so navigation moves to a side rail. */
+val LocalWide = staticCompositionLocalOf { false }
 
 @Composable
 fun compact() = LocalCompact.current
+
+@Composable
+fun isTv() = !LocalCompact.current
