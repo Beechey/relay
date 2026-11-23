@@ -21,7 +21,7 @@ Relay doesn't provide any channels or content. It only plays what your own provi
 
 Download `relay-iptv.apk` from the latest release and install it on your device:
 
-**https://github.com/Beechey/relay-releases/releases/latest/download/relay-iptv.apk**
+**https://github.com/Beechey/relay/releases/latest/download/relay-iptv.apk**
 
 On Android TV, one easy route is the *Downloader* app: enter the link above and install. Android asks you to allow installs from that app the first time.
 
@@ -92,3 +92,9 @@ Requirements: JDK 17 and the Android SDK (platform 35, build-tools 35).
 Release builds are signed from environment variables (`KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) with the keystore at `app/release.jks`, which is never committed. Tagging `vX.Y.Z` runs the release workflow, which builds, signs and publishes `relay-iptv.apk` to `relay-releases`.
 
 Built with Kotlin and Jetpack Compose, one layout for TV (remote-first, 1280×720 design grid) and one for phones (bottom tabs, portrait and landscape).
+
+## Licence
+
+Relay is free software under the [GNU General Public License v3.0](LICENSE): you can use, study, share and change it, and anything you distribute that's built from it must be shared under the same licence. Relay bundles the FFmpeg audio decoder (GPL-3.0) and the Manrope font (SIL Open Font License, see `licenses/`).
+
+The Material 3 redesign (0.3.0, in beta) is on the [`material-redesign`](https://github.com/Beechey/relay/tree/material-redesign) branch.
