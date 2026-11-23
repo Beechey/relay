@@ -39,7 +39,7 @@ import com.avetero.relay.data.model.Channel
 import com.avetero.relay.data.model.current
 import com.avetero.relay.data.model.progress
 import com.avetero.relay.feature.vod.TvEmpty
-import com.avetero.relay.feature.vod.TvPivot
+import com.avetero.relay.ui.tv.TvPivot
 import com.avetero.relay.feature.vod.TvPoster
 import com.avetero.relay.ui.components.settle
 import com.avetero.relay.ui.m3.ChannelLogo

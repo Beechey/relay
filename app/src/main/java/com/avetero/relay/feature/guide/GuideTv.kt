@@ -2,7 +2,6 @@ package com.avetero.relay.feature.guide
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -60,7 +59,7 @@ import com.avetero.relay.data.model.Channel
 import com.avetero.relay.data.model.Move
 import com.avetero.relay.data.model.Programme
 import com.avetero.relay.data.model.minutesLeft
-import com.avetero.relay.feature.home.TvPivot
+import com.avetero.relay.ui.tv.TvPivot
 import com.avetero.relay.player.PlayerSurface
 import com.avetero.relay.ui.components.Group
 import com.avetero.relay.ui.components.settle
@@ -128,7 +127,7 @@ internal fun GuideTv(app: AppState, g: GuideState) {
         pending = c.id to time
     }
 
-    CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
+    TvPivot {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().padding(start = 24.dp, end = TvSafe.Horizontal, top = TvSafe.Vertical), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Header(app, focused)

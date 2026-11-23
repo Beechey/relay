@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.live
 
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.FiberManualRecord
 import android.view.KeyEvent.KEYCODE_0
 import android.view.KeyEvent.KEYCODE_9
 import android.view.KeyEvent.KEYCODE_LAST_CHANNEL
@@ -350,9 +353,9 @@ private fun PhoneControls(
         if (now != null) Scrub(now, at, c.archive, onSeek, poke)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val glassButton = ButtonDefaults.buttonColors(containerColor = cs.surface.copy(alpha = 0.6f), contentColor = cs.onSurface)
-            if (state != null) Button(onLive, colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError)) { Text("Go live") }
-            if (c.archive && now != null) Button({ onSeek(now.start) }, colors = glassButton) { Text("From the start") }
-            Button(onTracks, colors = glassButton) { Text("Audio, subtitles & quality") }
+            if (state != null) Button(onLive, colors = ButtonDefaults.buttonColors(containerColor = cs.error, contentColor = cs.onError), contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.FiberManualRecord, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("Go live") }
+            if (c.archive && now != null) Button({ onSeek(now.start) }, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.Restore, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("From the start") }
+            Button(onTracks, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) { Icon(Icons.Rounded.Subtitles, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text("Audio, subtitles & quality") }
             val fav = app.isFav("c${c.id}")
             Button({ app.toggleFav("c${c.id}") }, colors = glassButton, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                 Icon(if (fav) Icons.Rounded.Star else Icons.Rounded.StarOutline, null, Modifier.size(ButtonDefaults.IconSize))

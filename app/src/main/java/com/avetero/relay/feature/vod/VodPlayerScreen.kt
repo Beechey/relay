@@ -1,5 +1,16 @@
 package com.avetero.relay.feature.vod
 
+import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Forward30
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Forward5
+import androidx.compose.material.icons.rounded.Replay30
+import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.Replay5
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -255,11 +266,11 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
             // centre: skip back, play/pause, skip forward
             AnimatedVisibility(shown, Modifier.align(Alignment.Center), enter = fade.first + scaleIn(Springs.spatialFast(), 0.9f), exit = fade.second + scaleOut(Springs.effects(), 0.9f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PhoneSkip("−${back / 1000}", "Back ${back / 1000} seconds", glass) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                    PhoneSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds", glass) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
                     FilledIconButton(::toggle, shapes = IconButtonDefaults.shapes(RoundedCornerShape(24.dp), RoundedCornerShape(16.dp)), modifier = Modifier.size(96.dp, 72.dp).focusRequester(playBtn)) {
                         Icon(if (app.player.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (app.player.playing) "Pause" else "Play", Modifier.size(30.dp))
                     }
-                    PhoneSkip("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", glass) { p.seekTo(p.currentPosition + fwd) }
+                    PhoneSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds", glass) { p.seekTo(p.currentPosition + fwd) }
                 }
             }
             // bottom: seek bar with times, then the actions
@@ -283,11 +294,11 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (next.isNotEmpty()) PhoneAction("Next episode", null, ::playNext)
-                            if (episodes.size > 1) PhoneAction("Episodes", glass) { episodesOpen = true }
-                            PhoneAction("Audio, subtitles & quality", glass) { tracksOpen = true }
-                            PhoneAction(speedLabel, glass, ::cycleSpeed)
-                            PhoneAction(if (zoom) "Zoom" else "Fit", glass) { zoom = !zoom }
+                            if (next.isNotEmpty()) PhoneAction("Next episode", Icons.Rounded.SkipNext, null, ::playNext)
+                            if (episodes.size > 1) PhoneAction("Episodes", Icons.Rounded.VideoLibrary, glass) { episodesOpen = true }
+                            PhoneAction("Audio, subtitles & quality", Icons.Rounded.Subtitles, glass) { tracksOpen = true }
+                            PhoneAction(speedLabel, Icons.Rounded.Speed, glass, ::cycleSpeed)
+                            PhoneAction(if (zoom) "Zoom" else "Fit", Icons.Rounded.AspectRatio, glass) { zoom = !zoom }
                         }
                         if (LocalWide.current) Text("Double-tap a side to skip", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
                     }
@@ -341,7 +352,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            TvSkip("−${back / 1000}", "Back ${back / 1000} seconds", RoundedCornerShape(28.dp, 10.dp, 10.dp, 28.dp)) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
+                            TvSkip(-(back / 1000).toInt(), "Back ${back / 1000} seconds", RoundedCornerShape(28.dp, 10.dp, 10.dp, 28.dp)) { p.seekTo((p.currentPosition - back).coerceAtLeast(0)) }
                             val playing = app.player.playing
                             val src = remember { MutableInteractionSource() }
                             val focused by src.collectIsFocusedAsState()
@@ -350,7 +361,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                                     tint = if (focused) tcs.inverseOnSurface else tcs.onPrimary)
                             }
                             // the gap to the actions is wide; point the remote at them explicitly
-                            TvSkip("+${fwd / 1000}", "Forward ${fwd / 1000} seconds", RoundedCornerShape(10.dp, 28.dp, 28.dp, 10.dp), Modifier.focusProperties { right = firstAction }) {
+                            TvSkip((fwd / 1000).toInt(), "Forward ${fwd / 1000} seconds", RoundedCornerShape(10.dp, 28.dp, 28.dp, 10.dp), Modifier.focusProperties { right = firstAction }) {
                                 p.seekTo(p.currentPosition + fwd)
                             }
                         }
@@ -378,20 +389,34 @@ private fun RoundIcon(icon: ImageVector, label: String, container: Color, onClic
         colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(icon, label) }
 
 @Composable
-private fun PhoneSkip(text: String, label: String, container: Color, onClick: () -> Unit) =
+private fun PhoneSkip(sec: Int, label: String, container: Color, onClick: () -> Unit) =
     FilledIconButton(onClick, shapes = IconButtonDefaults.shapes(), modifier = Modifier.size(64.dp).semantics { contentDescription = label },
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(text, style = MaterialTheme.typography.labelLarge) }
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) {
+        skipIcon(sec)?.let { Icon(it, null, Modifier.size(28.dp)) } ?: Text(skipText(sec), style = MaterialTheme.typography.labelLarge)
+    }
+
+/** Material has replay/forward icons for 5, 10 and 30 seconds; other skip lengths fall back to text. */
+private fun skipIcon(sec: Int): ImageVector? = when (sec) {
+    -5 -> Icons.Rounded.Replay5; -10 -> Icons.Rounded.Replay10; -30 -> Icons.Rounded.Replay30
+    5 -> Icons.Rounded.Forward5; 10 -> Icons.Rounded.Forward10; 30 -> Icons.Rounded.Forward30
+    else -> null
+}
+
+private fun skipText(sec: Int) = if (sec < 0) "−${-sec}" else "+$sec"
 
 /** Pill action: translucent [container], or the primary colour when null. */
 @Composable
-private fun PhoneAction(text: String, container: Color?, onClick: () -> Unit) =
-    Button(onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp),
-        colors = if (container == null) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(text) }
+private fun PhoneAction(text: String, icon: ImageVector, container: Color?, onClick: () -> Unit) =
+    Button(onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.height(48.dp), contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+        colors = if (container == null) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = container, contentColor = MaterialTheme.colorScheme.onSurface)) {
+        Icon(icon, null, Modifier.size(ButtonDefaults.IconSize)); Spacer(Modifier.width(ButtonDefaults.IconSpacing)); Text(text)
+    }
 
 @Composable
-private fun TvSkip(text: String, label: String, shape: RoundedCornerShape, modifier: Modifier = Modifier, onClick: () -> Unit) =
+private fun TvSkip(sec: Int, label: String, shape: RoundedCornerShape, modifier: Modifier = Modifier, onClick: () -> Unit) =
     TvSurface(onClick, modifier.size(64.dp, 56.dp).semantics { contentDescription = label }, shape = shape, idle = com.avetero.relay.ui.theme.Tok.ContainerHigh) {
-        TvText(text, style = TvTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center))
+        skipIcon(sec)?.let { androidx.tv.material3.Icon(it, null, Modifier.align(Alignment.Center).size(28.dp)) }
+            ?: TvText(skipText(sec), style = TvTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Center))
     }
 
 /**

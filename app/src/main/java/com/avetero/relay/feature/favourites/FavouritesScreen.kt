@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.favourites
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.rounded.StarOutline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -115,10 +118,14 @@ private fun PhoneSaved(app: AppState) {
             }
         }
         when {
-            saved.count(tab) == 0 -> Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (tab == 0) "No saved channels yet" else if (tab == 1) "No saved movies" else "No saved series", style = MaterialTheme.typography.titleMedium)
-                Text("Press and hold any channel, movie or series to save it here.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                if (tab == 0) Button({ app.go(Screen.Live()) }) { Text("Browse live TV") }
+            saved.count(tab) == 0 -> Column(Modifier.fillMaxSize().padding(horizontal = 32.dp).padding(bottom = 80.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Rounded.StarOutline, null, Modifier.size(72.dp), tint = cs.primary)
+                Text(if (tab == 0) "No saved channels yet" else if (tab == 1) "No saved movies yet" else "No saved series yet", style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 24.dp))
+                Text("Press and hold any channel, movie or series to save it here.", style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
+                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                val (label, dest) = when (tab) { 0 -> "Browse live TV" to Screen.Live(); 1 -> "Browse movies" to Screen.VodGrid(false); else -> "Browse series" to Screen.VodGrid(true) }
+                Button({ app.go(dest) }, Modifier.padding(top = 24.dp)) { Text(label) }
             }
             tab == 0 -> LazyColumn(Modifier.fillMaxSize(), list, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 itemsIndexed(saved.chans, key = { _, c -> c.id }) { i, c ->

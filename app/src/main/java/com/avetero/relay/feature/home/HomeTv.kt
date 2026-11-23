@@ -1,8 +1,6 @@
 package com.avetero.relay.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.BringIntoViewSpec
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,20 +60,11 @@ import com.avetero.relay.ui.theme.Tok
 import com.avetero.relay.ui.tv.TvButton
 import com.avetero.relay.ui.tv.TvHints
 import com.avetero.relay.ui.tv.TvLift
+import com.avetero.relay.ui.tv.TvPivot
 import com.avetero.relay.ui.tv.TvRowTitle
 import com.avetero.relay.ui.tv.TvSafe
 import com.avetero.relay.ui.tv.TvSurface
 import kotlinx.coroutines.delay
-
-/** TV rows and columns scroll so the focused item sits about a third of the way in (design-spec: fixed pivot). */
-internal val TvPivot = object : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val target = containerSize * 0.3f
-        // something bigger than what's left after the pivot just has to fit
-        val lead = if (size <= containerSize && target + size > containerSize) containerSize - size else target
-        return offset - lead
-    }
-}
 
 @Composable
 internal fun HomeTv(app: AppState, data: HomeData) {
@@ -99,7 +88,7 @@ internal fun HomeTv(app: AppState, data: HomeData) {
     }
     val info = remember { mutableStateMapOf<String, HeroInfo>() }
 
-    CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivot) {
+    TvPivot {
         Box(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxSize().onFocusChanged { pageFocused = it.hasFocus }, rememberLazyListState(),
                 contentPadding = PaddingValues(top = TvSafe.Vertical, bottom = 72.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {

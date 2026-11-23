@@ -1,8 +1,6 @@
 package com.avetero.relay.feature.vod
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.BringIntoViewSpec
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -63,17 +61,6 @@ internal fun shortDur(d: String): String {
     return if (mins >= 60) "${mins / 60} h ${mins % 60} m" else "$mins m"
 }
 
-/** TV rows and grids: the focused item settles about a third of the way in, so the remote always has a fixed place to look. */
-private val pivot = object : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        // already comfortably on screen: don't move
-        if (offset >= 0 && offset + size <= containerSize && offset <= containerSize * .55f) return 0f
-        return offset - containerSize * .3f
-    }
-}
-
-@Composable
-internal fun TvPivot(content: @Composable () -> Unit) = CompositionLocalProvider(LocalBringIntoViewSpec provides pivot, content = content)
 
 /**
  * TV detail: artwork on the right ([left] of the screen onwards, [height] tall) fading into the surface to the

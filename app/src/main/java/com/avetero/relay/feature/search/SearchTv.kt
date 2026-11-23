@@ -37,7 +37,7 @@ import com.avetero.relay.data.model.Series
 import com.avetero.relay.data.model.Vod
 import com.avetero.relay.data.model.current
 import com.avetero.relay.data.model.minutesLeft
-import com.avetero.relay.feature.vod.TvPivot
+import com.avetero.relay.ui.tv.TvPivot
 import com.avetero.relay.feature.vod.TvPoster
 import com.avetero.relay.ui.components.settle
 import com.avetero.relay.ui.components.stopAtEnd

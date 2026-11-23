@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -102,10 +103,11 @@ fun Artwork(url: String, title: String, seed: Int, modifier: Modifier = Modifier
  */
 @Composable
 fun PosterCard(url: String, title: String, seed: Int, onClick: () -> Unit, modifier: Modifier = Modifier, width: Dp? = null, sharedKey: Any? = null, onLongClick: (() -> Unit)? = null) =
-    Column(modifier.then(if (width != null) Modifier.width(width) else Modifier)) {
+    Column(modifier.then(if (width != null) Modifier.width(width) else Modifier).clip(RoundedCornerShape(16.dp))
+        .combinedClickableCompat(onClick, onLongClick).semantics(mergeDescendants = true) {}) {
         Artwork(url, title, seed,
-            (if (sharedKey != null) Modifier.sharedBounds(sharedKey) else Modifier).fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp))
-                .combinedClickableCompat(onClick, onLongClick), showTitle = url.isBlank())
+            (if (sharedKey != null) Modifier.sharedBounds(sharedKey) else Modifier).fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)),
+            showTitle = url.isBlank())
         Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
     }
 

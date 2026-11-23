@@ -24,7 +24,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -186,3 +189,20 @@ fun TvDialog(onDismiss: () -> Unit, width: Dp = 560.dp, content: @Composable Col
 @Composable
 fun TvRowTitle(text: String, modifier: Modifier = Modifier) =
     Text(text, style = MaterialTheme.typography.titleLarge, modifier = modifier.padding(bottom = 12.dp))
+
+/**
+ * TV rows, columns and grids: the focused item settles about a third of the way in, so the remote always has a fixed
+ * place to look. Something already fully on screen in the upper part isn't moved (so a hero above stays whole).
+ */
+private val TvPivotSpec = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        if (offset >= 0 && offset + size <= containerSize && offset <= containerSize * .55f) return 0f
+        val target = containerSize * .3f
+        // something bigger than what's left after the pivot just has to fit
+        val lead = if (size <= containerSize && target + size > containerSize) containerSize - size else target
+        return offset - lead
+    }
+}
+
+@Composable
+fun TvPivot(content: @Composable () -> Unit) = CompositionLocalProvider(LocalBringIntoViewSpec provides TvPivotSpec, content = content)

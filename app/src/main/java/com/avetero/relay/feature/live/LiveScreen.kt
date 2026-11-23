@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.live
 
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -302,7 +304,13 @@ internal fun rememberCastPicker(): () -> Unit {
 @Composable
 private fun GroupChips(groups: List<Group>, selected: String, onPick: (String) -> Unit, onAll: () -> Unit) {
     val state = rememberLazyListState()
-    LaunchedEffect(selected, groups.size) { groups.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.let { state.animateScrollToItem(it) } }
+    LaunchedEffect(selected, groups.size) {
+        val i = groups.indexOfFirst { it.id == selected }.takeIf { it >= 0 }?.plus(1) ?: return@LaunchedEffect
+        snapshotFlow { state.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it } // wait for the first layout
+        val info = state.layoutInfo
+        val shown = info.visibleItemsInfo.firstOrNull { it.index == i }?.let { it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset } == true
+        if (!shown) state.animateScrollToItem(i)
+    }
     LazyRow(state = state, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         item(key = "all") {
             AssistChip(onAll, { Text("All categories") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.List, null, Modifier.size(FilterChipDefaults.IconSize)) })

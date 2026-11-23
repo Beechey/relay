@@ -1,5 +1,8 @@
 package com.avetero.relay.feature.home
 
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -116,7 +119,8 @@ private fun SearchRow(app: AppState) =
             Text("Search channels, movies, series", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer)
-            .clickable(role = Role.Button, onClickLabel = "Settings and playlists") { app.go(Screen.Settings()) }, contentAlignment = Alignment.Center) {
+            .clickable(role = Role.Button) { app.go(Screen.Settings()) }
+            .clearAndSetSemantics { contentDescription = "Settings and playlists"; role = Role.Button }, contentAlignment = Alignment.Center) {
             Text(app.account?.name?.firstOrNull()?.uppercase() ?: "R", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }

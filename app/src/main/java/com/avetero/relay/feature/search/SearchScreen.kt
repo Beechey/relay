@@ -1,5 +1,7 @@
 package com.avetero.relay.feature.search
 
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -202,7 +204,11 @@ private fun PhoneResults(app: AppState, s: SearchState, go: (() -> Unit) -> Unit
                 listOf("all" to "All", "live" to "Channels ${chans.size}", "movies" to "Movies ${mov.size}", "series" to "Series ${ser.size}", "cats" to "Categories ${s.cats.size}")
                     // a type with no matches loses its chip
                     .filter { (k, label) -> k == "all" || !label.endsWith(" 0") }
-                    .forEach { (k, label) -> item(key = k) { FilterChip(s.filter == k, { s.filter = k }, { Text(label) }) } }
+                    .forEach { (k, label) -> item(key = k) {
+                        val on = s.filter == k
+                        FilterChip(on, { s.filter = k }, { Text(label) },
+                            leadingIcon = if (on) { { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } } else null)
+                    } }
             }
         }
         if (s.filter == "all") s.top?.let { t -> item(key = "top") { PhoneTopResult(app, t, chans, go) } }
