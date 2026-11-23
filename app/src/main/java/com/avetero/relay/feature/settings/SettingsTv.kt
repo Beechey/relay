@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,7 +78,9 @@ internal fun SettingsTv(app: AppState, section: String) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            Column(Modifier.width(300.dp).fillMaxHeight().padding(start = 8.dp, end = 16.dp, top = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // ◀ from a section's rows comes back to the open section, not whichever row sits level with it
+            Column(Modifier.width(300.dp).fillMaxHeight().focusProperties { onEnter = { here.requestFocus() } }.focusGroup()
+                .padding(start = 8.dp, end = 16.dp, top = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(start = 16.dp, bottom = 12.dp))
                 Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(Modifier.size(48.dp).background(cs.secondaryContainer, CircleShape), Alignment.Center) {
@@ -244,7 +248,7 @@ private fun TvSettingRow(r: Setting, shape: Shape, pick: (Choice) -> Unit) {
     }, Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = shape, idle = Tok.Container, interactionSource = src) {
         val sub = if (focused) LocalContentColor.current else cs.onSurfaceVariant
         val accent = if (focused) LocalContentColor.current else cs.primary
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(r.label, style = MaterialTheme.typography.titleMedium, color = if (r is Action && r.danger && !focused) cs.error else LocalContentColor.current)

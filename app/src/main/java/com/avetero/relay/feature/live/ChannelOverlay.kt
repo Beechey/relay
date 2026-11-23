@@ -113,7 +113,7 @@ fun ChannelOverlay(
                         focusRequester = when { isPlaying -> playingRow; i == 0 -> firstRow; else -> null }) {
                         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (c.num > 0) "${c.num}" else "", style = ty.labelLarge, modifier = Modifier.width(36.dp),
-                                color = if (isPlaying) cs.primary else LocalContentColor.current.copy(alpha = 0.8f))
+                                color = if (isPlaying && LocalContentColor.current != cs.inverseOnSurface) cs.primary else LocalContentColor.current.copy(alpha = 0.8f))
                             ChannelLogo(c.icon, c.name, Modifier.width(64.dp), size = 40.dp, playing = isPlaying)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(c.name, style = ty.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)

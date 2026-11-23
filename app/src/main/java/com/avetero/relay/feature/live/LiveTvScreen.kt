@@ -148,7 +148,8 @@ fun LiveTvScreen(app: AppState, group: String?) {
                                     Text(listOfNotNull(now?.title ?: "No programme info", next?.let { "next ${fmtTime(it.start)} ${it.title}" }).joinToString(" · "),
                                         style = ty.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                if (isPlaying) Text("Preview", style = ty.labelLarge, color = cs.primary)
+                                // amber on the light focus fill is unreadable, so a focused row uses its own content colour
+                                if (isPlaying) Text("Preview", style = ty.labelLarge, color = LocalContentColor.current.takeIf { it == cs.inverseOnSurface } ?: cs.primary)
                             }
                         }
                     }

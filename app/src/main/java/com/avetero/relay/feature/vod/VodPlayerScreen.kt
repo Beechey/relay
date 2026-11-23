@@ -204,7 +204,15 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
-            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown && showUi) poke++; false }
+            .onPreviewKeyEvent { e ->
+                // TV: with a control focused, Compose would spend Back clearing focus, so a paused player never got past it
+                if (tv && e.key == Key.Back && !tracksOpen && !episodesOpen && preview == null) {
+                    if (e.type == KeyEventType.KeyUp) { if (showUi && app.player.error == null) { showUi = false; runCatching { root.requestFocus() } } else app.back() }
+                    return@onPreviewKeyEvent true
+                }
+                if (e.type == KeyEventType.KeyDown && showUi) poke++
+                false
+            }
             .focusRequester(root).focusable()
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || showUi) return@onKeyEvent false

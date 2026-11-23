@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
@@ -89,7 +91,9 @@ fun TvShell(app: AppState, nav: (Tab) -> Unit, onExit: () -> Unit) {
         scrimBrush = SolidColor(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)),
         drawerContent = { _ ->
             if (showNav) Column(
-                Modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 27.dp).selectableGroup(),
+                Modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 27.dp).selectableGroup()
+                    // entering the drawer lands on the current tab, not whichever item sits level with the old focus
+                    .focusProperties { onEnter = { here.requestFocus() } }.focusGroup(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Box(Modifier.padding(start = 8.dp, bottom = 20.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.primary), Alignment.Center) {

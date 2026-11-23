@@ -27,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +67,7 @@ import com.avetero.relay.ui.tv.TvRowTitle
 import com.avetero.relay.ui.tv.TvSafe
 import com.avetero.relay.ui.tv.TvSurface
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun HomeTv(app: AppState, data: HomeData) {
@@ -88,9 +91,16 @@ internal fun HomeTv(app: AppState, data: HomeData) {
     }
     val info = remember { mutableStateMapOf<String, HeroInfo>() }
 
+    // the pivot leaves the hero half off screen when focus comes back up to the first row, so that row scrolls to the top
+    // (a couple of frames later, so the pivot's own bring-into-view scroll has started and this one replaces it)
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val firstShelf = listOfNotNull("live".takeIf { data.live.isNotEmpty() }, "continue".takeIf { data.resumes.isNotEmpty() },
+        "rm".takeIf { data.recentMovies.isNotEmpty() }, "rs".takeIf { data.recentSeries.isNotEmpty() }, "added".takeIf { data.addedMovies.isNotEmpty() }).firstOrNull()
+    fun top(key: String) = if (key == firstShelf) Modifier.onFocusChanged { if (it.hasFocus) scope.launch { withFrameNanos {}; withFrameNanos {}; listState.animateScrollToItem(0) } } else Modifier
     TvPivot {
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize().onFocusChanged { pageFocused = it.hasFocus }, rememberLazyListState(),
+            LazyColumn(Modifier.fillMaxSize().onFocusChanged { pageFocused = it.hasFocus }, listState,
                 contentPadding = PaddingValues(top = TvSafe.Vertical, bottom = 72.dp), verticalArrangement = Arrangement.spacedBy(32.dp)) {
                 item(key = "hero") {
                     Box(Modifier.padding(start = 24.dp, end = TvSafe.Horizontal)) {
@@ -98,27 +108,27 @@ internal fun HomeTv(app: AppState, data: HomeData) {
                     }
                 }
                 if (data.live.isNotEmpty()) item(key = "live") {
-                    Shelf("Live now") {
+                    Shelf("Live now", top("live")) {
                         items(data.live, key = { it.id }) { c -> LiveCard(app, c, data.live, Modifier.remembered("live-${c.id}")) }
                     }
                 }
                 if (data.resumes.isNotEmpty()) item(key = "continue") {
-                    Shelf("Continue watching") {
+                    Shelf("Continue watching", top("continue")) {
                         items(data.resumes, key = { it.key }) { r -> ContinueCard(app, r, Modifier.remembered("cw-${r.key}")) }
                     }
                 }
                 if (data.recentMovies.isNotEmpty()) item(key = "rm") {
-                    Shelf("Recently watched movies") {
+                    Shelf("Recently watched movies", top("rm")) {
                         items(data.recentMovies, key = { it.id }) { m -> Poster(m.icon, m.name, m.id, Modifier.remembered("m-${m.id}")) { app.push(Screen.MovieDetail(m)) } }
                     }
                 }
                 if (data.recentSeries.isNotEmpty()) item(key = "rs") {
-                    Shelf("Recently watched series") {
+                    Shelf("Recently watched series", top("rs")) {
                         items(data.recentSeries, key = { it.id }) { s -> Poster(s.cover, s.name, s.id, Modifier.remembered("s-${s.id}")) { app.push(Screen.SeriesDetail(s)) } }
                     }
                 }
                 if (data.addedMovies.isNotEmpty()) item(key = "added") {
-                    Shelf("Recently added movies") {
+                    Shelf("Recently added movies", top("added")) {
                         items(data.addedMovies, key = { it.id }) { m -> Poster(m.icon, m.name, m.id, Modifier.remembered("a-${m.id}")) { app.push(Screen.MovieDetail(m)) } }
                     }
                 }
@@ -174,8 +184,8 @@ private fun EmptyHero(app: AppState) =
 
 /** A titled row; cards start under the title and scroll out to the screen edge. */
 @Composable
-private fun Shelf(title: String, content: LazyListScope.() -> Unit) =
-    Column {
+private fun Shelf(title: String, modifier: Modifier, content: LazyListScope.() -> Unit) =
+    Column(modifier) {
         TvRowTitle(title, Modifier.padding(start = 24.dp))
         // focused cards grow, so the row keeps room around them
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(start = 24.dp, end = TvSafe.Horizontal, top = 8.dp, bottom = 8.dp), content = content)
