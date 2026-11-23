@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import com.avetero.relay.feature.playback.BottomScrim
+import com.avetero.relay.feature.playback.PhoneDim
 import com.avetero.relay.feature.playback.PlayerIcon
 import com.avetero.relay.feature.playback.PlayPause
 import com.avetero.relay.feature.playback.PlayerToolbar
@@ -391,6 +392,7 @@ private fun AnimatedVisibilityScope.PhoneControls(
 ) = Box(Modifier.fillMaxSize()) {
     val cs = MaterialTheme.colorScheme
     val r = with(LocalDensity.current) { 24.dp.roundToPx() }
+    PhoneDim()
     TopScrim(0.35f)
     BottomScrim(0.5f)
     Box(Modifier.fillMaxSize().displayCutoutPadding()) {

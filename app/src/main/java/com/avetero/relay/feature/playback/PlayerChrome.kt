@@ -106,13 +106,30 @@ fun PlayPause(paused: Boolean, onClick: () -> Unit, modifier: Modifier = Modifie
         Icon(if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause, if (paused) "Play" else "Pause", Modifier.size(40.dp))
     }
 
-/** The bottom action row: a floating toolbar of labelled actions. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+/** The bottom action row: labelled actions straight on the scrim, as media players lay them out (no container). */
 @Composable
 fun PlayerToolbar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) =
-    HorizontalFloatingToolbar(expanded = true, modifier = modifier,
-        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)),
-        content = content)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+
+/** Phone: the whole picture dims a little under the controls, so they read over busy video (the scrims add depth at the edges). */
+@Composable
+fun BoxScope.PhoneDim() = Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
+
+/** Phone seek bar: a thin track with the Expressive handle, played part in the accent (the stock track is too heavy over video). */
+@Composable
+fun PlayerSlider(fraction: Float, onDrag: (Float) -> Unit, onDone: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val cs = MaterialTheme.colorScheme
+    val state = androidx.compose.runtime.remember { androidx.compose.material3.SliderState() }
+    state.value = fraction.coerceIn(0f, 1f)
+    androidx.compose.material3.Slider(state, modifier = modifier.height(32.dp), enabled = enabled,
+        onValueChange = onDrag, onValueChangeFinished = onDone,
+        thumb = { Box(Modifier.size(4.dp, 20.dp).clip(RoundedCornerShape(2.dp)).background(cs.primary)) },
+        track = { s ->
+            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.3f))) {
+                Box(Modifier.fillMaxWidth(s.value).height(4.dp).background(cs.primary))
+            }
+        })
+}
 
 /** A labelled toolbar action; [primary] fills it with the accent (Go live, Next episode). */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

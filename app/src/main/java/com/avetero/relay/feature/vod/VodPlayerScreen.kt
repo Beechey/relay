@@ -5,6 +5,8 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Replay
 import com.avetero.relay.feature.playback.BottomScrim
+import com.avetero.relay.feature.playback.PlayerSlider
+import com.avetero.relay.feature.playback.PhoneDim
 import com.avetero.relay.feature.playback.PlayPause
 import com.avetero.relay.feature.playback.PlayerIcon
 import com.avetero.relay.feature.playback.PlayerToolbar
@@ -264,7 +266,7 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
         val d = androidx.compose.ui.platform.LocalDensity.current
 
         if (!tv) {
-            AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { TopScrim(0.35f); BottomScrim(0.5f) } }
+            AnimatedVisibility(shown, enter = fade.first, exit = fade.second) { Box(Modifier.fillMaxSize()) { PhoneDim(); TopScrim(0.35f); BottomScrim(0.5f) } }
             // top app bar: back, title, mute, cast, picture in picture
             AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter), enter = fade.first + slideInVertically(Springs.spatial()) { -it / 3 },
                 exit = fade.second + slideOutVertically(Springs.spatial()) { -it / 3 }) {
@@ -293,11 +295,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         val time = MaterialTheme.typography.labelLarge
                         Text(fmtDur(preview ?: pos), style = time)
-                        val slider = remember { SliderState() }
-                        slider.value = if (dur > 0) ((preview ?: pos).toFloat() / dur).coerceIn(0f, 1f) else 0f
-                        Slider(state = slider, modifier = Modifier.weight(1f), enabled = dur > 0,
-                            onValueChange = { preview = (it * dur).toLong(); poke++ },
-                            onValueChangeFinished = { preview?.let { p.seekTo(it) }; preview = null })
+                        PlayerSlider(if (dur > 0) (preview ?: pos).toFloat() / dur else 0f, { preview = (it * dur).toLong(); poke++ },
+                            { preview?.let { p.seekTo(it) }; preview = null }, Modifier.weight(1f), enabled = dur > 0)
                         Text("−" + fmtDur((dur - (preview ?: pos)).coerceAtLeast(0)), style = time)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,8 +307,6 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
                             ToolbarAction(speedLabel, Icons.Rounded.Speed, ::cycleSpeed)
                             ToolbarAction(if (zoom) "Zoom" else "Fit", Icons.Rounded.AspectRatio, { zoom = !zoom })
                         }
-                        Spacer(Modifier.weight(1f))
-                        if (LocalWide.current) Text("Double-tap a side to skip", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
             }
@@ -384,7 +381,8 @@ fun VodPlayerScreen(app: AppState, item: PlayItem, next: List<PlayItem>, episode
 
 @Composable
 private fun PhoneSkip(sec: Int, label: String, onClick: () -> Unit) =
-    PlayerIcon(Icons.Rounded.Replay, label, onClick, Modifier.semantics { contentDescription = label }, iconSize = 36.dp) {
+    // on a soft dark disc so it reads over bright video, like the play button beside it
+    PlayerIcon(Icons.Rounded.Replay, label, onClick, Modifier.semantics { contentDescription = label }.clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)), iconSize = 36.dp) {
         skipIcon(sec)?.let { Icon(it, null, Modifier.size(36.dp)) } ?: Text(skipText(sec), style = MaterialTheme.typography.titleMedium)
     }
 
