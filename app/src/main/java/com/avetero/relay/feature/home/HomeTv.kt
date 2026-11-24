@@ -162,7 +162,8 @@ private fun Hero(app: AppState, items: List<Resume>, info: MutableMap<String, He
                 Text(if (r.meta.startsWith("Up next")) "UP NEXT" else "CONTINUE WATCHING", style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 0.4.sp), color = Tok.OnSecondaryContainer)
                 Text(heroTitle(r), style = MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis, color = Tok.OnSurface)
                 Text(resumeLine(r), style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp), color = Tok.OnSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                info[r.key]?.plot?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = Tok.OnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                // the plot gives way first when space is short, so the buttons always keep their full size
+                info[r.key]?.plot?.takeIf { it.isNotBlank() }?.let { Text(it, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodyLarge, color = Tok.OnSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     TvButton(if (r.pos > 0) "Resume" else "Play", { resume(app, r) }, resumeModifier, primary = true, leading = { Icon(androidx.compose.material.icons.Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)) })
                     TvButton(if (r.seriesId != 0) "Episodes" else "Details", { details(app, r) })

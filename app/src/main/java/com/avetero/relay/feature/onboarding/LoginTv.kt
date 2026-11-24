@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -79,7 +80,7 @@ internal fun LoginTv(f: LoginForm) {
                     watchParts.forEach { (k, label) ->
                         val on = k in f.want
                         TvSurface({ f.flip(k) }, Modifier.height(40.dp), selected = on, shape = RoundedCornerShape(8.dp)) {
-                            Row(Modifier.fillMaxSize().padding(start = if (on) 10.dp else 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxHeight().padding(start = if (on) 10.dp else 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (on) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp))
                                 Text(label, style = MaterialTheme.typography.titleSmall)
                             }
